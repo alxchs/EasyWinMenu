@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/EasyWinMenu.App/EasyWinMenu.App.csproj" />
+    <Project Path="src/EasyWinMenu.Core/EasyWinMenu.Core.csproj" />
   </Folder>
 </Solution>

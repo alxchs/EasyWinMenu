@@ -1,8 +1,8 @@
-using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
 using System.Windows;
 using System.Windows.Forms;
+using EasyWinMenu.App.Services;
+using EasyWinMenu.Core.Configuration;
+using EasyWinMenu.Core.Models;
 using Application = System.Windows.Application;
 
 namespace EasyWinMenu.App;
@@ -15,10 +15,10 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        var menu = new ContextMenuStrip();
-        menu.Items.Add("Bloco de Notas", null, (_, _) => LaunchNotepad());
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Sair", null, (_, _) => Shutdown());
+        var configurationStore = new ConfigurationStore(ApplicationPaths.ConfigFilePath);
+        var configuration = configurationStore.Load();
+
+        var menu = BuildTrayMenu(configuration);
 
         _trayIcon = new NotifyIcon
         {
@@ -37,18 +37,23 @@ public partial class App : Application
         };
     }
 
-    private static void LaunchNotepad()
+    private static ContextMenuStrip BuildTrayMenu(LauncherConfiguration configuration)
     {
-        try
+        var menu = new ContextMenuStrip();
+
+        foreach (var item in configuration.Items)
         {
-            Process.Start(new ProcessStartInfo("notepad.exe") { UseShellExecute = true });
+            menu.Items.Add(item.Name, null, (_, _) => LaunchExecutor.Execute(item));
         }
-        catch (Win32Exception)
+
+        if (configuration.Items.Count > 0)
         {
+            menu.Items.Add(new ToolStripSeparator());
         }
-        catch (FileNotFoundException)
-        {
-        }
+
+        menu.Items.Add("Sair", null, (_, _) => Current.Shutdown());
+
+        return menu;
     }
 
     protected override void OnExit(ExitEventArgs e)
