@@ -1,9 +1,26 @@
 namespace EasyWinMenu.Core.Models;
 
-public sealed class LauncherConfiguration
+public sealed class LauncherConfiguration : IMenuContainer
 {
     public List<MenuCategory> Categories { get; init; } = [];
     public List<LaunchItem> Items { get; init; } = [];
+
+    public LauncherConfiguration Clone()
+    {
+        return new LauncherConfiguration
+        {
+            Items = [.. Items.Select(item => item.Clone())],
+            Categories = [.. Categories.Select(category => category.Clone())]
+        };
+    }
+
+    public void ReplaceContentsWith(LauncherConfiguration source)
+    {
+        Items.Clear();
+        Items.AddRange(source.Items.Select(item => item.Clone()));
+        Categories.Clear();
+        Categories.AddRange(source.Categories.Select(category => category.Clone()));
+    }
 
     public static LauncherConfiguration CreateDefault()
     {
