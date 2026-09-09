@@ -10,6 +10,7 @@ namespace EasyWinMenu.App;
 public partial class App : Application
 {
     private NotifyIcon? _trayIcon;
+    private IconCacheService? _iconCache;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -18,7 +19,8 @@ public partial class App : Application
         var configurationStore = new ConfigurationStore(ApplicationPaths.ConfigFilePath);
         var configuration = configurationStore.Load();
 
-        var menu = BuildTrayMenu(configuration);
+        _iconCache = new IconCacheService(ApplicationPaths.IconCacheDirectory);
+        var menu = BuildTrayMenu(configuration, _iconCache);
 
         _trayIcon = new NotifyIcon
         {
@@ -37,12 +39,12 @@ public partial class App : Application
         };
     }
 
-    private static ContextMenuStrip BuildTrayMenu(LauncherConfiguration configuration)
+    private static ContextMenuStrip BuildTrayMenu(LauncherConfiguration configuration, IconCacheService iconCache)
     {
         var menu = new ContextMenuStrip();
 
-        AddItems(menu.Items, configuration.Items);
-        AddCategories(menu.Items, configuration.Categories);
+        AddItems(menu.Items, configuration.Items, iconCache);
+        AddCategories(menu.Items, configuration.Categories, iconCache);
 
         if (configuration.Items.Count > 0 || configuration.Categories.Count > 0)
         {
@@ -54,21 +56,22 @@ public partial class App : Application
         return menu;
     }
 
-    private static void AddItems(ToolStripItemCollection collection, IEnumerable<LaunchItem> items)
+    private static void AddItems(ToolStripItemCollection collection, IEnumerable<LaunchItem> items, IconCacheService iconCache)
     {
         foreach (var item in items)
         {
-            collection.Add(item.Name, null, (_, _) => LaunchExecutor.Execute(item));
+            var icon = iconCache.GetIcon(item.Target)?.ToBitmap();
+            collection.Add(new ToolStripMenuItem(item.Name, icon, (_, _) => LaunchExecutor.Execute(item)));
         }
     }
 
-    private static void AddCategories(ToolStripItemCollection collection, IEnumerable<MenuCategory> categories)
+    private static void AddCategories(ToolStripItemCollection collection, IEnumerable<MenuCategory> categories, IconCacheService iconCache)
     {
         foreach (var category in categories)
         {
             var categoryMenuItem = new ToolStripMenuItem(category.Name);
-            AddItems(categoryMenuItem.DropDownItems, category.Items);
-            AddCategories(categoryMenuItem.DropDownItems, category.Categories);
+            AddItems(categoryMenuItem.DropDownItems, category.Items, iconCache);
+            AddCategories(categoryMenuItem.DropDownItems, category.Categories, iconCache);
             collection.Add(categoryMenuItem);
         }
     }
@@ -76,6 +79,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _trayIcon?.Dispose();
+        _iconCache?.Dispose();
         base.OnExit(e);
     }
 }

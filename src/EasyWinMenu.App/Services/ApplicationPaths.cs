@@ -6,11 +6,10 @@ internal static class ApplicationPaths
 {
     private const string ProductFolderName = "EasyWinMenu";
 
-    public static string ConfigFilePath { get; } = BuildConfigFilePath();
+    private static string ProductDataFolder { get; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        ProductFolderName);
 
-    private static string BuildConfigFilePath()
-    {
-        var appDataFolder = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appDataFolder, ProductFolderName, "config.json");
-    }
+    public static string ConfigFilePath { get; } = Path.Combine(ProductDataFolder, "config.json");
+    public static string IconCacheDirectory { get; } = Path.Combine(ProductDataFolder, "IconCache");
 }
