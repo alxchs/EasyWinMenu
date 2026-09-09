@@ -51,6 +51,15 @@ public partial class App : Application
             menu.Items.Add(new ToolStripSeparator());
         }
 
+        var startWithWindowsItem = new ToolStripMenuItem("Iniciar com o Windows")
+        {
+            CheckOnClick = true,
+            Checked = StartupRegistration.IsEnabled()
+        };
+        startWithWindowsItem.CheckedChanged += (_, _) => StartupRegistration.SetEnabled(startWithWindowsItem.Checked);
+        menu.Items.Add(startWithWindowsItem);
+
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Sair", null, (_, _) => Current.Shutdown());
 
         return menu;
