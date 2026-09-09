@@ -1,5 +1,8 @@
 using System.Windows;
 using EasyWinMenu.Core.Models;
+using MessageBox = System.Windows.MessageBox;
+using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
+using OpenFolderDialog = Microsoft.Win32.OpenFolderDialog;
 
 namespace EasyWinMenu.App.Settings;
 
@@ -27,7 +30,7 @@ public partial class LaunchItemEditWindow : Window
 
         if (selectedType == LaunchItemType.Folder)
         {
-            var folderDialog = new Microsoft.Win32.OpenFolderDialog();
+            var folderDialog = new OpenFolderDialog();
             if (folderDialog.ShowDialog(this) == true)
             {
                 TargetBox.Text = folderDialog.FolderName;
@@ -36,7 +39,7 @@ public partial class LaunchItemEditWindow : Window
             return;
         }
 
-        var fileDialog = new Microsoft.Win32.OpenFileDialog { Filter = "Todos os arquivos (*.*)|*.*" };
+        var fileDialog = new OpenFileDialog { Filter = "Todos os arquivos (*.*)|*.*" };
         if (fileDialog.ShowDialog(this) == true)
         {
             TargetBox.Text = fileDialog.FileName;
@@ -47,7 +50,7 @@ public partial class LaunchItemEditWindow : Window
     {
         if (string.IsNullOrWhiteSpace(NameBox.Text) || string.IsNullOrWhiteSpace(TargetBox.Text) || TypeBox.SelectedItem is null)
         {
-            System.Windows.MessageBox.Show(
+            MessageBox.Show(
                 this,
                 "Nome, tipo e destino são obrigatórios.",
                 "EasyWinMenu",

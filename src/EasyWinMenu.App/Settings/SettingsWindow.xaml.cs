@@ -1,6 +1,14 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using EasyWinMenu.Core.Models;
+using DragEventArgs = System.Windows.DragEventArgs;
+using DragDropEffects = System.Windows.DragDropEffects;
+using MessageBox = System.Windows.MessageBox;
+using MouseButtonEventArgs = System.Windows.Input.MouseButtonEventArgs;
+using MouseButtonState = System.Windows.Input.MouseButtonState;
+using MouseEventArgs = System.Windows.Input.MouseEventArgs;
+using Point = System.Windows.Point;
 
 namespace EasyWinMenu.App.Settings;
 
@@ -8,6 +16,9 @@ public partial class SettingsWindow : Window
 {
     private readonly LauncherConfiguration _target;
     private readonly LauncherConfiguration _workingConfiguration;
+
+    private Point? _dragStartPoint;
+    private TreeViewItem? _dragCandidate;
 
     public event EventHandler? ConfigurationSaved;
 
@@ -137,7 +148,7 @@ public partial class SettingsWindow : Window
         }
 
         var name = selected.Item?.Name ?? selected.Category?.Name;
-        var confirmed = System.Windows.MessageBox.Show(
+        var confirmed = MessageBox.Show(
             this,
             $"Excluir \"{name}\"?",
             "EasyWinMenu",
@@ -159,6 +170,134 @@ public partial class SettingsWindow : Window
         }
 
         RebuildTree();
+    }
+
+    private void OnTreeMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _dragStartPoint = e.GetPosition(MenuTree);
+        _dragCandidate = FindAncestorTreeViewItem(e.OriginalSource as DependencyObject);
+    }
+
+    private void OnTreeMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || _dragStartPoint is null || _dragCandidate is null)
+        {
+            return;
+        }
+
+        var offset = e.GetPosition(MenuTree) - _dragStartPoint.Value;
+        if (Math.Abs(offset.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(offset.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        var draggedNode = _dragCandidate;
+        _dragStartPoint = null;
+        _dragCandidate = null;
+
+        DragDrop.DoDragDrop(draggedNode, draggedNode, DragDropEffects.Move);
+    }
+
+    private void OnTreeDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(typeof(TreeViewItem)) ? DragDropEffects.Move : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnTreeDrop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetData(typeof(TreeViewItem)) is not TreeViewItem draggedNode || draggedNode.Tag is not NodeTag draggedTag)
+        {
+            return;
+        }
+
+        var targetNode = FindAncestorTreeViewItem(e.OriginalSource as DependencyObject);
+        if (targetNode == draggedNode)
+        {
+            return;
+        }
+
+        var targetTag = targetNode?.Tag as NodeTag;
+
+        IMenuContainer destination;
+        LaunchItem? insertBeforeItem = null;
+
+        if (targetTag?.Category is not null)
+        {
+            destination = targetTag.Category;
+        }
+        else if (targetTag?.Item is not null)
+        {
+            destination = targetTag.Parent;
+            insertBeforeItem = targetTag.Item;
+        }
+        else
+        {
+            destination = _workingConfiguration;
+        }
+
+        if (draggedTag.Category is not null && IsCategoryOrDescendant(draggedTag.Category, destination))
+        {
+            return;
+        }
+
+        MoveNode(draggedTag, destination, insertBeforeItem);
+        RebuildTree();
+    }
+
+    private static void MoveNode(NodeTag dragged, IMenuContainer destination, LaunchItem? insertBeforeItem)
+    {
+        if (dragged.Item is not null)
+        {
+            dragged.Parent.Items.Remove(dragged.Item);
+
+            var index = insertBeforeItem is not null ? destination.Items.IndexOf(insertBeforeItem) : -1;
+            if (index < 0)
+            {
+                destination.Items.Add(dragged.Item);
+            }
+            else
+            {
+                destination.Items.Insert(index, dragged.Item);
+            }
+
+            return;
+        }
+
+        if (dragged.Category is not null)
+        {
+            dragged.Parent.Categories.Remove(dragged.Category);
+            destination.Categories.Add(dragged.Category);
+        }
+    }
+
+    private static bool IsCategoryOrDescendant(MenuCategory category, IMenuContainer container)
+    {
+        if (ReferenceEquals(category, container))
+        {
+            return true;
+        }
+
+        foreach (var child in category.Categories)
+        {
+            if (IsCategoryOrDescendant(child, container))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static TreeViewItem? FindAncestorTreeViewItem(DependencyObject? source)
+    {
+        while (source is not null and not TreeViewItem)
+        {
+            source = VisualTreeHelper.GetParent(source);
+        }
+
+        return source as TreeViewItem;
     }
 
     private void OnSaveClick(object sender, RoutedEventArgs e)

@@ -15,6 +15,11 @@
             <Button Content="Salvar" Width="90" Padding="0,4" Margin="0,0,8,0" Click="OnSaveClick" />
             <Button Content="Fechar" Width="90" Padding="0,4" Click="OnCloseClick" />
         </StackPanel>
-        <TreeView x:Name="MenuTree" />
+        <TreeView x:Name="MenuTree"
+                  AllowDrop="True"
+                  PreviewMouseLeftButtonDown="OnTreeMouseLeftButtonDown"
+                  PreviewMouseMove="OnTreeMouseMove"
+                  DragOver="OnTreeDragOver"
+                  Drop="OnTreeDrop" />
     </DockPanel>
 </Window>
