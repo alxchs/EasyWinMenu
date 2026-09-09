@@ -41,12 +41,10 @@ public partial class App : Application
     {
         var menu = new ContextMenuStrip();
 
-        foreach (var item in configuration.Items)
-        {
-            menu.Items.Add(item.Name, null, (_, _) => LaunchExecutor.Execute(item));
-        }
+        AddItems(menu.Items, configuration.Items);
+        AddCategories(menu.Items, configuration.Categories);
 
-        if (configuration.Items.Count > 0)
+        if (configuration.Items.Count > 0 || configuration.Categories.Count > 0)
         {
             menu.Items.Add(new ToolStripSeparator());
         }
@@ -54,6 +52,25 @@ public partial class App : Application
         menu.Items.Add("Sair", null, (_, _) => Current.Shutdown());
 
         return menu;
+    }
+
+    private static void AddItems(ToolStripItemCollection collection, IEnumerable<LaunchItem> items)
+    {
+        foreach (var item in items)
+        {
+            collection.Add(item.Name, null, (_, _) => LaunchExecutor.Execute(item));
+        }
+    }
+
+    private static void AddCategories(ToolStripItemCollection collection, IEnumerable<MenuCategory> categories)
+    {
+        foreach (var category in categories)
+        {
+            var categoryMenuItem = new ToolStripMenuItem(category.Name);
+            AddItems(categoryMenuItem.DropDownItems, category.Items);
+            AddCategories(categoryMenuItem.DropDownItems, category.Categories);
+            collection.Add(categoryMenuItem);
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)
