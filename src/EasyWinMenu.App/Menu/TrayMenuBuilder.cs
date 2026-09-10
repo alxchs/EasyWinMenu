@@ -4,6 +4,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
+using EasyWinMenu.App.Localization;
 using EasyWinMenu.App.Services;
 using EasyWinMenu.Core.Models;
 using Application = System.Windows.Application;
@@ -44,19 +45,19 @@ internal static class TrayMenuBuilder
             menu.Items.Add(new Separator());
         }
 
-        var settingsItem = new MenuItem { Header = "Configurações..." };
+        var settingsItem = new MenuItem { Header = LocalizationService.Get("tray.settings") };
         ApplyMenuItemAppearance(settingsItem, theme, theme);
         settingsItem.Click += (_, _) => openSettings();
         menu.Items.Add(settingsItem);
 
-        var newGroupItem = new MenuItem { Header = "Novo grupo no desktop..." };
+        var newGroupItem = new MenuItem { Header = LocalizationService.Get("tray.newDesktopGroup") };
         ApplyMenuItemAppearance(newGroupItem, theme, theme);
         newGroupItem.Click += (_, _) => createDesktopGroup();
         menu.Items.Add(newGroupItem);
 
         var startupItem = new MenuItem
         {
-            Header = "Iniciar com o Windows",
+            Header = LocalizationService.Get("tray.startWithWindows"),
             IsCheckable = true,
             IsChecked = startWithWindowsEnabled
         };
@@ -66,7 +67,7 @@ internal static class TrayMenuBuilder
 
         menu.Items.Add(new Separator());
 
-        var exitItem = new MenuItem { Header = "Sair" };
+        var exitItem = new MenuItem { Header = LocalizationService.Get("tray.exit") };
         ApplyMenuItemAppearance(exitItem, theme, theme);
         exitItem.Click += (_, _) => exit();
         menu.Items.Add(exitItem);

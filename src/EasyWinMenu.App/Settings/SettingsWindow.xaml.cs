@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using EasyWinMenu.App.Localization;
 using EasyWinMenu.App.Theming;
 using EasyWinMenu.Core.Configuration;
 using EasyWinMenu.Core.Models;
@@ -41,16 +42,23 @@ public partial class SettingsWindow : ModernWindow
     {
         AppThemeBox.ItemsSource = new[]
         {
-            new { Mode = AppThemeMode.System, Label = "Seguir o Windows" },
-            new { Mode = AppThemeMode.Light, Label = "Claro" },
-            new { Mode = AppThemeMode.Dark, Label = "Escuro" }
+            new { Mode = AppThemeMode.System, Label = LocalizationService.Get("settings.themeSystem") },
+            new { Mode = AppThemeMode.Light, Label = LocalizationService.Get("settings.themeLight") },
+            new { Mode = AppThemeMode.Dark, Label = LocalizationService.Get("settings.themeDark") }
         };
         AppThemeBox.SelectedValue = _workingConfiguration.Behavior.AppTheme;
 
+        var languageOptions = new[] { new { Code = (string?)null, Label = LocalizationService.Get("settings.languageAuto") } }
+            .Concat(LocalizationService.SupportedLanguages.Select(l => new { Code = (string?)l.Code, Label = l.DisplayName }))
+            .ToList();
+        LanguageBox.ItemsSource = languageOptions;
+        LanguageBox.SelectedItem = languageOptions.FirstOrDefault(l => l.Code == _workingConfiguration.Behavior.Language)
+            ?? languageOptions[0];
+
         ClickModeBox.ItemsSource = new[]
         {
-            new { Mode = TrayClickMode.SingleClick, Label = "Clique simples" },
-            new { Mode = TrayClickMode.DoubleClick, Label = "Duplo clique" }
+            new { Mode = TrayClickMode.SingleClick, Label = LocalizationService.Get("settings.singleClick") },
+            new { Mode = TrayClickMode.DoubleClick, Label = LocalizationService.Get("settings.doubleClick") }
         };
         ClickModeBox.SelectedValue = _workingConfiguration.Behavior.ClickMode;
 
@@ -71,6 +79,7 @@ public partial class SettingsWindow : ModernWindow
     {
         var behavior = _workingConfiguration.Behavior;
         behavior.AppTheme = AppThemeBox.SelectedValue as AppThemeMode? ?? AppThemeMode.System;
+        behavior.Language = LanguageBox.SelectedValue as string;
         behavior.ClickMode = ClickModeBox.SelectedValue as TrayClickMode? ?? TrayClickMode.SingleClick;
         behavior.GlobalHotkeyEnabled = HotkeyEnabledBox.IsChecked == true;
         behavior.GlobalHotkeyKey = HotkeyKeyBox.SelectedItem as string ?? "Space";
@@ -148,7 +157,7 @@ public partial class SettingsWindow : ModernWindow
 
     private void OnAddCategoryClick(object sender, RoutedEventArgs e)
     {
-        var prompt = new TextPromptWindow("Nome da categoria:", string.Empty) { Owner = this };
+        var prompt = new TextPromptWindow(LocalizationService.Get("settings.newCategoryPrompt"), string.Empty) { Owner = this };
         if (prompt.ShowDialog() != true)
         {
             return;
@@ -197,7 +206,7 @@ public partial class SettingsWindow : ModernWindow
             return;
         }
 
-        var prompt = new TextPromptWindow("Nome da categoria:", selected.Category.Name) { Owner = this };
+        var prompt = new TextPromptWindow(LocalizationService.Get("settings.newCategoryPrompt"), selected.Category.Name) { Owner = this };
         if (prompt.ShowDialog() == true)
         {
             selected.Category.Name = prompt.Value;
@@ -217,8 +226,8 @@ public partial class SettingsWindow : ModernWindow
         var name = selected.Item?.Name ?? selected.Category?.Name;
         var confirmed = MessageBox.Show(
             this,
-            $"Excluir \"{name}\"?",
-            "EasyWinMenu",
+            LocalizationService.Format("settings.deleteConfirm", name!),
+            LocalizationService.Get("common.appName"),
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
 
@@ -377,7 +386,7 @@ public partial class SettingsWindow : ModernWindow
     {
         var dialog = new SaveFileDialog
         {
-            Filter = "Arquivo JSON (*.json)|*.json",
+            Filter = LocalizationService.Get("settings.jsonFilter"),
             FileName = "easywinmenu-config.json"
         };
 
@@ -393,7 +402,7 @@ public partial class SettingsWindow : ModernWindow
 
     private void OnImportClick(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog { Filter = "Arquivo JSON (*.json)|*.json" };
+        var dialog = new OpenFileDialog { Filter = LocalizationService.Get("settings.jsonFilter") };
         if (dialog.ShowDialog(this) != true)
         {
             return;
@@ -403,8 +412,8 @@ public partial class SettingsWindow : ModernWindow
         {
             MessageBox.Show(
                 this,
-                "Não foi possível importar o arquivo selecionado.",
-                "EasyWinMenu",
+                LocalizationService.Get("settings.importErrorMessage"),
+                LocalizationService.Get("common.appName"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             return;

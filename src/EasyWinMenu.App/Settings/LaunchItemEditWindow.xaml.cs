@@ -1,4 +1,5 @@
 using System.Windows;
+using EasyWinMenu.App.Localization;
 using EasyWinMenu.App.Theming;
 using EasyWinMenu.Core.Models;
 using MessageBox = System.Windows.MessageBox;
@@ -44,7 +45,7 @@ public partial class LaunchItemEditWindow : ModernWindow
             return;
         }
 
-        var fileDialog = new OpenFileDialog { Filter = "Todos os arquivos (*.*)|*.*" };
+        var fileDialog = new OpenFileDialog { Filter = LocalizationService.Get("item.allFilesFilter") };
         if (fileDialog.ShowDialog(this) == true)
         {
             TargetBox.Text = fileDialog.FileName;
@@ -55,7 +56,7 @@ public partial class LaunchItemEditWindow : ModernWindow
     {
         var dialog = new OpenFileDialog
         {
-            Filter = "Ícones e executáveis (*.ico;*.exe;*.dll)|*.ico;*.exe;*.dll|Todos os arquivos (*.*)|*.*"
+            Filter = LocalizationService.Get("item.iconFilter")
         };
 
         if (dialog.ShowDialog(this) == true)
@@ -70,8 +71,8 @@ public partial class LaunchItemEditWindow : ModernWindow
         {
             MessageBox.Show(
                 this,
-                "Nome, tipo e destino são obrigatórios.",
-                "EasyWinMenu",
+                LocalizationService.Get("item.validationError"),
+                LocalizationService.Get("common.appName"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
             return;

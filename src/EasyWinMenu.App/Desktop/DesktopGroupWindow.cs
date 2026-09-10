@@ -4,6 +4,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
+using EasyWinMenu.App.Localization;
 using EasyWinMenu.App.Menu;
 using EasyWinMenu.App.Services;
 using EasyWinMenu.Core.Models;
@@ -205,12 +206,12 @@ internal sealed class DesktopGroupWindow : Window
         };
         MenuThemeProperties.SetPanelCornerRadius(menu, new CornerRadius(_theme.CornerRadius));
 
-        AddMenuItem(menu, "Renomear...", OnRenameClick);
-        AddMenuItem(menu, "Cor de fundo...", OnChangeColorClick);
-        AddMenuItem(menu, "Imagem de fundo...", OnChangeBackgroundImageClick);
-        AddMenuItem(menu, "Remover imagem de fundo", OnClearBackgroundImageClick);
+        AddMenuItem(menu, LocalizationService.Get("group.rename"), OnRenameClick);
+        AddMenuItem(menu, LocalizationService.Get("group.backgroundColor"), OnChangeColorClick);
+        AddMenuItem(menu, LocalizationService.Get("group.backgroundImage"), OnChangeBackgroundImageClick);
+        AddMenuItem(menu, LocalizationService.Get("group.removeBackgroundImage"), OnClearBackgroundImageClick);
         menu.Items.Add(new Separator());
-        AddMenuItem(menu, "Remover grupo", OnDeleteGroupClick);
+        AddMenuItem(menu, LocalizationService.Get("group.remove"), OnDeleteGroupClick);
 
         return menu;
     }
@@ -235,7 +236,7 @@ internal sealed class DesktopGroupWindow : Window
 
     private void OnRenameClick()
     {
-        var prompt = new Settings.TextPromptWindow("Nome do grupo:", _category.Name);
+        var prompt = new Settings.TextPromptWindow(LocalizationService.Get("group.namePrompt"), _category.Name);
         if (prompt.ShowDialog() != true)
         {
             return;
@@ -266,7 +267,7 @@ internal sealed class DesktopGroupWindow : Window
     {
         var dialog = new OpenFileDialog
         {
-            Filter = "Imagens (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp"
+            Filter = LocalizationService.Get("group.imageFilter")
         };
 
         if (dialog.ShowDialog(this) != true)
@@ -290,8 +291,8 @@ internal sealed class DesktopGroupWindow : Window
     {
         var confirmed = MessageBox.Show(
             this,
-            $"Remover o grupo \"{_category.Name}\" e todos os seus itens fixados?",
-            "EasyWinMenu",
+            LocalizationService.Format("group.deleteConfirm", _category.Name),
+            LocalizationService.Get("common.appName"),
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
 

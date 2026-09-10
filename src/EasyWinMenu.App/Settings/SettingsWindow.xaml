@@ -2,21 +2,24 @@
                       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                       xmlns:theming="clr-namespace:EasyWinMenu.App.Theming"
-                      Title="EasyWinMenu - Configurações"
+                      xmlns:loc="clr-namespace:EasyWinMenu.App.Localization"
+                      Title="{loc:Loc settings.title}"
                       Width="560" Height="620"
                       WindowStartupLocation="CenterScreen">
     <DockPanel Margin="12">
-        <GroupBox Header="Aparência" DockPanel.Dock="Top" Margin="0,0,0,8">
+        <GroupBox Header="{loc:Loc settings.appearance}" DockPanel.Dock="Top" Margin="0,0,0,8">
             <StackPanel Orientation="Horizontal" Margin="4">
-                <TextBlock Text="Tema" VerticalAlignment="Center" Margin="0,0,8,0" />
-                <ComboBox x:Name="AppThemeBox" Width="140" DisplayMemberPath="Label" SelectedValuePath="Mode" />
+                <TextBlock Text="{loc:Loc settings.theme}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <ComboBox x:Name="AppThemeBox" Width="140" Margin="0,0,20,0" DisplayMemberPath="Label" SelectedValuePath="Mode" />
+                <TextBlock Text="{loc:Loc settings.language}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <ComboBox x:Name="LanguageBox" Width="160" DisplayMemberPath="Label" SelectedValuePath="Code" />
             </StackPanel>
         </GroupBox>
-        <GroupBox Header="Comportamento" DockPanel.Dock="Top" Margin="0,0,0,8">
+        <GroupBox Header="{loc:Loc settings.behavior}" DockPanel.Dock="Top" Margin="0,0,0,8">
             <StackPanel Orientation="Horizontal" Margin="4">
-                <TextBlock Text="Abrir menu com" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <TextBlock Text="{loc:Loc settings.openMenuWith}" VerticalAlignment="Center" Margin="0,0,8,0" />
                 <ComboBox x:Name="ClickModeBox" Width="140" Margin="0,0,20,0" DisplayMemberPath="Label" SelectedValuePath="Mode" />
-                <CheckBox x:Name="HotkeyEnabledBox" Content="Atalho global" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <CheckBox x:Name="HotkeyEnabledBox" Content="{loc:Loc settings.globalHotkey}" VerticalAlignment="Center" Margin="0,0,8,0" />
                 <CheckBox x:Name="HotkeyCtrlBox" Content="Ctrl" VerticalAlignment="Center" Margin="0,0,6,0" />
                 <CheckBox x:Name="HotkeyAltBox" Content="Alt" VerticalAlignment="Center" Margin="0,0,6,0" />
                 <CheckBox x:Name="HotkeyShiftBox" Content="Shift" VerticalAlignment="Center" Margin="0,0,6,0" />
@@ -25,17 +28,17 @@
             </StackPanel>
         </GroupBox>
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
-            <Button Content="Nova categoria" Padding="8,4" Margin="0,0,8,0" Click="OnAddCategoryClick" />
-            <Button Content="Novo item" Padding="8,4" Margin="0,0,8,0" Click="OnAddItemClick" />
-            <Button Content="Editar" Padding="8,4" Margin="0,0,8,0" Click="OnEditClick" />
-            <Button Content="Excluir" Padding="8,4" Margin="0,0,8,0" Click="OnDeleteClick" />
-            <Button Content="Tema..." Padding="8,4" Click="OnEditThemeClick" />
+            <Button Content="{loc:Loc settings.newCategory}" Padding="8,4" Margin="0,0,8,0" Click="OnAddCategoryClick" />
+            <Button Content="{loc:Loc settings.newItem}" Padding="8,4" Margin="0,0,8,0" Click="OnAddItemClick" />
+            <Button Content="{loc:Loc settings.edit}" Padding="8,4" Margin="0,0,8,0" Click="OnEditClick" />
+            <Button Content="{loc:Loc settings.delete}" Padding="8,4" Margin="0,0,8,0" Click="OnDeleteClick" />
+            <Button Content="{loc:Loc settings.themeButton}" Padding="8,4" Click="OnEditThemeClick" />
         </StackPanel>
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-            <Button Content="Exportar..." Width="90" Padding="0,4" Margin="0,0,8,0" Click="OnExportClick" />
-            <Button Content="Importar..." Width="90" Padding="0,4" Margin="0,0,16,0" Click="OnImportClick" />
-            <Button Content="Salvar" Width="90" Padding="0,4" Margin="0,0,8,0" Click="OnSaveClick" />
-            <Button Content="Fechar" Width="90" Padding="0,4" Click="OnCloseClick" />
+            <Button Content="{loc:Loc settings.export}" Width="90" Padding="0,4" Margin="0,0,8,0" Click="OnExportClick" />
+            <Button Content="{loc:Loc settings.import}" Width="90" Padding="0,4" Margin="0,0,16,0" Click="OnImportClick" />
+            <Button Content="{loc:Loc settings.save}" Width="90" Padding="0,4" Margin="0,0,8,0" Click="OnSaveClick" />
+            <Button Content="{loc:Loc settings.close}" Width="90" Padding="0,4" Click="OnCloseClick" />
         </StackPanel>
         <TreeView x:Name="MenuTree"
                   AllowDrop="True"

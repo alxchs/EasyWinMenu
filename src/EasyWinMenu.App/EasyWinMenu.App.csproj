@@ -4,6 +4,10 @@
     <ProjectReference Include="..\EasyWinMenu.Core\EasyWinMenu.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Resource Include="Localization\*.json" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>

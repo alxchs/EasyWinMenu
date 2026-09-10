@@ -2,7 +2,8 @@
                       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                       xmlns:theming="clr-namespace:EasyWinMenu.App.Theming"
-                      Title="Tema"
+                      xmlns:loc="clr-namespace:EasyWinMenu.App.Localization"
+                      Title="{loc:Loc theme.title}"
                       Width="420" Height="660"
                       WindowStartupLocation="CenterOwner"
                       ResizeMode="NoResize"
@@ -10,15 +11,15 @@
     <DockPanel Margin="16">
         <CheckBox x:Name="UseOwnThemeBox"
                   DockPanel.Dock="Top"
-                  Content="Usar tema próprio para esta categoria"
+                  Content="{loc:Loc theme.useOwnTheme}"
                   Margin="0,0,0,12"
                   Checked="OnUseOwnThemeChanged"
                   Unchecked="OnUseOwnThemeChanged" />
 
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button Content="Restaurar padrão" Width="120" Padding="0,4" Margin="0,0,8,0" Click="OnResetClick" />
-            <Button Content="OK" Width="80" Padding="0,4" IsDefault="True" Margin="0,0,8,0" Click="OnOkClick" />
-            <Button Content="Cancelar" Width="80" Padding="0,4" IsCancel="True" />
+            <Button Content="{loc:Loc theme.resetDefault}" Width="120" Padding="0,4" Margin="0,0,8,0" Click="OnResetClick" />
+            <Button Content="{loc:Loc common.ok}" Width="80" Padding="0,4" IsDefault="True" Margin="0,0,8,0" Click="OnOkClick" />
+            <Button Content="{loc:Loc common.cancel}" Width="80" Padding="0,4" IsCancel="True" />
         </StackPanel>
 
         <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -46,52 +47,52 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <TextBlock Text="Cor de fundo (#RRGGBB)" Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBlock Text="{loc:Loc theme.backgroundColor}" Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
                 <TextBox x:Name="BackgroundColorBox" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8" />
 
-                <TextBlock Text="Opacidade (0-1)" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBlock Text="{loc:Loc theme.opacity}" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
                 <TextBox x:Name="OpacityBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8" />
 
-                <TextBlock Text="Cor da borda (#RRGGBB)" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBlock Text="{loc:Loc theme.borderColor}" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
                 <TextBox x:Name="BorderColorBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8" />
 
-                <TextBlock Text="Raio da borda" Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBlock Text="{loc:Loc theme.cornerRadius}" Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
                 <TextBox x:Name="CornerRadiusBox" Grid.Row="3" Grid.Column="1" Margin="0,0,0,8" />
 
-                <TextBlock Text="Sombra" Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBlock Text="{loc:Loc theme.shadow}" Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
                 <CheckBox x:Name="ShowShadowBox" Grid.Row="4" Grid.Column="1" VerticalAlignment="Center" Margin="0,0,0,8" />
 
-                <TextBlock Text="Espaçamento entre itens" Grid.Row="5" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBlock Text="{loc:Loc theme.itemSpacing}" Grid.Row="5" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
                 <TextBox x:Name="ItemSpacingBox" Grid.Row="5" Grid.Column="1" Margin="0,0,0,8" />
 
-                <TextBlock Text="Espaçamento interno do item" Grid.Row="6" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBlock Text="{loc:Loc theme.itemPadding}" Grid.Row="6" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
                 <TextBox x:Name="ItemPaddingBox" Grid.Row="6" Grid.Column="1" Margin="0,0,0,8" />
 
-                <TextBlock Text="Tamanho do ícone" Grid.Row="7" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBlock Text="{loc:Loc theme.iconSize}" Grid.Row="7" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
                 <TextBox x:Name="IconSizeBox" Grid.Row="7" Grid.Column="1" Margin="0,0,0,8" />
 
-                <TextBlock Text="Cor do texto (#RRGGBB)" Grid.Row="8" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBlock Text="{loc:Loc theme.textColor}" Grid.Row="8" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
                 <TextBox x:Name="TextColorBox" Grid.Row="8" Grid.Column="1" Margin="0,0,0,8" />
 
-                <TextBlock Text="Cor de destaque (#AARRGGBB)" Grid.Row="9" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBlock Text="{loc:Loc theme.highlightColor}" Grid.Row="9" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
                 <TextBox x:Name="HighlightColorBox" Grid.Row="9" Grid.Column="1" Margin="0,0,0,8" />
 
-                <TextBlock Text="Fonte dos títulos" Grid.Row="10" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBlock Text="{loc:Loc theme.titleFontFamily}" Grid.Row="10" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
                 <TextBox x:Name="TitleFontFamilyBox" Grid.Row="10" Grid.Column="1" Margin="0,0,0,8" />
 
-                <TextBlock Text="Tamanho da fonte dos títulos" Grid.Row="11" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBlock Text="{loc:Loc theme.titleFontSize}" Grid.Row="11" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
                 <TextBox x:Name="TitleFontSizeBox" Grid.Row="11" Grid.Column="1" Margin="0,0,0,8" />
 
-                <TextBlock Text="Títulos em negrito" Grid.Row="12" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBlock Text="{loc:Loc theme.titleBold}" Grid.Row="12" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
                 <CheckBox x:Name="TitleBoldBox" Grid.Row="12" Grid.Column="1" VerticalAlignment="Center" Margin="0,0,0,8" />
 
-                <TextBlock Text="Fonte dos itens" Grid.Row="13" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBlock Text="{loc:Loc theme.itemFontFamily}" Grid.Row="13" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
                 <TextBox x:Name="ItemFontFamilyBox" Grid.Row="13" Grid.Column="1" Margin="0,0,0,8" />
 
-                <TextBlock Text="Tamanho da fonte dos itens" Grid.Row="14" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBlock Text="{loc:Loc theme.itemFontSize}" Grid.Row="14" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
                 <TextBox x:Name="ItemFontSizeBox" Grid.Row="14" Grid.Column="1" Margin="0,0,0,8" />
 
-                <TextBlock Text="Duração da animação (ms)" Grid.Row="15" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBlock Text="{loc:Loc theme.animationDuration}" Grid.Row="15" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
                 <TextBox x:Name="AnimationDurationBox" Grid.Row="15" Grid.Column="1" Margin="0,0,0,8" />
             </Grid>
         </ScrollViewer>

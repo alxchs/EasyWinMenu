@@ -3,6 +3,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Forms;
 using System.Windows.Media;
 using EasyWinMenu.App.Desktop;
+using EasyWinMenu.App.Localization;
 using EasyWinMenu.App.Menu;
 using EasyWinMenu.App.Services;
 using EasyWinMenu.App.Settings;
@@ -33,6 +34,10 @@ public partial class App : Application
         _iconCache = new IconCacheService(ApplicationPaths.IconCacheDirectory);
 
         AppThemeService.Apply(_configuration.Behavior.AppTheme);
+        LocalizationService.SetLanguage(
+            string.IsNullOrEmpty(_configuration.Behavior.Language)
+                ? LocalizationService.DetectLanguage()
+                : _configuration.Behavior.Language);
 
         _menuHost = new Window
         {
@@ -59,7 +64,7 @@ public partial class App : Application
         {
             Icon = System.Drawing.SystemIcons.Application,
             Visible = true,
-            Text = "EasyWinMenu"
+            Text = LocalizationService.Get("common.appName")
         };
 
         _trayIcon.MouseClick += (_, args) =>
@@ -99,7 +104,7 @@ public partial class App : Application
 
     private void CreateDesktopGroup()
     {
-        var prompt = new TextPromptWindow("Nome do grupo:", string.Empty);
+        var prompt = new TextPromptWindow(LocalizationService.Get("group.namePrompt"), string.Empty);
         if (prompt.ShowDialog() != true)
         {
             return;
@@ -165,6 +170,10 @@ public partial class App : Application
         _hotkeyService!.Apply(_configuration!.Behavior);
         _desktopOrganizer!.Refresh(_configuration!, OnDesktopGroupLayoutChanged, OnDesktopGroupDeleteRequested);
         AppThemeService.Apply(_configuration!.Behavior.AppTheme);
+        LocalizationService.SetLanguage(
+            string.IsNullOrEmpty(_configuration!.Behavior.Language)
+                ? LocalizationService.DetectLanguage()
+                : _configuration.Behavior.Language);
     }
 
     protected override void OnExit(ExitEventArgs e)
