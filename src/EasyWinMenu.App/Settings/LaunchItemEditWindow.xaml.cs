@@ -25,6 +25,7 @@ public partial class LaunchItemEditWindow : Window
         WorkingDirectoryBox.Text = item.WorkingDirectory;
         ExecutionModeBox.SelectedItem = item.ExecutionMode;
         IconOverrideBox.Text = item.IconOverridePath;
+        DesktopPinnedBox.IsChecked = item.IsDesktopPinned;
     }
 
     private void OnBrowseClick(object sender, RoutedEventArgs e)
@@ -82,6 +83,7 @@ public partial class LaunchItemEditWindow : Window
         _item.WorkingDirectory = string.IsNullOrWhiteSpace(WorkingDirectoryBox.Text) ? null : WorkingDirectoryBox.Text.Trim();
         _item.ExecutionMode = ExecutionModeBox.SelectedItem as ExecutionMode? ?? ExecutionMode.Normal;
         _item.IconOverridePath = string.IsNullOrWhiteSpace(IconOverrideBox.Text) ? null : IconOverrideBox.Text.Trim();
+        _item.IsDesktopPinned = DesktopPinnedBox.IsChecked == true;
 
         DialogResult = true;
     }

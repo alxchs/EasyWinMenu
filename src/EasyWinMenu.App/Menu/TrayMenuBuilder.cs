@@ -7,9 +7,6 @@ using System.Windows.Media.Imaging;
 using EasyWinMenu.App.Services;
 using EasyWinMenu.Core.Models;
 using Application = System.Windows.Application;
-using Brush = System.Windows.Media.Brush;
-using Color = System.Windows.Media.Color;
-using ColorConverter = System.Windows.Media.ColorConverter;
 using ContextMenu = System.Windows.Controls.ContextMenu;
 using Control = System.Windows.Controls.Control;
 using FontFamily = System.Windows.Media.FontFamily;
@@ -107,8 +104,8 @@ internal static class TrayMenuBuilder
 
     private static void ApplyPanelAppearance(Control control, MenuTheme panelTheme)
     {
-        control.Background = CreateBrush(panelTheme.BackgroundColor, panelTheme.Opacity);
-        control.BorderBrush = CreateBrush(panelTheme.BorderColor, 1.0);
+        control.Background = ThemeBrushes.CreateBrush(panelTheme.BackgroundColor, panelTheme.Opacity);
+        control.BorderBrush = ThemeBrushes.CreateBrush(panelTheme.BorderColor, 1.0);
         control.BorderThickness = new Thickness(1);
         MenuThemeProperties.SetPanelCornerRadius(control, new CornerRadius(panelTheme.CornerRadius));
 
@@ -127,12 +124,12 @@ internal static class TrayMenuBuilder
     private static void ApplyMenuItemAppearance(MenuItem item, MenuTheme rowTheme, MenuTheme panelTheme)
     {
         item.Style = (Style)Application.Current.Resources["EasyWinMenuMenuItemStyle"];
-        item.Foreground = CreateBrush(rowTheme.TextColor, 1.0);
+        item.Foreground = ThemeBrushes.CreateBrush(rowTheme.TextColor, 1.0);
         item.FontFamily = new FontFamily(rowTheme.ItemFontFamily);
         item.FontSize = rowTheme.ItemFontSize;
         item.Padding = new Thickness(rowTheme.ItemPadding, rowTheme.ItemPadding / 2, rowTheme.ItemPadding, rowTheme.ItemPadding / 2);
         item.Margin = new Thickness(2, rowTheme.ItemSpacing / 2, 2, rowTheme.ItemSpacing / 2);
-        MenuThemeProperties.SetHighlightBrush(item, CreateBrush(rowTheme.HighlightColor, 1.0));
+        MenuThemeProperties.SetHighlightBrush(item, ThemeBrushes.CreateBrush(rowTheme.HighlightColor, 1.0));
         MenuThemeProperties.SetHighlightCornerRadius(item, new CornerRadius(4));
 
         ApplyPanelAppearance(item, panelTheme);
@@ -152,12 +149,5 @@ internal static class TrayMenuBuilder
             Width = theme.IconSize,
             Height = theme.IconSize
         };
-    }
-
-    private static Brush CreateBrush(string hex, double opacity)
-    {
-        var color = (Color)ColorConverter.ConvertFromString(hex)!;
-        color.A = (byte)Math.Clamp(color.A * opacity, 0, 255);
-        return new SolidColorBrush(color);
     }
 }

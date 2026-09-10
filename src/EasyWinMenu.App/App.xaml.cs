@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Forms;
 using System.Windows.Media;
+using EasyWinMenu.App.Desktop;
 using EasyWinMenu.App.Menu;
 using EasyWinMenu.App.Services;
 using EasyWinMenu.App.Settings;
@@ -19,6 +20,7 @@ public partial class App : Application
     private NotifyIcon? _trayIcon;
     private Window? _menuHost;
     private GlobalHotkeyService? _hotkeyService;
+    private DesktopOrganizerService? _desktopOrganizer;
     private SettingsWindow? _settingsWindow;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -46,6 +48,9 @@ public partial class App : Application
         _hotkeyService = new GlobalHotkeyService(_menuHost);
         _hotkeyService.HotkeyPressed += ShowTrayMenu;
         _hotkeyService.Apply(_configuration.Behavior);
+
+        _desktopOrganizer = new DesktopOrganizerService(_iconCache);
+        _desktopOrganizer.Refresh(_configuration, OnDesktopGroupLayoutChanged);
 
         _trayIcon = new NotifyIcon
         {
@@ -75,7 +80,11 @@ public partial class App : Application
                 ShowTrayMenu();
             }
         };
+    }
 
+    private void OnDesktopGroupLayoutChanged(MenuCategory category)
+    {
+        _configurationStore!.Save(_configuration!);
     }
 
     private void ShowTrayMenu()
@@ -130,6 +139,7 @@ public partial class App : Application
     {
         _configurationStore!.Save(_configuration!);
         _hotkeyService!.Apply(_configuration!.Behavior);
+        _desktopOrganizer!.Refresh(_configuration!, OnDesktopGroupLayoutChanged);
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -137,6 +147,7 @@ public partial class App : Application
         _trayIcon?.Dispose();
         _iconCache?.Dispose();
         _hotkeyService?.Dispose();
+        _desktopOrganizer?.CloseAll();
         base.OnExit(e);
     }
 }
