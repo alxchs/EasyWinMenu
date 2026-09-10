@@ -25,6 +25,7 @@ internal static class TrayMenuBuilder
         IconCacheService iconCache,
         bool startWithWindowsEnabled,
         Action openSettings,
+        Action createDesktopGroup,
         Action<bool> setStartWithWindows,
         Action exit)
     {
@@ -47,6 +48,11 @@ internal static class TrayMenuBuilder
         ApplyMenuItemAppearance(settingsItem, theme, theme);
         settingsItem.Click += (_, _) => openSettings();
         menu.Items.Add(settingsItem);
+
+        var newGroupItem = new MenuItem { Header = "Novo grupo no desktop..." };
+        ApplyMenuItemAppearance(newGroupItem, theme, theme);
+        newGroupItem.Click += (_, _) => createDesktopGroup();
+        menu.Items.Add(newGroupItem);
 
         var startupItem = new MenuItem
         {

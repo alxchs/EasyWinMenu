@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -6,25 +7,35 @@ using System.Windows.Media.Imaging;
 using EasyWinMenu.App.Menu;
 using EasyWinMenu.App.Services;
 using EasyWinMenu.Core.Models;
+using Application = System.Windows.Application;
 using Border = System.Windows.Controls.Border;
 using Brushes = System.Windows.Media.Brushes;
 using Canvas = System.Windows.Controls.Canvas;
+using Color = System.Windows.Media.Color;
+using ColorConverter = System.Windows.Media.ColorConverter;
+using ContextMenu = System.Windows.Controls.ContextMenu;
 using Cursors = System.Windows.Input.Cursors;
 using Dock = System.Windows.Controls.Dock;
 using DockPanel = System.Windows.Controls.DockPanel;
+using DragEventArgs = System.Windows.DragEventArgs;
 using FontFamily = System.Windows.Media.FontFamily;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Image = System.Windows.Controls.Image;
 using Key = System.Windows.Input.Key;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using Keyboard = System.Windows.Input.Keyboard;
+using MenuItem = System.Windows.Controls.MenuItem;
+using MessageBox = System.Windows.MessageBox;
 using ModifierKeys = System.Windows.Input.ModifierKeys;
 using MouseButtonEventArgs = System.Windows.Input.MouseButtonEventArgs;
 using MouseButtonState = System.Windows.Input.MouseButtonState;
 using MouseEventArgs = System.Windows.Input.MouseEventArgs;
 using MouseWheelEventArgs = System.Windows.Input.MouseWheelEventArgs;
+using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using Orientation = System.Windows.Controls.Orientation;
+using Separator = System.Windows.Controls.Separator;
 using StackPanel = System.Windows.Controls.StackPanel;
+using Style = System.Windows.Style;
 using TextAlignment = System.Windows.TextAlignment;
 using TextBlock = System.Windows.Controls.TextBlock;
 using TextWrapping = System.Windows.TextWrapping;
@@ -39,8 +50,16 @@ internal sealed class DesktopGroupWindow : Window
     private const double TileSize = 80;
 
     private readonly MenuCategory _category;
+    private readonly MenuTheme _theme;
+    private readonly IconCacheService _iconCache;
+    private readonly Action<LaunchItem> _onExecute;
     private readonly Action<MenuCategory> _onLayoutChanged;
+    private readonly Action<MenuCategory> _onDeleteRequested;
     private readonly ScaleTransform _zoomTransform;
+
+    private Canvas _canvas = null!;
+    private Border _border = null!;
+    private TextBlock _headerText = null!;
 
     private bool _resizingGroup;
     private System.Windows.Point _resizeStart;
@@ -52,10 +71,15 @@ internal sealed class DesktopGroupWindow : Window
         MenuTheme theme,
         IconCacheService iconCache,
         Action<LaunchItem> onExecute,
-        Action<MenuCategory> onLayoutChanged)
+        Action<MenuCategory> onLayoutChanged,
+        Action<MenuCategory> onDeleteRequested)
     {
         _category = category;
+        _theme = theme;
+        _iconCache = iconCache;
+        _onExecute = onExecute;
         _onLayoutChanged = onLayoutChanged;
+        _onDeleteRequested = onDeleteRequested;
         _zoomTransform = new ScaleTransform(category.DesktopIconScale, category.DesktopIconScale);
 
         WindowStyle = WindowStyle.None;
@@ -68,30 +92,35 @@ internal sealed class DesktopGroupWindow : Window
         Top = category.DesktopY;
         Width = category.DesktopWidth;
         Height = category.DesktopHeight;
+        AllowDrop = true;
 
-        Content = BuildContent(category, theme, iconCache, onExecute);
+        Content = BuildContent();
 
         PreviewMouseWheel += OnPreviewMouseWheel;
         PreviewKeyDown += OnPreviewKeyDown;
+        Drop += OnDrop;
     }
 
-    private FrameworkElement BuildContent(MenuCategory category, MenuTheme theme, IconCacheService iconCache, Action<LaunchItem> onExecute)
+    private FrameworkElement BuildContent()
     {
         var panel = new DockPanel();
 
+        _headerText = new TextBlock
+        {
+            Text = _category.Name,
+            Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 1.0),
+            FontFamily = new FontFamily(_theme.TitleFontFamily),
+            FontSize = _theme.TitleFontSize,
+            FontWeight = _theme.TitleBold ? FontWeights.Bold : FontWeights.Normal
+        };
+
         var header = new Border
         {
-            Background = ThemeBrushes.CreateBrush(theme.HighlightColor, 1.0),
+            Background = ThemeBrushes.CreateBrush(_theme.HighlightColor, 1.0),
             Padding = new Thickness(8, 4, 8, 4),
             Cursor = Cursors.SizeAll,
-            Child = new TextBlock
-            {
-                Text = category.Name,
-                Foreground = ThemeBrushes.CreateBrush(theme.TextColor, 1.0),
-                FontFamily = new FontFamily(theme.TitleFontFamily),
-                FontSize = theme.TitleFontSize,
-                FontWeight = theme.TitleBold ? FontWeights.Bold : FontWeights.Normal
-            }
+            Child = _headerText,
+            ContextMenu = BuildHeaderContextMenu()
         };
         header.MouseLeftButtonDown += OnHeaderMouseLeftButtonDown;
         DockPanel.SetDock(header, Dock.Top);
@@ -101,7 +130,7 @@ internal sealed class DesktopGroupWindow : Window
         {
             Width = 14,
             Height = 14,
-            Background = ThemeBrushes.CreateBrush(theme.BorderColor, 1.0),
+            Background = ThemeBrushes.CreateBrush(_theme.BorderColor, 1.0),
             HorizontalAlignment = HorizontalAlignment.Right,
             Cursor = Cursors.SizeNWSE
         };
@@ -111,7 +140,7 @@ internal sealed class DesktopGroupWindow : Window
         DockPanel.SetDock(resizeGrip, Dock.Bottom);
         panel.Children.Add(resizeGrip);
 
-        var canvas = new Canvas
+        _canvas = new Canvas
         {
             Background = Brushes.Transparent,
             RenderTransform = _zoomTransform,
@@ -119,32 +148,27 @@ internal sealed class DesktopGroupWindow : Window
         };
 
         var index = 0;
-        foreach (var item in category.Items.Where(i => i.IsDesktopPinned))
+        foreach (var item in _category.Items.Where(i => i.IsDesktopPinned))
         {
-            var tile = BuildTile(item, theme, iconCache, onExecute, canvas);
-            var x = item.DesktopIconX ?? (index % 3) * TileSize;
-            var y = item.DesktopIconY ?? (index / 3) * TileSize;
-            Canvas.SetLeft(tile, x);
-            Canvas.SetTop(tile, y);
-            canvas.Children.Add(tile);
+            AddTile(item, item.DesktopIconX ?? (index % 3) * TileSize, item.DesktopIconY ?? (index / 3) * TileSize);
             index++;
         }
 
-        panel.Children.Add(canvas);
+        panel.Children.Add(_canvas);
 
-        var border = new Border
+        _border = new Border
         {
-            Background = ThemeBrushes.CreateBrush(theme.BackgroundColor, theme.Opacity),
-            BorderBrush = ThemeBrushes.CreateBrush(theme.BorderColor, 1.0),
+            BorderBrush = ThemeBrushes.CreateBrush(_theme.BorderColor, 1.0),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(theme.CornerRadius),
+            CornerRadius = new CornerRadius(_theme.CornerRadius),
             ClipToBounds = true,
             Child = panel
         };
+        ApplyBackground();
 
-        if (theme.ShowShadow)
+        if (_theme.ShowShadow)
         {
-            border.Effect = new DropShadowEffect
+            _border.Effect = new DropShadowEffect
             {
                 BlurRadius = 12,
                 ShadowDepth = 2,
@@ -153,10 +177,190 @@ internal sealed class DesktopGroupWindow : Window
             };
         }
 
-        return border;
+        return _border;
     }
 
-    private FrameworkElement BuildTile(LaunchItem item, MenuTheme theme, IconCacheService iconCache, Action<LaunchItem> onExecute, Canvas canvas)
+    private void ApplyBackground()
+    {
+        if (!string.IsNullOrWhiteSpace(_category.DesktopBackgroundImagePath) && File.Exists(_category.DesktopBackgroundImagePath))
+        {
+            _border.Background = new ImageBrush(new BitmapImage(new Uri(_category.DesktopBackgroundImagePath)))
+            {
+                Stretch = Stretch.UniformToFill
+            };
+            return;
+        }
+
+        _border.Background = ThemeBrushes.CreateBrush(_theme.BackgroundColor, _theme.Opacity);
+    }
+
+    private ContextMenu BuildHeaderContextMenu()
+    {
+        var menu = new ContextMenu
+        {
+            Style = (Style)Application.Current.Resources["EasyWinMenuContextMenuStyle"],
+            Background = ThemeBrushes.CreateBrush(_theme.BackgroundColor, 1.0),
+            BorderBrush = ThemeBrushes.CreateBrush(_theme.BorderColor, 1.0),
+            BorderThickness = new Thickness(1)
+        };
+        MenuThemeProperties.SetPanelCornerRadius(menu, new CornerRadius(_theme.CornerRadius));
+
+        AddMenuItem(menu, "Renomear...", OnRenameClick);
+        AddMenuItem(menu, "Cor de fundo...", OnChangeColorClick);
+        AddMenuItem(menu, "Imagem de fundo...", OnChangeBackgroundImageClick);
+        AddMenuItem(menu, "Remover imagem de fundo", OnClearBackgroundImageClick);
+        menu.Items.Add(new Separator());
+        AddMenuItem(menu, "Remover grupo", OnDeleteGroupClick);
+
+        return menu;
+    }
+
+    private void AddMenuItem(ContextMenu menu, string header, Action handler)
+    {
+        var item = new MenuItem
+        {
+            Header = header,
+            Style = (Style)Application.Current.Resources["EasyWinMenuMenuItemStyle"],
+            Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 1.0),
+            FontFamily = new FontFamily(_theme.ItemFontFamily),
+            FontSize = _theme.ItemFontSize,
+            Padding = new Thickness(_theme.ItemPadding, _theme.ItemPadding / 2, _theme.ItemPadding, _theme.ItemPadding / 2)
+        };
+        MenuThemeProperties.SetHighlightBrush(item, ThemeBrushes.CreateBrush(_theme.HighlightColor, 1.0));
+        MenuThemeProperties.SetHighlightCornerRadius(item, new CornerRadius(4));
+        MenuThemeProperties.SetPanelCornerRadius(item, new CornerRadius(_theme.CornerRadius));
+        item.Click += (_, _) => handler();
+        menu.Items.Add(item);
+    }
+
+    private void OnRenameClick()
+    {
+        var prompt = new Settings.TextPromptWindow("Nome do grupo:", _category.Name);
+        if (prompt.ShowDialog() != true)
+        {
+            return;
+        }
+
+        _category.Name = prompt.Value;
+        _headerText.Text = prompt.Value;
+        _onLayoutChanged(_category);
+    }
+
+    private void OnChangeColorClick()
+    {
+        using var dialog = new System.Windows.Forms.ColorDialog();
+        var current = (Color)ColorConverter.ConvertFromString(_theme.BackgroundColor)!;
+        dialog.Color = System.Drawing.Color.FromArgb(current.A, current.R, current.G, current.B);
+
+        if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
+        {
+            return;
+        }
+
+        _category.ThemeOverride ??= _theme.Clone();
+        _category.ThemeOverride.BackgroundColor = $"#{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";
+        ApplyThemeChange();
+    }
+
+    private void OnChangeBackgroundImageClick()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Filter = "Imagens (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp"
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        _category.DesktopBackgroundImagePath = dialog.FileName;
+        ApplyBackground();
+        _onLayoutChanged(_category);
+    }
+
+    private void OnClearBackgroundImageClick()
+    {
+        _category.DesktopBackgroundImagePath = null;
+        ApplyBackground();
+        _onLayoutChanged(_category);
+    }
+
+    private void OnDeleteGroupClick()
+    {
+        var confirmed = MessageBox.Show(
+            this,
+            $"Remover o grupo \"{_category.Name}\" e todos os seus itens fixados?",
+            "EasyWinMenu",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (confirmed == MessageBoxResult.Yes)
+        {
+            _onDeleteRequested(_category);
+        }
+    }
+
+    private void ApplyThemeChange()
+    {
+        ApplyBackground();
+        _onLayoutChanged(_category);
+    }
+
+    private void OnDrop(object sender, DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+        {
+            return;
+        }
+
+        var paths = (string[])e.Data.GetData(System.Windows.DataFormats.FileDrop)!;
+        var dropPoint = e.GetPosition(_canvas);
+        var offset = 0.0;
+
+        foreach (var path in paths)
+        {
+            var item = new LaunchItem
+            {
+                Name = Path.GetFileNameWithoutExtension(path),
+                Type = InferType(path),
+                Target = path,
+                IsDesktopPinned = true,
+                DesktopIconX = dropPoint.X + offset,
+                DesktopIconY = dropPoint.Y + offset
+            };
+
+            _category.Items.Add(item);
+            AddTile(item, item.DesktopIconX.Value, item.DesktopIconY.Value);
+            offset += 16;
+        }
+
+        _onLayoutChanged(_category);
+    }
+
+    private static LaunchItemType InferType(string path)
+    {
+        if (Directory.Exists(path))
+        {
+            return LaunchItemType.Folder;
+        }
+
+        var extension = Path.GetExtension(path);
+        return string.Equals(extension, ".exe", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(extension, ".lnk", StringComparison.OrdinalIgnoreCase)
+            ? LaunchItemType.Application
+            : LaunchItemType.File;
+    }
+
+    private void AddTile(LaunchItem item, double x, double y)
+    {
+        var tile = BuildTile(item);
+        Canvas.SetLeft(tile, x);
+        Canvas.SetTop(tile, y);
+        _canvas.Children.Add(tile);
+    }
+
+    private FrameworkElement BuildTile(LaunchItem item)
     {
         var stack = new StackPanel
         {
@@ -165,14 +369,14 @@ internal sealed class DesktopGroupWindow : Window
             Cursor = Cursors.Hand
         };
 
-        var icon = iconCache.GetIcon(item.IconOverridePath ?? item.Target);
+        var icon = _iconCache.GetIcon(item.IconOverridePath ?? item.Target);
         if (icon is not null)
         {
             stack.Children.Add(new Image
             {
                 Source = Imaging.CreateBitmapSourceFromHIcon(icon.Handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions()),
-                Width = theme.IconSize * 1.6,
-                Height = theme.IconSize * 1.6,
+                Width = _theme.IconSize * 1.6,
+                Height = _theme.IconSize * 1.6,
                 HorizontalAlignment = HorizontalAlignment.Center
             });
         }
@@ -180,9 +384,9 @@ internal sealed class DesktopGroupWindow : Window
         stack.Children.Add(new TextBlock
         {
             Text = item.Name,
-            Foreground = ThemeBrushes.CreateBrush(theme.TextColor, 1.0),
-            FontFamily = new FontFamily(theme.ItemFontFamily),
-            FontSize = theme.ItemFontSize,
+            Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 1.0),
+            FontFamily = new FontFamily(_theme.ItemFontFamily),
+            FontSize = _theme.ItemFontSize,
             TextAlignment = TextAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
             HorizontalAlignment = HorizontalAlignment.Center
@@ -196,12 +400,12 @@ internal sealed class DesktopGroupWindow : Window
         {
             if (e.ClickCount == 2)
             {
-                onExecute(item);
+                _onExecute(item);
                 return;
             }
 
             dragging = true;
-            dragStart = e.GetPosition(canvas);
+            dragStart = e.GetPosition(_canvas);
             tileStart = new System.Windows.Point(Canvas.GetLeft(stack), Canvas.GetTop(stack));
             stack.CaptureMouse();
         };
@@ -213,7 +417,7 @@ internal sealed class DesktopGroupWindow : Window
                 return;
             }
 
-            var current = e.GetPosition(canvas);
+            var current = e.GetPosition(_canvas);
             var delta = current - dragStart;
             Canvas.SetLeft(stack, tileStart.X + delta.X);
             Canvas.SetTop(stack, tileStart.Y + delta.Y);

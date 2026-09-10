@@ -50,7 +50,7 @@ public partial class App : Application
         _hotkeyService.Apply(_configuration.Behavior);
 
         _desktopOrganizer = new DesktopOrganizerService(_iconCache);
-        _desktopOrganizer.Refresh(_configuration, OnDesktopGroupLayoutChanged);
+        _desktopOrganizer.Refresh(_configuration, OnDesktopGroupLayoutChanged, OnDesktopGroupDeleteRequested);
 
         _trayIcon = new NotifyIcon
         {
@@ -87,6 +87,26 @@ public partial class App : Application
         _configurationStore!.Save(_configuration!);
     }
 
+    private void OnDesktopGroupDeleteRequested(MenuCategory category)
+    {
+        DesktopOrganizerService.RemoveCategory(_configuration!, category);
+        _configurationStore!.Save(_configuration!);
+        _desktopOrganizer!.Refresh(_configuration!, OnDesktopGroupLayoutChanged, OnDesktopGroupDeleteRequested);
+    }
+
+    private void CreateDesktopGroup()
+    {
+        var prompt = new TextPromptWindow("Nome do grupo:", string.Empty);
+        if (prompt.ShowDialog() != true)
+        {
+            return;
+        }
+
+        _configuration!.Categories.Add(new MenuCategory { Name = prompt.Value, IsDesktopGroup = true });
+        _configurationStore!.Save(_configuration);
+        _desktopOrganizer!.Refresh(_configuration, OnDesktopGroupLayoutChanged, OnDesktopGroupDeleteRequested);
+    }
+
     private void ShowTrayMenu()
     {
         var screenPoint = System.Windows.Forms.Cursor.Position;
@@ -99,6 +119,7 @@ public partial class App : Application
             _iconCache!,
             StartupRegistration.IsEnabled(),
             OpenSettingsWindow,
+            CreateDesktopGroup,
             StartupRegistration.SetEnabled,
             Shutdown);
 
@@ -139,7 +160,7 @@ public partial class App : Application
     {
         _configurationStore!.Save(_configuration!);
         _hotkeyService!.Apply(_configuration!.Behavior);
-        _desktopOrganizer!.Refresh(_configuration!, OnDesktopGroupLayoutChanged);
+        _desktopOrganizer!.Refresh(_configuration!, OnDesktopGroupLayoutChanged, OnDesktopGroupDeleteRequested);
     }
 
     protected override void OnExit(ExitEventArgs e)

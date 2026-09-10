@@ -7,7 +7,7 @@ internal sealed class DesktopOrganizerService(IconCacheService iconCache)
 {
     private readonly Dictionary<MenuCategory, DesktopGroupWindow> _windows = new();
 
-    public void Refresh(LauncherConfiguration configuration, Action<MenuCategory> onLayoutChanged)
+    public void Refresh(LauncherConfiguration configuration, Action<MenuCategory> onLayoutChanged, Action<MenuCategory> onDeleteRequested)
     {
         var groups = FindDesktopGroups(configuration).ToList();
 
@@ -25,7 +25,7 @@ internal sealed class DesktopOrganizerService(IconCacheService iconCache)
             }
 
             var theme = category.ThemeOverride ?? configuration.Theme;
-            var window = new DesktopGroupWindow(category, theme, iconCache, LaunchExecutor.Execute, onLayoutChanged);
+            var window = new DesktopGroupWindow(category, theme, iconCache, LaunchExecutor.Execute, onLayoutChanged, onDeleteRequested);
             window.Show();
             _windows[category] = window;
         }
@@ -41,11 +41,29 @@ internal sealed class DesktopOrganizerService(IconCacheService iconCache)
         _windows.Clear();
     }
 
+    public static bool RemoveCategory(IMenuContainer container, MenuCategory target)
+    {
+        if (container.Categories.Remove(target))
+        {
+            return true;
+        }
+
+        foreach (var category in container.Categories)
+        {
+            if (RemoveCategory(category, target))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static IEnumerable<MenuCategory> FindDesktopGroups(IMenuContainer container)
     {
         foreach (var category in container.Categories)
         {
-            if (category.Items.Any(item => item.IsDesktopPinned))
+            if (category.IsDesktopGroup || category.Items.Any(item => item.IsDesktopPinned))
             {
                 yield return category;
             }
