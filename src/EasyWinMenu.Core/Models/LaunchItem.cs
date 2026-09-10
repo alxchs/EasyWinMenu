@@ -10,6 +10,8 @@ public sealed class LaunchItem
     public ExecutionMode ExecutionMode { get; set; } = ExecutionMode.Normal;
     public string? IconOverridePath { get; set; }
     public bool IsDesktopPinned { get; set; }
+    public double? DesktopIconX { get; set; }
+    public double? DesktopIconY { get; set; }
 
     public LaunchItem Clone()
     {
@@ -22,7 +24,9 @@ public sealed class LaunchItem
             WorkingDirectory = WorkingDirectory,
             ExecutionMode = ExecutionMode,
             IconOverridePath = IconOverridePath,
-            IsDesktopPinned = IsDesktopPinned
+            IsDesktopPinned = IsDesktopPinned,
+            DesktopIconX = DesktopIconX,
+            DesktopIconY = DesktopIconY
         };
     }
 }

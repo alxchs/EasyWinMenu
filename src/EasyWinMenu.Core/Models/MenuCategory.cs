@@ -10,6 +10,7 @@ public sealed class MenuCategory : IMenuContainer
     public double DesktopY { get; set; } = 40;
     public double DesktopWidth { get; set; } = 220;
     public double DesktopHeight { get; set; } = 180;
+    public double DesktopIconScale { get; set; } = 1.0;
 
     public MenuCategory Clone()
     {
@@ -22,7 +23,8 @@ public sealed class MenuCategory : IMenuContainer
             DesktopX = DesktopX,
             DesktopY = DesktopY,
             DesktopWidth = DesktopWidth,
-            DesktopHeight = DesktopHeight
+            DesktopHeight = DesktopHeight,
+            DesktopIconScale = DesktopIconScale
         };
     }
 }

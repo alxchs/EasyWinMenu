@@ -8,30 +8,41 @@ using EasyWinMenu.App.Services;
 using EasyWinMenu.Core.Models;
 using Border = System.Windows.Controls.Border;
 using Brushes = System.Windows.Media.Brushes;
+using Canvas = System.Windows.Controls.Canvas;
 using Cursors = System.Windows.Input.Cursors;
 using Dock = System.Windows.Controls.Dock;
 using DockPanel = System.Windows.Controls.DockPanel;
 using FontFamily = System.Windows.Media.FontFamily;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Image = System.Windows.Controls.Image;
+using Key = System.Windows.Input.Key;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
+using Keyboard = System.Windows.Input.Keyboard;
+using ModifierKeys = System.Windows.Input.ModifierKeys;
 using MouseButtonEventArgs = System.Windows.Input.MouseButtonEventArgs;
 using MouseButtonState = System.Windows.Input.MouseButtonState;
 using MouseEventArgs = System.Windows.Input.MouseEventArgs;
+using MouseWheelEventArgs = System.Windows.Input.MouseWheelEventArgs;
 using Orientation = System.Windows.Controls.Orientation;
+using StackPanel = System.Windows.Controls.StackPanel;
 using TextAlignment = System.Windows.TextAlignment;
 using TextBlock = System.Windows.Controls.TextBlock;
 using TextWrapping = System.Windows.TextWrapping;
 using VerticalAlignment = System.Windows.VerticalAlignment;
-using WrapPanel = System.Windows.Controls.WrapPanel;
 
 namespace EasyWinMenu.App.Desktop;
 
 internal sealed class DesktopGroupWindow : Window
 {
+    private const double MinIconScale = 0.5;
+    private const double MaxIconScale = 3.0;
+    private const double TileSize = 80;
+
     private readonly MenuCategory _category;
     private readonly Action<MenuCategory> _onLayoutChanged;
+    private readonly ScaleTransform _zoomTransform;
 
-    private bool _resizing;
+    private bool _resizingGroup;
     private System.Windows.Point _resizeStart;
     private double _startWidth;
     private double _startHeight;
@@ -45,6 +56,7 @@ internal sealed class DesktopGroupWindow : Window
     {
         _category = category;
         _onLayoutChanged = onLayoutChanged;
+        _zoomTransform = new ScaleTransform(category.DesktopIconScale, category.DesktopIconScale);
 
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
@@ -58,6 +70,9 @@ internal sealed class DesktopGroupWindow : Window
         Height = category.DesktopHeight;
 
         Content = BuildContent(category, theme, iconCache, onExecute);
+
+        PreviewMouseWheel += OnPreviewMouseWheel;
+        PreviewKeyDown += OnPreviewKeyDown;
     }
 
     private FrameworkElement BuildContent(MenuCategory category, MenuTheme theme, IconCacheService iconCache, Action<LaunchItem> onExecute)
@@ -96,13 +111,26 @@ internal sealed class DesktopGroupWindow : Window
         DockPanel.SetDock(resizeGrip, Dock.Bottom);
         panel.Children.Add(resizeGrip);
 
-        var itemsPanel = new WrapPanel { Margin = new Thickness(8) };
+        var canvas = new Canvas
+        {
+            Background = Brushes.Transparent,
+            RenderTransform = _zoomTransform,
+            RenderTransformOrigin = new System.Windows.Point(0, 0)
+        };
+
+        var index = 0;
         foreach (var item in category.Items.Where(i => i.IsDesktopPinned))
         {
-            itemsPanel.Children.Add(BuildTile(item, theme, iconCache, onExecute));
+            var tile = BuildTile(item, theme, iconCache, onExecute, canvas);
+            var x = item.DesktopIconX ?? (index % 3) * TileSize;
+            var y = item.DesktopIconY ?? (index / 3) * TileSize;
+            Canvas.SetLeft(tile, x);
+            Canvas.SetTop(tile, y);
+            canvas.Children.Add(tile);
+            index++;
         }
 
-        panel.Children.Add(itemsPanel);
+        panel.Children.Add(canvas);
 
         var border = new Border
         {
@@ -110,6 +138,7 @@ internal sealed class DesktopGroupWindow : Window
             BorderBrush = ThemeBrushes.CreateBrush(theme.BorderColor, 1.0),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(theme.CornerRadius),
+            ClipToBounds = true,
             Child = panel
         };
 
@@ -127,13 +156,12 @@ internal sealed class DesktopGroupWindow : Window
         return border;
     }
 
-    private static FrameworkElement BuildTile(LaunchItem item, MenuTheme theme, IconCacheService iconCache, Action<LaunchItem> onExecute)
+    private FrameworkElement BuildTile(LaunchItem item, MenuTheme theme, IconCacheService iconCache, Action<LaunchItem> onExecute, Canvas canvas)
     {
-        var stack = new System.Windows.Controls.StackPanel
+        var stack = new StackPanel
         {
             Orientation = Orientation.Vertical,
-            Width = 72,
-            Margin = new Thickness(4),
+            Width = TileSize - 8,
             Cursor = Cursors.Hand
         };
 
@@ -160,12 +188,49 @@ internal sealed class DesktopGroupWindow : Window
             HorizontalAlignment = HorizontalAlignment.Center
         });
 
+        System.Windows.Point dragStart = default;
+        System.Windows.Point tileStart = default;
+        var dragging = false;
+
         stack.MouseLeftButtonDown += (_, e) =>
         {
             if (e.ClickCount == 2)
             {
                 onExecute(item);
+                return;
             }
+
+            dragging = true;
+            dragStart = e.GetPosition(canvas);
+            tileStart = new System.Windows.Point(Canvas.GetLeft(stack), Canvas.GetTop(stack));
+            stack.CaptureMouse();
+        };
+
+        stack.MouseMove += (_, e) =>
+        {
+            if (!dragging)
+            {
+                return;
+            }
+
+            var current = e.GetPosition(canvas);
+            var delta = current - dragStart;
+            Canvas.SetLeft(stack, tileStart.X + delta.X);
+            Canvas.SetTop(stack, tileStart.Y + delta.Y);
+        };
+
+        stack.MouseLeftButtonUp += (_, _) =>
+        {
+            if (!dragging)
+            {
+                return;
+            }
+
+            dragging = false;
+            stack.ReleaseMouseCapture();
+            item.DesktopIconX = Canvas.GetLeft(stack);
+            item.DesktopIconY = Canvas.GetTop(stack);
+            _onLayoutChanged(_category);
         };
 
         return stack;
@@ -186,7 +251,7 @@ internal sealed class DesktopGroupWindow : Window
 
     private void OnResizeGripMouseDown(object sender, MouseButtonEventArgs e)
     {
-        _resizing = true;
+        _resizingGroup = true;
         _resizeStart = PointToScreen(e.GetPosition(this));
         _startWidth = Width;
         _startHeight = Height;
@@ -195,7 +260,7 @@ internal sealed class DesktopGroupWindow : Window
 
     private void OnResizeGripMouseMove(object sender, MouseEventArgs e)
     {
-        if (!_resizing)
+        if (!_resizingGroup)
         {
             return;
         }
@@ -207,15 +272,59 @@ internal sealed class DesktopGroupWindow : Window
 
     private void OnResizeGripMouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (!_resizing)
+        if (!_resizingGroup)
         {
             return;
         }
 
-        _resizing = false;
+        _resizingGroup = false;
         ((UIElement)sender).ReleaseMouseCapture();
         _category.DesktopWidth = Width;
         _category.DesktopHeight = Height;
+        _onLayoutChanged(_category);
+    }
+
+    private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.Control)
+        {
+            return;
+        }
+
+        ApplyZoomDelta(e.Delta > 0 ? 0.1 : -0.1);
+        e.Handled = true;
+    }
+
+    private void OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.Control)
+        {
+            return;
+        }
+
+        if (e.Key is Key.OemPlus or Key.Add)
+        {
+            ApplyZoomDelta(0.1);
+            e.Handled = true;
+        }
+        else if (e.Key is Key.OemMinus or Key.Subtract)
+        {
+            ApplyZoomDelta(-0.1);
+            e.Handled = true;
+        }
+    }
+
+    private void ApplyZoomDelta(double delta)
+    {
+        var newScale = Math.Clamp(_category.DesktopIconScale + delta, MinIconScale, MaxIconScale);
+        if (Math.Abs(newScale - _category.DesktopIconScale) < 0.001)
+        {
+            return;
+        }
+
+        _category.DesktopIconScale = newScale;
+        _zoomTransform.ScaleX = newScale;
+        _zoomTransform.ScaleY = newScale;
         _onLayoutChanged(_category);
     }
 }
