@@ -7,6 +7,8 @@ public sealed class LaunchItem
     public required string Target { get; set; }
     public string? Arguments { get; set; }
     public string? WorkingDirectory { get; set; }
+    public ExecutionMode ExecutionMode { get; set; } = ExecutionMode.Normal;
+    public string? IconOverridePath { get; set; }
 
     public LaunchItem Clone()
     {
@@ -16,7 +18,9 @@ public sealed class LaunchItem
             Type = Type,
             Target = Target,
             Arguments = Arguments,
-            WorkingDirectory = WorkingDirectory
+            WorkingDirectory = WorkingDirectory,
+            ExecutionMode = ExecutionMode,
+            IconOverridePath = IconOverridePath
         };
     }
 }

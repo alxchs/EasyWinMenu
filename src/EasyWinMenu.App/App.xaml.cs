@@ -72,7 +72,7 @@ public partial class App : Application
     {
         foreach (var item in container.Items)
         {
-            var icon = iconCache.GetIcon(item.Target)?.ToBitmap();
+            var icon = iconCache.GetIcon(item.IconOverridePath ?? item.Target)?.ToBitmap();
             collection.Add(new ToolStripMenuItem(item.Name, icon, (_, _) => LaunchExecutor.Execute(item)));
         }
 

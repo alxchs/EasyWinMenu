@@ -2,12 +2,14 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Item do menu"
-        Width="420" Height="300"
+        Width="420" Height="380"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         ShowInTaskbar="False">
     <Grid Margin="16">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -38,7 +40,14 @@
         <TextBlock Text="Diretório de trabalho" Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,0,8" />
         <TextBox x:Name="WorkingDirectoryBox" Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,0,0,8" />
 
-        <StackPanel Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Right">
+        <TextBlock Text="Modo de execução" Grid.Row="5" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,0,8" />
+        <ComboBox x:Name="ExecutionModeBox" Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,0,0,8" />
+
+        <TextBlock Text="Ícone personalizado" Grid.Row="6" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,0,8" />
+        <TextBox x:Name="IconOverrideBox" Grid.Row="6" Grid.Column="1" Margin="0,0,8,8" />
+        <Button Content="Procurar..." Grid.Row="6" Grid.Column="2" Margin="0,0,0,8" Click="OnBrowseIconClick" />
+
+        <StackPanel Grid.Row="8" Grid.Column="0" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Content="OK" Width="80" IsDefault="True" Click="OnOkClick" Margin="0,0,8,0" />
             <Button Content="Cancelar" Width="80" IsCancel="True" />
         </StackPanel>

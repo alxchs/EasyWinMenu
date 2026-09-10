@@ -34,6 +34,16 @@ internal static class LaunchExecutor
             startInfo.WorkingDirectory = item.WorkingDirectory;
         }
 
+        switch (item.ExecutionMode)
+        {
+            case ExecutionMode.Minimized:
+                startInfo.WindowStyle = ProcessWindowStyle.Minimized;
+                break;
+            case ExecutionMode.Administrator:
+                startInfo.Verb = "runas";
+                break;
+        }
+
         return startInfo;
     }
 

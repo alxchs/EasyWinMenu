@@ -17,11 +17,14 @@ public partial class LaunchItemEditWindow : Window
         _item = item;
 
         TypeBox.ItemsSource = Enum.GetValues<LaunchItemType>();
+        ExecutionModeBox.ItemsSource = Enum.GetValues<ExecutionMode>();
         NameBox.Text = item.Name;
         TypeBox.SelectedItem = item.Type;
         TargetBox.Text = item.Target;
         ArgumentsBox.Text = item.Arguments;
         WorkingDirectoryBox.Text = item.WorkingDirectory;
+        ExecutionModeBox.SelectedItem = item.ExecutionMode;
+        IconOverrideBox.Text = item.IconOverridePath;
     }
 
     private void OnBrowseClick(object sender, RoutedEventArgs e)
@@ -46,6 +49,19 @@ public partial class LaunchItemEditWindow : Window
         }
     }
 
+    private void OnBrowseIconClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Filter = "Ícones e executáveis (*.ico;*.exe;*.dll)|*.ico;*.exe;*.dll|Todos os arquivos (*.*)|*.*"
+        };
+
+        if (dialog.ShowDialog(this) == true)
+        {
+            IconOverrideBox.Text = dialog.FileName;
+        }
+    }
+
     private void OnOkClick(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(NameBox.Text) || string.IsNullOrWhiteSpace(TargetBox.Text) || TypeBox.SelectedItem is null)
@@ -64,6 +80,8 @@ public partial class LaunchItemEditWindow : Window
         _item.Target = TargetBox.Text.Trim();
         _item.Arguments = string.IsNullOrWhiteSpace(ArgumentsBox.Text) ? null : ArgumentsBox.Text.Trim();
         _item.WorkingDirectory = string.IsNullOrWhiteSpace(WorkingDirectoryBox.Text) ? null : WorkingDirectoryBox.Text.Trim();
+        _item.ExecutionMode = ExecutionModeBox.SelectedItem as ExecutionMode? ?? ExecutionMode.Normal;
+        _item.IconOverridePath = string.IsNullOrWhiteSpace(IconOverrideBox.Text) ? null : IconOverrideBox.Text.Trim();
 
         DialogResult = true;
     }
