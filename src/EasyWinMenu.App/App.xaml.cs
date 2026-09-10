@@ -79,6 +79,11 @@ public partial class App : Application
 
     private void ShowTrayMenu()
     {
+        var screenPoint = System.Windows.Forms.Cursor.Position;
+
+        _menuHost!.Left = screenPoint.X;
+        _menuHost.Top = screenPoint.Y;
+
         var menu = TrayMenuBuilder.Build(
             _configuration!,
             _iconCache!,
@@ -87,7 +92,7 @@ public partial class App : Application
             StartupRegistration.SetEnabled,
             Shutdown);
 
-        var cursorPosition = ToDeviceIndependentPoint(System.Windows.Forms.Cursor.Position);
+        var cursorPosition = ToDeviceIndependentPoint(screenPoint);
 
         menu.PlacementTarget = _menuHost;
         menu.Placement = PlacementMode.AbsolutePoint;
