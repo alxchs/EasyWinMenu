@@ -5,6 +5,7 @@ public sealed class MenuCategory : IMenuContainer
     public required string Name { get; set; }
     public List<MenuCategory> Categories { get; init; } = [];
     public List<LaunchItem> Items { get; init; } = [];
+    public MenuTheme? ThemeOverride { get; set; }
 
     public MenuCategory Clone()
     {
@@ -12,7 +13,8 @@ public sealed class MenuCategory : IMenuContainer
         {
             Name = Name,
             Items = [.. Items.Select(item => item.Clone())],
-            Categories = [.. Categories.Select(category => category.Clone())]
+            Categories = [.. Categories.Select(category => category.Clone())],
+            ThemeOverride = ThemeOverride?.Clone()
         };
     }
 }

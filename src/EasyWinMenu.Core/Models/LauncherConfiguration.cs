@@ -4,13 +4,15 @@ public sealed class LauncherConfiguration : IMenuContainer
 {
     public List<MenuCategory> Categories { get; init; } = [];
     public List<LaunchItem> Items { get; init; } = [];
+    public MenuTheme Theme { get; set; } = new();
 
     public LauncherConfiguration Clone()
     {
         return new LauncherConfiguration
         {
             Items = [.. Items.Select(item => item.Clone())],
-            Categories = [.. Categories.Select(category => category.Clone())]
+            Categories = [.. Categories.Select(category => category.Clone())],
+            Theme = Theme.Clone()
         };
     }
 
@@ -20,6 +22,7 @@ public sealed class LauncherConfiguration : IMenuContainer
         Items.AddRange(source.Items.Select(item => item.Clone()));
         Categories.Clear();
         Categories.AddRange(source.Categories.Select(category => category.Clone()));
+        Theme = source.Theme.Clone();
     }
 
     public static LauncherConfiguration CreateDefault()
@@ -40,6 +43,10 @@ public sealed class LauncherConfiguration : IMenuContainer
                 new MenuCategory
                 {
                     Name = "Ferramentas do Windows",
+                    ThemeOverride = new MenuTheme
+                    {
+                        HighlightColor = "#3DFFA34D"
+                    },
                     Items =
                     [
                         new LaunchItem
