@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using EasyWinMenu.App.Services;
@@ -36,6 +37,7 @@ internal static class TrayMenuBuilder
             Style = (Style)Application.Current.Resources["EasyWinMenuContextMenuStyle"]
         };
         ApplyPanelAppearance(menu, theme);
+        ApplyOpenAnimation(menu, theme);
 
         AddContainerItems(menu.Items, configuration, theme, iconCache);
 
@@ -91,6 +93,16 @@ internal static class TrayMenuBuilder
             AddContainerItems(categoryItem.Items, category, categoryTheme, iconCache);
             collection.Add(categoryItem);
         }
+    }
+
+    private static void ApplyOpenAnimation(ContextMenu menu, MenuTheme theme)
+    {
+        menu.Opacity = 0;
+        menu.Loaded += (_, _) =>
+        {
+            var animation = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(theme.AnimationDurationMs));
+            menu.BeginAnimation(UIElement.OpacityProperty, animation);
+        };
     }
 
     private static void ApplyPanelAppearance(Control control, MenuTheme panelTheme)
