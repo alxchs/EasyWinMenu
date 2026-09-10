@@ -14,28 +14,39 @@ public sealed class ConfigurationStore(string configFilePath)
 
     public LauncherConfiguration Load()
     {
-        if (!File.Exists(configFilePath))
+        if (TryLoad(out var configuration))
         {
-            return SaveDefault();
+            return configuration;
         }
 
-        try
+        Save(configuration);
+        return configuration;
+    }
+
+    public bool TryLoad(out LauncherConfiguration configuration)
+    {
+        if (File.Exists(configFilePath))
         {
-            var json = File.ReadAllText(configFilePath);
-            var configuration = JsonSerializer.Deserialize<LauncherConfiguration>(json, SerializerOptions);
-            if (configuration is not null)
+            try
             {
-                return configuration;
+                var json = File.ReadAllText(configFilePath);
+                var loaded = JsonSerializer.Deserialize<LauncherConfiguration>(json, SerializerOptions);
+                if (loaded is not null)
+                {
+                    configuration = loaded;
+                    return true;
+                }
+            }
+            catch (JsonException)
+            {
+            }
+            catch (IOException)
+            {
             }
         }
-        catch (JsonException)
-        {
-        }
-        catch (IOException)
-        {
-        }
 
-        return SaveDefault();
+        configuration = LauncherConfiguration.CreateDefault();
+        return false;
     }
 
     public void Save(LauncherConfiguration configuration)
@@ -48,12 +59,5 @@ public sealed class ConfigurationStore(string configFilePath)
 
         var json = JsonSerializer.Serialize(configuration, SerializerOptions);
         File.WriteAllText(configFilePath, json);
-    }
-
-    private LauncherConfiguration SaveDefault()
-    {
-        var configuration = LauncherConfiguration.CreateDefault();
-        Save(configuration);
-        return configuration;
     }
 }

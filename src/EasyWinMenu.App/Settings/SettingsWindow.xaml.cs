@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using EasyWinMenu.Core.Configuration;
 using EasyWinMenu.Core.Models;
 using DragEventArgs = System.Windows.DragEventArgs;
 using DragDropEffects = System.Windows.DragDropEffects;
@@ -8,7 +9,9 @@ using MessageBox = System.Windows.MessageBox;
 using MouseButtonEventArgs = System.Windows.Input.MouseButtonEventArgs;
 using MouseButtonState = System.Windows.Input.MouseButtonState;
 using MouseEventArgs = System.Windows.Input.MouseEventArgs;
+using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using Point = System.Windows.Point;
+using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
 
 namespace EasyWinMenu.App.Settings;
 
@@ -298,6 +301,45 @@ public partial class SettingsWindow : Window
         }
 
         return source as TreeViewItem;
+    }
+
+    private void OnExportClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Filter = "Arquivo JSON (*.json)|*.json",
+            FileName = "easywinmenu-config.json"
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        new ConfigurationStore(dialog.FileName).Save(_workingConfiguration);
+    }
+
+    private void OnImportClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog { Filter = "Arquivo JSON (*.json)|*.json" };
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        if (!new ConfigurationStore(dialog.FileName).TryLoad(out var imported))
+        {
+            MessageBox.Show(
+                this,
+                "Não foi possível importar o arquivo selecionado.",
+                "EasyWinMenu",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            return;
+        }
+
+        _workingConfiguration.ReplaceContentsWith(imported);
+        RebuildTree();
     }
 
     private void OnSaveClick(object sender, RoutedEventArgs e)
