@@ -44,6 +44,11 @@
   "item.validationError": "Nazwa, typ i cel są wymagane.",
   "item.iconFilter": "Ikony i pliki wykonywalne (*.ico;*.exe;*.dll)|*.ico;*.exe;*.dll|Wszystkie pliki (*.*)|*.*",
   "item.allFilesFilter": "Wszystkie pliki (*.*)|*.*",
+  "item.open": "Otwórz",
+  "item.rename": "Zmień nazwę...",
+  "item.removeFromGroup": "Usuń z grupy",
+  "item.renamePrompt": "Nowa nazwa:",
+  "item.removeConfirm": "Usunąć „{0}” z tej grupy?",
 
   "theme.title": "Motyw",
   "theme.useOwnTheme": "Użyj własnego motywu dla tej kategorii",
@@ -81,6 +86,11 @@
   "group.iconSizeSmall": "Małe",
   "group.iconSizeMedium": "Średnie",
   "group.iconSizeLarge": "Duże",
+  "group.newMenu": "Nowy",
+  "group.newFolder": "Nowy folder",
+  "group.newTextFile": "Nowy dokument tekstowy",
+  "group.newTextFileName": "Nowy Dokument tekstowy",
+  "group.folderNamePrompt": "Nazwa folderu:",
 
   "common.ok": "OK",
   "common.cancel": "Anuluj",

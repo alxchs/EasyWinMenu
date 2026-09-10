@@ -44,6 +44,11 @@
   "item.validationError": "Name, Typ und Ziel sind erforderlich.",
   "item.iconFilter": "Symbole und ausführbare Dateien (*.ico;*.exe;*.dll)|*.ico;*.exe;*.dll|Alle Dateien (*.*)|*.*",
   "item.allFilesFilter": "Alle Dateien (*.*)|*.*",
+  "item.open": "Öffnen",
+  "item.rename": "Umbenennen...",
+  "item.removeFromGroup": "Aus Gruppe entfernen",
+  "item.renamePrompt": "Neuer Name:",
+  "item.removeConfirm": "\"{0}\" aus dieser Gruppe entfernen?",
 
   "theme.title": "Design",
   "theme.useOwnTheme": "Eigenes Design für diese Kategorie verwenden",
@@ -81,6 +86,11 @@
   "group.iconSizeSmall": "Klein",
   "group.iconSizeMedium": "Mittel",
   "group.iconSizeLarge": "Groß",
+  "group.newMenu": "Neu",
+  "group.newFolder": "Neuer Ordner",
+  "group.newTextFile": "Neues Textdokument",
+  "group.newTextFileName": "Neues Textdokument",
+  "group.folderNamePrompt": "Ordnername:",
 
   "common.ok": "OK",
   "common.cancel": "Abbrechen",

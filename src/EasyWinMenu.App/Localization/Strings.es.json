@@ -44,6 +44,11 @@
   "item.validationError": "El nombre, tipo y destino son obligatorios.",
   "item.iconFilter": "Iconos y ejecutables (*.ico;*.exe;*.dll)|*.ico;*.exe;*.dll|Todos los archivos (*.*)|*.*",
   "item.allFilesFilter": "Todos los archivos (*.*)|*.*",
+  "item.open": "Abrir",
+  "item.rename": "Cambiar nombre...",
+  "item.removeFromGroup": "Quitar del grupo",
+  "item.renamePrompt": "Nuevo nombre:",
+  "item.removeConfirm": "¿Quitar \"{0}\" de este grupo?",
 
   "theme.title": "Tema",
   "theme.useOwnTheme": "Usar un tema propio para esta categoría",
@@ -81,6 +86,11 @@
   "group.iconSizeSmall": "Pequeño",
   "group.iconSizeMedium": "Mediano",
   "group.iconSizeLarge": "Grande",
+  "group.newMenu": "Nuevo",
+  "group.newFolder": "Nueva carpeta",
+  "group.newTextFile": "Nuevo documento de texto",
+  "group.newTextFileName": "Nuevo Documento de Texto",
+  "group.folderNamePrompt": "Nombre de la carpeta:",
 
   "common.ok": "Aceptar",
   "common.cancel": "Cancelar",

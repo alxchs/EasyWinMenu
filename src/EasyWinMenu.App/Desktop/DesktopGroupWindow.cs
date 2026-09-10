@@ -58,6 +58,7 @@ internal sealed class DesktopGroupWindow : Window
     private readonly Action<MenuCategory> _onLayoutChanged;
     private readonly Action<MenuCategory> _onDeleteRequested;
     private readonly ScaleTransform _zoomTransform;
+    private readonly Dictionary<MenuCategory, DesktopGroupWindow> _openSubfolders = new();
 
     private Canvas _canvas = null!;
     private Border _border = null!;
@@ -192,7 +193,7 @@ internal sealed class DesktopGroupWindow : Window
         _border.Background = ThemeBrushes.CreateBrush(_theme.BackgroundColor, _theme.Opacity);
     }
 
-    private ContextMenu BuildHeaderContextMenu()
+    private ContextMenu CreateContextMenuShell()
     {
         var menu = new ContextMenu
         {
@@ -202,6 +203,12 @@ internal sealed class DesktopGroupWindow : Window
             BorderThickness = new Thickness(1)
         };
         MenuThemeProperties.SetPanelCornerRadius(menu, new CornerRadius(_theme.CornerRadius));
+        return menu;
+    }
+
+    private ContextMenu BuildHeaderContextMenu()
+    {
+        var menu = CreateContextMenuShell();
 
         AddMenuItem(menu, LocalizationService.Get("group.rename"), OnRenameClick);
         AddMenuItem(menu, LocalizationService.Get("group.backgroundColor"), OnChangeColorClick);
@@ -215,20 +222,19 @@ internal sealed class DesktopGroupWindow : Window
 
     private ContextMenu BuildCanvasContextMenu()
     {
-        var menu = new ContextMenu
-        {
-            Style = (Style)Application.Current.Resources["EasyWinMenuContextMenuStyle"],
-            Background = ThemeBrushes.CreateBrush(_theme.BackgroundColor, 1.0),
-            BorderBrush = ThemeBrushes.CreateBrush(_theme.BorderColor, 1.0),
-            BorderThickness = new Thickness(1)
-        };
-        MenuThemeProperties.SetPanelCornerRadius(menu, new CornerRadius(_theme.CornerRadius));
+        var menu = CreateContextMenuShell();
+
+        var newMenu = CreateMenuItem(LocalizationService.Get("group.newMenu"));
+        AddMenuItem(newMenu, LocalizationService.Get("group.newFolder"), CreateSubfolder);
+        AddMenuItem(newMenu, LocalizationService.Get("group.newTextFile"), CreateTextFile);
+        menu.Items.Add(newMenu);
+        menu.Items.Add(new Separator());
 
         AddMenuItem(menu, LocalizationService.Get("group.arrangeIcons"), ArrangeIconsAutomatically);
 
         var sortMenu = CreateMenuItem(LocalizationService.Get("group.sortBy"));
-        AddMenuItem(sortMenu, LocalizationService.Get("group.sortByName"), () => SortAndArrange(CompareByName));
-        AddMenuItem(sortMenu, LocalizationService.Get("group.sortByType"), () => SortAndArrange(CompareByType));
+        AddMenuItem(sortMenu, LocalizationService.Get("group.sortByName"), SortByName);
+        AddMenuItem(sortMenu, LocalizationService.Get("group.sortByType"), SortByType);
         menu.Items.Add(sortMenu);
 
         var sizeMenu = CreateMenuItem(LocalizationService.Get("group.iconSize"));
@@ -240,15 +246,22 @@ internal sealed class DesktopGroupWindow : Window
         return menu;
     }
 
-    private static int CompareByName(LaunchItem a, LaunchItem b)
+    private ContextMenu BuildItemTileContextMenu(LaunchItem item)
     {
-        return string.Compare(a.Name, b.Name, StringComparison.CurrentCultureIgnoreCase);
+        var menu = CreateContextMenuShell();
+        AddMenuItem(menu, LocalizationService.Get("item.open"), () => _onExecute(item));
+        AddMenuItem(menu, LocalizationService.Get("item.rename"), () => RenameItem(item));
+        AddMenuItem(menu, LocalizationService.Get("item.removeFromGroup"), () => RemoveItem(item));
+        return menu;
     }
 
-    private static int CompareByType(LaunchItem a, LaunchItem b)
+    private ContextMenu BuildFolderTileContextMenu(MenuCategory folder)
     {
-        var typeCompare = a.Type.CompareTo(b.Type);
-        return typeCompare != 0 ? typeCompare : CompareByName(a, b);
+        var menu = CreateContextMenuShell();
+        AddMenuItem(menu, LocalizationService.Get("item.open"), () => OpenSubfolder(folder));
+        AddMenuItem(menu, LocalizationService.Get("item.rename"), () => RenameFolder(folder));
+        AddMenuItem(menu, LocalizationService.Get("item.removeFromGroup"), () => RemoveFolder(folder));
+        return menu;
     }
 
     private MenuItem CreateMenuItem(string header)
@@ -273,6 +286,158 @@ internal sealed class DesktopGroupWindow : Window
         var item = CreateMenuItem(header);
         item.Click += (_, _) => handler();
         parent.Items.Add(item);
+    }
+
+    private void CreateSubfolder()
+    {
+        var prompt = new Settings.TextPromptWindow(LocalizationService.Get("group.folderNamePrompt"), string.Empty);
+        if (prompt.ShowDialog() != true)
+        {
+            return;
+        }
+
+        _category.Categories.Add(new MenuCategory { Name = prompt.Value });
+        PopulateTiles();
+        _onLayoutChanged(_category);
+    }
+
+    private void CreateTextFile()
+    {
+        var directory = GetGroupFilesDirectory();
+        Directory.CreateDirectory(directory);
+        var fileName = GetAvailableFileName(directory, LocalizationService.Get("group.newTextFileName"), ".txt");
+        var fullPath = Path.Combine(directory, fileName);
+        File.WriteAllText(fullPath, string.Empty);
+
+        var item = new LaunchItem
+        {
+            Name = Path.GetFileNameWithoutExtension(fileName),
+            Type = LaunchItemType.File,
+            Target = fullPath,
+            IsDesktopPinned = true
+        };
+
+        _category.Items.Add(item);
+        PopulateTiles();
+        _onLayoutChanged(_category);
+    }
+
+    private string GetGroupFilesDirectory()
+    {
+        var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EasyWinMenu", "GroupFiles");
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var safeName = string.Concat(_category.Name.Select(c => invalidChars.Contains(c) ? '_' : c));
+        return Path.Combine(root, safeName);
+    }
+
+    private static string GetAvailableFileName(string directory, string baseName, string extension)
+    {
+        var candidate = baseName + extension;
+        var counter = 2;
+        while (File.Exists(Path.Combine(directory, candidate)))
+        {
+            candidate = $"{baseName} ({counter}){extension}";
+            counter++;
+        }
+
+        return candidate;
+    }
+
+    private void RenameItem(LaunchItem item)
+    {
+        var prompt = new Settings.TextPromptWindow(LocalizationService.Get("item.renamePrompt"), item.Name);
+        if (prompt.ShowDialog() != true)
+        {
+            return;
+        }
+
+        item.Name = prompt.Value;
+        PopulateTiles();
+        _onLayoutChanged(_category);
+    }
+
+    private void RemoveItem(LaunchItem item)
+    {
+        var confirmed = MessageBox.Show(
+            this,
+            LocalizationService.Format("item.removeConfirm", item.Name),
+            LocalizationService.Get("common.appName"),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (confirmed != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        _category.Items.Remove(item);
+        PopulateTiles();
+        _onLayoutChanged(_category);
+    }
+
+    private void RenameFolder(MenuCategory folder)
+    {
+        var prompt = new Settings.TextPromptWindow(LocalizationService.Get("group.folderNamePrompt"), folder.Name);
+        if (prompt.ShowDialog() != true)
+        {
+            return;
+        }
+
+        folder.Name = prompt.Value;
+        PopulateTiles();
+        _onLayoutChanged(_category);
+    }
+
+    private void RemoveFolder(MenuCategory folder)
+    {
+        var confirmed = MessageBox.Show(
+            this,
+            LocalizationService.Format("item.removeConfirm", folder.Name),
+            LocalizationService.Get("common.appName"),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (confirmed != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        DeleteFolder(folder);
+    }
+
+    private void DeleteFolder(MenuCategory folder)
+    {
+        if (_openSubfolders.TryGetValue(folder, out var openWindow))
+        {
+            openWindow.Close();
+            _openSubfolders.Remove(folder);
+        }
+
+        _category.Categories.Remove(folder);
+        PopulateTiles();
+        _onLayoutChanged(_category);
+    }
+
+    private void OpenSubfolder(MenuCategory folder)
+    {
+        if (_openSubfolders.TryGetValue(folder, out var existing))
+        {
+            existing.Activate();
+            return;
+        }
+
+        var theme = folder.ThemeOverride ?? _theme;
+        var window = new DesktopGroupWindow(
+            folder,
+            theme,
+            _iconCache,
+            _onExecute,
+            _ => _onLayoutChanged(_category),
+            DeleteFolder);
+
+        window.Closed += (_, _) => _openSubfolders.Remove(folder);
+        _openSubfolders[folder] = window;
+        window.Show();
     }
 
     private void OnRenameClick()
@@ -398,6 +563,12 @@ internal sealed class DesktopGroupWindow : Window
     {
         _canvas.Children.Clear();
         var index = 0;
+        foreach (var folder in _category.Categories)
+        {
+            AddFolderTile(folder, folder.IconX ?? (index % 3) * TileSize, folder.IconY ?? (index / 3) * TileSize);
+            index++;
+        }
+
         foreach (var item in _category.Items.Where(i => i.IsDesktopPinned))
         {
             AddTile(item, item.DesktopIconX ?? (index % 3) * TileSize, item.DesktopIconY ?? (index / 3) * TileSize);
@@ -407,24 +578,48 @@ internal sealed class DesktopGroupWindow : Window
 
     private void ArrangeIconsAutomatically()
     {
-        ArrangeInGrid(_category.Items.Where(i => i.IsDesktopPinned));
+        IEnumerable<object> entries = _category.Categories
+            .Cast<object>()
+            .Concat(_category.Items.Where(i => i.IsDesktopPinned));
+        ArrangeInGrid(entries);
     }
 
-    private void SortAndArrange(Comparison<LaunchItem> comparison)
+    private void SortByName()
     {
-        var pinned = _category.Items.Where(i => i.IsDesktopPinned).ToList();
-        pinned.Sort(comparison);
-        ArrangeInGrid(pinned);
+        var folders = _category.Categories.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase);
+        var items = _category.Items.Where(i => i.IsDesktopPinned).OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
+        ArrangeInGrid(folders.Cast<object>().Concat(items));
     }
 
-    private void ArrangeInGrid(IEnumerable<LaunchItem> orderedItems)
+    private void SortByType()
+    {
+        var folders = _category.Categories.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase);
+        var items = _category.Items.Where(i => i.IsDesktopPinned)
+            .OrderBy(i => i.Type)
+            .ThenBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
+        ArrangeInGrid(folders.Cast<object>().Concat(items));
+    }
+
+    private void ArrangeInGrid(IEnumerable<object> orderedEntries)
     {
         var columns = Math.Max(1, (int)(_category.DesktopWidth / TileSize));
         var index = 0;
-        foreach (var item in orderedItems)
+        foreach (var entry in orderedEntries)
         {
-            item.DesktopIconX = (index % columns) * TileSize;
-            item.DesktopIconY = (index / columns) * TileSize;
+            var x = (index % columns) * TileSize;
+            var y = (index / columns) * TileSize;
+            switch (entry)
+            {
+                case LaunchItem item:
+                    item.DesktopIconX = x;
+                    item.DesktopIconY = y;
+                    break;
+                case MenuCategory folder:
+                    folder.IconX = x;
+                    folder.IconY = y;
+                    break;
+            }
+
             index++;
         }
 
@@ -438,6 +633,52 @@ internal sealed class DesktopGroupWindow : Window
         _zoomTransform.ScaleX = scale;
         _zoomTransform.ScaleY = scale;
         _onLayoutChanged(_category);
+    }
+
+    private void AttachTileBehavior(FrameworkElement tile, Action onOpen, Action<double, double> onMoved)
+    {
+        System.Windows.Point dragStart = default;
+        System.Windows.Point tileStart = default;
+        var dragging = false;
+
+        tile.MouseLeftButtonDown += (_, e) =>
+        {
+            if (e.ClickCount == 2)
+            {
+                onOpen();
+                return;
+            }
+
+            dragging = true;
+            dragStart = e.GetPosition(_canvas);
+            tileStart = new System.Windows.Point(Canvas.GetLeft(tile), Canvas.GetTop(tile));
+            tile.CaptureMouse();
+        };
+
+        tile.MouseMove += (_, e) =>
+        {
+            if (!dragging)
+            {
+                return;
+            }
+
+            var current = e.GetPosition(_canvas);
+            var delta = current - dragStart;
+            Canvas.SetLeft(tile, tileStart.X + delta.X);
+            Canvas.SetTop(tile, tileStart.Y + delta.Y);
+        };
+
+        tile.MouseLeftButtonUp += (_, _) =>
+        {
+            if (!dragging)
+            {
+                return;
+            }
+
+            dragging = false;
+            tile.ReleaseMouseCapture();
+            onMoved(Canvas.GetLeft(tile), Canvas.GetTop(tile));
+        };
     }
 
     private void AddTile(LaunchItem item, double x, double y)
@@ -454,7 +695,8 @@ internal sealed class DesktopGroupWindow : Window
         {
             Orientation = Orientation.Vertical,
             Width = TileSize - 8,
-            Cursor = Cursors.Hand
+            Cursor = Cursors.Hand,
+            ContextMenu = BuildItemTileContextMenu(item)
         };
 
         var icon = _iconCache.GetIcon(item.IconOverridePath ?? item.Target);
@@ -480,50 +722,66 @@ internal sealed class DesktopGroupWindow : Window
             HorizontalAlignment = HorizontalAlignment.Center
         });
 
-        System.Windows.Point dragStart = default;
-        System.Windows.Point tileStart = default;
-        var dragging = false;
-
-        stack.MouseLeftButtonDown += (_, e) =>
-        {
-            if (e.ClickCount == 2)
+        AttachTileBehavior(
+            stack,
+            () => _onExecute(item),
+            (x, y) =>
             {
-                _onExecute(item);
-                return;
-            }
+                item.DesktopIconX = x;
+                item.DesktopIconY = y;
+                _onLayoutChanged(_category);
+            });
 
-            dragging = true;
-            dragStart = e.GetPosition(_canvas);
-            tileStart = new System.Windows.Point(Canvas.GetLeft(stack), Canvas.GetTop(stack));
-            stack.CaptureMouse();
+        return stack;
+    }
+
+    private void AddFolderTile(MenuCategory folder, double x, double y)
+    {
+        var tile = BuildFolderTile(folder);
+        Canvas.SetLeft(tile, x);
+        Canvas.SetTop(tile, y);
+        _canvas.Children.Add(tile);
+    }
+
+    private FrameworkElement BuildFolderTile(MenuCategory folder)
+    {
+        var stack = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Width = TileSize - 8,
+            Cursor = Cursors.Hand,
+            ContextMenu = BuildFolderTileContextMenu(folder)
         };
 
-        stack.MouseMove += (_, e) =>
+        stack.Children.Add(new TextBlock
         {
-            if (!dragging)
-            {
-                return;
-            }
+            Text = "",
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = _theme.IconSize * 1.6,
+            Foreground = ThemeBrushes.CreateBrush(_theme.HighlightColor, 1.0),
+            HorizontalAlignment = HorizontalAlignment.Center
+        });
 
-            var current = e.GetPosition(_canvas);
-            var delta = current - dragStart;
-            Canvas.SetLeft(stack, tileStart.X + delta.X);
-            Canvas.SetTop(stack, tileStart.Y + delta.Y);
-        };
-
-        stack.MouseLeftButtonUp += (_, _) =>
+        stack.Children.Add(new TextBlock
         {
-            if (!dragging)
-            {
-                return;
-            }
+            Text = folder.Name,
+            Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 1.0),
+            FontFamily = new FontFamily(_theme.ItemFontFamily),
+            FontSize = _theme.ItemFontSize,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            HorizontalAlignment = HorizontalAlignment.Center
+        });
 
-            dragging = false;
-            stack.ReleaseMouseCapture();
-            item.DesktopIconX = Canvas.GetLeft(stack);
-            item.DesktopIconY = Canvas.GetTop(stack);
-            _onLayoutChanged(_category);
-        };
+        AttachTileBehavior(
+            stack,
+            () => OpenSubfolder(folder),
+            (x, y) =>
+            {
+                folder.IconX = x;
+                folder.IconY = y;
+                _onLayoutChanged(_category);
+            });
 
         return stack;
     }

@@ -44,6 +44,11 @@
   "item.validationError": "Имя, тип и цель обязательны.",
   "item.iconFilter": "Значки и исполняемые файлы (*.ico;*.exe;*.dll)|*.ico;*.exe;*.dll|Все файлы (*.*)|*.*",
   "item.allFilesFilter": "Все файлы (*.*)|*.*",
+  "item.open": "Открыть",
+  "item.rename": "Переименовать...",
+  "item.removeFromGroup": "Удалить из группы",
+  "item.renamePrompt": "Новое имя:",
+  "item.removeConfirm": "Удалить «{0}» из этой группы?",
 
   "theme.title": "Тема",
   "theme.useOwnTheme": "Использовать собственную тему для этой категории",
@@ -81,6 +86,11 @@
   "group.iconSizeSmall": "Мелкие",
   "group.iconSizeMedium": "Средние",
   "group.iconSizeLarge": "Крупные",
+  "group.newMenu": "Создать",
+  "group.newFolder": "Новая папка",
+  "group.newTextFile": "Новый текстовый документ",
+  "group.newTextFileName": "Новый текстовый документ",
+  "group.folderNamePrompt": "Имя папки:",
 
   "common.ok": "ОК",
   "common.cancel": "Отмена",

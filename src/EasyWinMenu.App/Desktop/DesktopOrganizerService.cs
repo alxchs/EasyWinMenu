@@ -63,14 +63,9 @@ internal sealed class DesktopOrganizerService(IconCacheService iconCache)
     {
         foreach (var category in container.Categories)
         {
-            if (category.IsDesktopGroup || category.Items.Any(item => item.IsDesktopPinned))
+            if (category.IsDesktopGroup)
             {
                 yield return category;
-            }
-
-            foreach (var nested in FindDesktopGroups(category))
-            {
-                yield return nested;
             }
         }
     }

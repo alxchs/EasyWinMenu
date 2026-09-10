@@ -44,6 +44,11 @@
   "item.validationError": "Name, type and target are required.",
   "item.iconFilter": "Icons and executables (*.ico;*.exe;*.dll)|*.ico;*.exe;*.dll|All files (*.*)|*.*",
   "item.allFilesFilter": "All files (*.*)|*.*",
+  "item.open": "Open",
+  "item.rename": "Rename...",
+  "item.removeFromGroup": "Remove from group",
+  "item.renamePrompt": "New name:",
+  "item.removeConfirm": "Remove \"{0}\" from this group?",
 
   "theme.title": "Theme",
   "theme.useOwnTheme": "Use a custom theme for this category",
@@ -81,6 +86,11 @@
   "group.iconSizeSmall": "Small",
   "group.iconSizeMedium": "Medium",
   "group.iconSizeLarge": "Large",
+  "group.newMenu": "New",
+  "group.newFolder": "New folder",
+  "group.newTextFile": "New text document",
+  "group.newTextFileName": "New Text Document",
+  "group.folderNamePrompt": "Folder name:",
 
   "common.ok": "OK",
   "common.cancel": "Cancel",
