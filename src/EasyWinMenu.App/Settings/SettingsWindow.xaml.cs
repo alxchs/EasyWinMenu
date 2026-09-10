@@ -229,6 +229,12 @@ public partial class SettingsWindow : Window
         RebuildTree();
     }
 
+    private void OnEditThemeClick(object sender, RoutedEventArgs e)
+    {
+        var selected = GetSelectedNode();
+        new ThemeEditWindow(_workingConfiguration, selected?.Category) { Owner = this }.ShowDialog();
+    }
+
     private void OnTreeMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         _dragStartPoint = e.GetPosition(MenuTree);

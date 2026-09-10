@@ -75,6 +75,7 @@ public partial class App : Application
                 ShowTrayMenu();
             }
         };
+
     }
 
     private void ShowTrayMenu()
