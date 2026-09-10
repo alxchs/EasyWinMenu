@@ -1,5 +1,8 @@
 using System.Windows;
+using System.Windows.Controls.Primitives;
 using System.Windows.Forms;
+using System.Windows.Media;
+using EasyWinMenu.App.Menu;
 using EasyWinMenu.App.Services;
 using EasyWinMenu.App.Settings;
 using EasyWinMenu.Core.Configuration;
@@ -14,6 +17,7 @@ public partial class App : Application
     private LauncherConfiguration? _configuration;
     private IconCacheService? _iconCache;
     private NotifyIcon? _trayIcon;
+    private Window? _menuHost;
     private SettingsWindow? _settingsWindow;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -24,64 +28,59 @@ public partial class App : Application
         _configuration = _configurationStore.Load();
         _iconCache = new IconCacheService(ApplicationPaths.IconCacheDirectory);
 
+        _menuHost = new Window
+        {
+            Width = 0,
+            Height = 0,
+            Left = -10000,
+            Top = -10000,
+            WindowStyle = WindowStyle.None,
+            ShowInTaskbar = false,
+            ShowActivated = false,
+            AllowsTransparency = true,
+            Background = System.Windows.Media.Brushes.Transparent
+        };
+        _menuHost.Show();
+
         _trayIcon = new NotifyIcon
         {
             Icon = System.Drawing.SystemIcons.Application,
             Visible = true,
-            Text = "EasyWinMenu",
-            ContextMenuStrip = BuildTrayMenu(_configuration, _iconCache)
+            Text = "EasyWinMenu"
         };
 
         _trayIcon.MouseClick += (_, args) =>
         {
-            if (args.Button == MouseButtons.Left)
+            if (args.Button is MouseButtons.Left or MouseButtons.Right)
             {
-                _trayIcon.ContextMenuStrip!.Show(Cursor.Position);
+                ShowTrayMenu();
             }
         };
     }
 
-    private ContextMenuStrip BuildTrayMenu(LauncherConfiguration configuration, IconCacheService iconCache)
+    private void ShowTrayMenu()
     {
-        var menu = new ContextMenuStrip();
+        var menu = TrayMenuBuilder.Build(
+            _configuration!,
+            _iconCache!,
+            StartupRegistration.IsEnabled(),
+            OpenSettingsWindow,
+            StartupRegistration.SetEnabled,
+            Shutdown);
 
-        AddContainer(menu.Items, configuration, iconCache);
+        var cursorPosition = ToDeviceIndependentPoint(System.Windows.Forms.Cursor.Position);
 
-        if (configuration.Items.Count > 0 || configuration.Categories.Count > 0)
-        {
-            menu.Items.Add(new ToolStripSeparator());
-        }
-
-        menu.Items.Add("Configurações...", null, (_, _) => OpenSettingsWindow());
-
-        var startWithWindowsItem = new ToolStripMenuItem("Iniciar com o Windows")
-        {
-            CheckOnClick = true,
-            Checked = StartupRegistration.IsEnabled()
-        };
-        startWithWindowsItem.CheckedChanged += (_, _) => StartupRegistration.SetEnabled(startWithWindowsItem.Checked);
-        menu.Items.Add(startWithWindowsItem);
-
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Sair", null, (_, _) => Current.Shutdown());
-
-        return menu;
+        menu.PlacementTarget = _menuHost;
+        menu.Placement = PlacementMode.AbsolutePoint;
+        menu.HorizontalOffset = cursorPosition.X;
+        menu.VerticalOffset = cursorPosition.Y;
+        menu.IsOpen = true;
     }
 
-    private static void AddContainer(ToolStripItemCollection collection, IMenuContainer container, IconCacheService iconCache)
+    private System.Windows.Point ToDeviceIndependentPoint(System.Drawing.Point screenPoint)
     {
-        foreach (var item in container.Items)
-        {
-            var icon = iconCache.GetIcon(item.IconOverridePath ?? item.Target)?.ToBitmap();
-            collection.Add(new ToolStripMenuItem(item.Name, icon, (_, _) => LaunchExecutor.Execute(item)));
-        }
-
-        foreach (var category in container.Categories)
-        {
-            var categoryMenuItem = new ToolStripMenuItem(category.Name);
-            AddContainer(categoryMenuItem.DropDownItems, category, iconCache);
-            collection.Add(categoryMenuItem);
-        }
+        var transform = PresentationSource.FromVisual(_menuHost!)?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
+        return transform.Transform(new System.Windows.Point(screenPoint.X, screenPoint.Y));
     }
 
     private void OpenSettingsWindow()
@@ -105,10 +104,6 @@ public partial class App : Application
     private void OnConfigurationSaved(object? sender, EventArgs e)
     {
         _configurationStore!.Save(_configuration!);
-
-        var previousMenu = _trayIcon!.ContextMenuStrip;
-        _trayIcon.ContextMenuStrip = BuildTrayMenu(_configuration!, _iconCache!);
-        previousMenu?.Dispose();
     }
 
     protected override void OnExit(ExitEventArgs e)
