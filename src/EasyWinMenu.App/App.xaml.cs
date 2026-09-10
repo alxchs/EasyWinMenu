@@ -6,6 +6,7 @@ using EasyWinMenu.App.Desktop;
 using EasyWinMenu.App.Menu;
 using EasyWinMenu.App.Services;
 using EasyWinMenu.App.Settings;
+using EasyWinMenu.App.Theming;
 using EasyWinMenu.Core.Configuration;
 using EasyWinMenu.Core.Models;
 using Application = System.Windows.Application;
@@ -30,6 +31,8 @@ public partial class App : Application
         _configurationStore = new ConfigurationStore(ApplicationPaths.ConfigFilePath);
         _configuration = _configurationStore.Load();
         _iconCache = new IconCacheService(ApplicationPaths.IconCacheDirectory);
+
+        AppThemeService.Apply(_configuration.Behavior.AppTheme);
 
         _menuHost = new Window
         {
@@ -161,6 +164,7 @@ public partial class App : Application
         _configurationStore!.Save(_configuration!);
         _hotkeyService!.Apply(_configuration!.Behavior);
         _desktopOrganizer!.Refresh(_configuration!, OnDesktopGroupLayoutChanged, OnDesktopGroupDeleteRequested);
+        AppThemeService.Apply(_configuration!.Behavior.AppTheme);
     }
 
     protected override void OnExit(ExitEventArgs e)

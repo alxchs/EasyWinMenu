@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using EasyWinMenu.App.Theming;
 using EasyWinMenu.Core.Configuration;
 using EasyWinMenu.Core.Models;
 using DragEventArgs = System.Windows.DragEventArgs;
@@ -15,7 +16,7 @@ using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
 
 namespace EasyWinMenu.App.Settings;
 
-public partial class SettingsWindow : Window
+public partial class SettingsWindow : ModernWindow
 {
     private readonly LauncherConfiguration _target;
     private readonly LauncherConfiguration _workingConfiguration;
@@ -38,6 +39,14 @@ public partial class SettingsWindow : Window
 
     private void LoadBehavior()
     {
+        AppThemeBox.ItemsSource = new[]
+        {
+            new { Mode = AppThemeMode.System, Label = "Seguir o Windows" },
+            new { Mode = AppThemeMode.Light, Label = "Claro" },
+            new { Mode = AppThemeMode.Dark, Label = "Escuro" }
+        };
+        AppThemeBox.SelectedValue = _workingConfiguration.Behavior.AppTheme;
+
         ClickModeBox.ItemsSource = new[]
         {
             new { Mode = TrayClickMode.SingleClick, Label = "Clique simples" },
@@ -61,6 +70,7 @@ public partial class SettingsWindow : Window
     private void SaveBehavior()
     {
         var behavior = _workingConfiguration.Behavior;
+        behavior.AppTheme = AppThemeBox.SelectedValue as AppThemeMode? ?? AppThemeMode.System;
         behavior.ClickMode = ClickModeBox.SelectedValue as TrayClickMode? ?? TrayClickMode.SingleClick;
         behavior.GlobalHotkeyEnabled = HotkeyEnabledBox.IsChecked == true;
         behavior.GlobalHotkeyKey = HotkeyKeyBox.SelectedItem as string ?? "Space";

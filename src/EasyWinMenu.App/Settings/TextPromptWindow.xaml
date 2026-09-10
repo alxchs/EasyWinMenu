@@ -1,11 +1,12 @@
-<Window x:Class="EasyWinMenu.App.Settings.TextPromptWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="EasyWinMenu"
-        Width="360" Height="150"
-        WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize"
-        ShowInTaskbar="False">
+<theming:ModernWindow x:Class="EasyWinMenu.App.Settings.TextPromptWindow"
+                      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                      xmlns:theming="clr-namespace:EasyWinMenu.App.Theming"
+                      Title="EasyWinMenu"
+                      Width="360" Height="170"
+                      WindowStartupLocation="CenterOwner"
+                      ResizeMode="NoResize"
+                      ShowInTaskbar="False">
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -20,4 +21,4 @@
             <Button Content="Cancelar" Width="80" IsCancel="True" />
         </StackPanel>
     </Grid>
-</Window>
+</theming:ModernWindow>

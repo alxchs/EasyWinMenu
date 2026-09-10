@@ -6,6 +6,7 @@ public sealed class LauncherBehavior
     public bool GlobalHotkeyEnabled { get; set; }
     public HotkeyModifiers GlobalHotkeyModifiers { get; set; } = HotkeyModifiers.Control | HotkeyModifiers.Shift;
     public string GlobalHotkeyKey { get; set; } = "Space";
+    public AppThemeMode AppTheme { get; set; } = AppThemeMode.System;
 
     public LauncherBehavior Clone()
     {
@@ -14,7 +15,8 @@ public sealed class LauncherBehavior
             ClickMode = ClickMode,
             GlobalHotkeyEnabled = GlobalHotkeyEnabled,
             GlobalHotkeyModifiers = GlobalHotkeyModifiers,
-            GlobalHotkeyKey = GlobalHotkeyKey
+            GlobalHotkeyKey = GlobalHotkeyKey,
+            AppTheme = AppTheme
         };
     }
 }

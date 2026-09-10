@@ -1,10 +1,17 @@
-<Window x:Class="EasyWinMenu.App.Settings.SettingsWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="EasyWinMenu - Configurações"
-        Width="560" Height="560"
-        WindowStartupLocation="CenterScreen">
+<theming:ModernWindow x:Class="EasyWinMenu.App.Settings.SettingsWindow"
+                      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                      xmlns:theming="clr-namespace:EasyWinMenu.App.Theming"
+                      Title="EasyWinMenu - Configurações"
+                      Width="560" Height="620"
+                      WindowStartupLocation="CenterScreen">
     <DockPanel Margin="12">
+        <GroupBox Header="Aparência" DockPanel.Dock="Top" Margin="0,0,0,8">
+            <StackPanel Orientation="Horizontal" Margin="4">
+                <TextBlock Text="Tema" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <ComboBox x:Name="AppThemeBox" Width="140" DisplayMemberPath="Label" SelectedValuePath="Mode" />
+            </StackPanel>
+        </GroupBox>
         <GroupBox Header="Comportamento" DockPanel.Dock="Top" Margin="0,0,0,8">
             <StackPanel Orientation="Horizontal" Margin="4">
                 <TextBlock Text="Abrir menu com" VerticalAlignment="Center" Margin="0,0,8,0" />
@@ -37,4 +44,4 @@
                   DragOver="OnTreeDragOver"
                   Drop="OnTreeDrop" />
     </DockPanel>
-</Window>
+</theming:ModernWindow>

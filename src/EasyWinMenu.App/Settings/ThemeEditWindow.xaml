@@ -1,11 +1,12 @@
-<Window x:Class="EasyWinMenu.App.Settings.ThemeEditWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Tema"
-        Width="420" Height="620"
-        WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize"
-        ShowInTaskbar="False">
+<theming:ModernWindow x:Class="EasyWinMenu.App.Settings.ThemeEditWindow"
+                      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                      xmlns:theming="clr-namespace:EasyWinMenu.App.Theming"
+                      Title="Tema"
+                      Width="420" Height="660"
+                      WindowStartupLocation="CenterOwner"
+                      ResizeMode="NoResize"
+                      ShowInTaskbar="False">
     <DockPanel Margin="16">
         <CheckBox x:Name="UseOwnThemeBox"
                   DockPanel.Dock="Top"
@@ -95,4 +96,4 @@
             </Grid>
         </ScrollViewer>
     </DockPanel>
-</Window>
+</theming:ModernWindow>
