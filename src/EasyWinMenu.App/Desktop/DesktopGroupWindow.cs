@@ -22,6 +22,7 @@ using DragEventArgs = System.Windows.DragEventArgs;
 using FontFamily = System.Windows.Media.FontFamily;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Image = System.Windows.Controls.Image;
+using ItemsControl = System.Windows.Controls.ItemsControl;
 using Key = System.Windows.Input.Key;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using Keyboard = System.Windows.Input.Keyboard;
@@ -145,15 +146,11 @@ internal sealed class DesktopGroupWindow : Window
         {
             Background = Brushes.Transparent,
             RenderTransform = _zoomTransform,
-            RenderTransformOrigin = new System.Windows.Point(0, 0)
+            RenderTransformOrigin = new System.Windows.Point(0, 0),
+            ContextMenu = BuildCanvasContextMenu()
         };
 
-        var index = 0;
-        foreach (var item in _category.Items.Where(i => i.IsDesktopPinned))
-        {
-            AddTile(item, item.DesktopIconX ?? (index % 3) * TileSize, item.DesktopIconY ?? (index / 3) * TileSize);
-            index++;
-        }
+        PopulateTiles();
 
         panel.Children.Add(_canvas);
 
@@ -216,7 +213,45 @@ internal sealed class DesktopGroupWindow : Window
         return menu;
     }
 
-    private void AddMenuItem(ContextMenu menu, string header, Action handler)
+    private ContextMenu BuildCanvasContextMenu()
+    {
+        var menu = new ContextMenu
+        {
+            Style = (Style)Application.Current.Resources["EasyWinMenuContextMenuStyle"],
+            Background = ThemeBrushes.CreateBrush(_theme.BackgroundColor, 1.0),
+            BorderBrush = ThemeBrushes.CreateBrush(_theme.BorderColor, 1.0),
+            BorderThickness = new Thickness(1)
+        };
+        MenuThemeProperties.SetPanelCornerRadius(menu, new CornerRadius(_theme.CornerRadius));
+
+        AddMenuItem(menu, LocalizationService.Get("group.arrangeIcons"), ArrangeIconsAutomatically);
+
+        var sortMenu = CreateMenuItem(LocalizationService.Get("group.sortBy"));
+        AddMenuItem(sortMenu, LocalizationService.Get("group.sortByName"), () => SortAndArrange(CompareByName));
+        AddMenuItem(sortMenu, LocalizationService.Get("group.sortByType"), () => SortAndArrange(CompareByType));
+        menu.Items.Add(sortMenu);
+
+        var sizeMenu = CreateMenuItem(LocalizationService.Get("group.iconSize"));
+        AddMenuItem(sizeMenu, LocalizationService.Get("group.iconSizeSmall"), () => SetIconScale(0.75));
+        AddMenuItem(sizeMenu, LocalizationService.Get("group.iconSizeMedium"), () => SetIconScale(1.0));
+        AddMenuItem(sizeMenu, LocalizationService.Get("group.iconSizeLarge"), () => SetIconScale(1.5));
+        menu.Items.Add(sizeMenu);
+
+        return menu;
+    }
+
+    private static int CompareByName(LaunchItem a, LaunchItem b)
+    {
+        return string.Compare(a.Name, b.Name, StringComparison.CurrentCultureIgnoreCase);
+    }
+
+    private static int CompareByType(LaunchItem a, LaunchItem b)
+    {
+        var typeCompare = a.Type.CompareTo(b.Type);
+        return typeCompare != 0 ? typeCompare : CompareByName(a, b);
+    }
+
+    private MenuItem CreateMenuItem(string header)
     {
         var item = new MenuItem
         {
@@ -230,8 +265,14 @@ internal sealed class DesktopGroupWindow : Window
         MenuThemeProperties.SetHighlightBrush(item, ThemeBrushes.CreateBrush(_theme.HighlightColor, 1.0));
         MenuThemeProperties.SetHighlightCornerRadius(item, new CornerRadius(4));
         MenuThemeProperties.SetPanelCornerRadius(item, new CornerRadius(_theme.CornerRadius));
+        return item;
+    }
+
+    private void AddMenuItem(ItemsControl parent, string header, Action handler)
+    {
+        var item = CreateMenuItem(header);
         item.Click += (_, _) => handler();
-        menu.Items.Add(item);
+        parent.Items.Add(item);
     }
 
     private void OnRenameClick()
@@ -351,6 +392,52 @@ internal sealed class DesktopGroupWindow : Window
             || string.Equals(extension, ".lnk", StringComparison.OrdinalIgnoreCase)
             ? LaunchItemType.Application
             : LaunchItemType.File;
+    }
+
+    private void PopulateTiles()
+    {
+        _canvas.Children.Clear();
+        var index = 0;
+        foreach (var item in _category.Items.Where(i => i.IsDesktopPinned))
+        {
+            AddTile(item, item.DesktopIconX ?? (index % 3) * TileSize, item.DesktopIconY ?? (index / 3) * TileSize);
+            index++;
+        }
+    }
+
+    private void ArrangeIconsAutomatically()
+    {
+        ArrangeInGrid(_category.Items.Where(i => i.IsDesktopPinned));
+    }
+
+    private void SortAndArrange(Comparison<LaunchItem> comparison)
+    {
+        var pinned = _category.Items.Where(i => i.IsDesktopPinned).ToList();
+        pinned.Sort(comparison);
+        ArrangeInGrid(pinned);
+    }
+
+    private void ArrangeInGrid(IEnumerable<LaunchItem> orderedItems)
+    {
+        var columns = Math.Max(1, (int)(_category.DesktopWidth / TileSize));
+        var index = 0;
+        foreach (var item in orderedItems)
+        {
+            item.DesktopIconX = (index % columns) * TileSize;
+            item.DesktopIconY = (index / columns) * TileSize;
+            index++;
+        }
+
+        PopulateTiles();
+        _onLayoutChanged(_category);
+    }
+
+    private void SetIconScale(double scale)
+    {
+        _category.DesktopIconScale = scale;
+        _zoomTransform.ScaleX = scale;
+        _zoomTransform.ScaleY = scale;
+        _onLayoutChanged(_category);
     }
 
     private void AddTile(LaunchItem item, double x, double y)
@@ -527,9 +614,6 @@ internal sealed class DesktopGroupWindow : Window
             return;
         }
 
-        _category.DesktopIconScale = newScale;
-        _zoomTransform.ScaleX = newScale;
-        _zoomTransform.ScaleY = newScale;
-        _onLayoutChanged(_category);
+        SetIconScale(newScale);
     }
 }
