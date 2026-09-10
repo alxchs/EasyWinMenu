@@ -4,6 +4,9 @@
   "tray.startWithWindows": "Windows起動時に実行",
   "tray.exit": "終了",
 
+  "desktop.toggleCollapseAll": "すべてのグループを展開/折りたたむ",
+  "desktop.gatherAll": "グループを中央に集める",
+
   "settings.title": "EasyWinMenu - 設定",
   "settings.appearance": "外観",
   "settings.theme": "テーマ",
@@ -91,6 +94,10 @@
   "group.newTextFile": "新しいテキスト ドキュメント",
   "group.newTextFileName": "新しいテキスト ドキュメント",
   "group.folderNamePrompt": "フォルダー名:",
+  "group.expand": "展開",
+  "group.collapse": "折りたたむ",
+  "group.areaTransparency": "領域を透過",
+  "group.titleTransparency": "タイトルを透過",
 
   "common.ok": "OK",
   "common.cancel": "キャンセル",

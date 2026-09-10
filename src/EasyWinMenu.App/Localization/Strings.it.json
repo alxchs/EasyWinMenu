@@ -4,6 +4,9 @@
   "tray.startWithWindows": "Avvia con Windows",
   "tray.exit": "Esci",
 
+  "desktop.toggleCollapseAll": "Espandi/comprimi tutti i gruppi",
+  "desktop.gatherAll": "Raggruppa al centro",
+
   "settings.title": "EasyWinMenu - Impostazioni",
   "settings.appearance": "Aspetto",
   "settings.theme": "Tema",
@@ -91,6 +94,10 @@
   "group.newTextFile": "Nuovo documento di testo",
   "group.newTextFileName": "Nuovo Documento di Testo",
   "group.folderNamePrompt": "Nome cartella:",
+  "group.expand": "Espandi",
+  "group.collapse": "Comprimi",
+  "group.areaTransparency": "Area trasparente",
+  "group.titleTransparency": "Titolo trasparente",
 
   "common.ok": "OK",
   "common.cancel": "Annulla",

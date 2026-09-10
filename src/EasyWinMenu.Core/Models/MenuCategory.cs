@@ -15,6 +15,9 @@ public sealed class MenuCategory : IMenuContainer
     public string? DesktopBackgroundImagePath { get; set; }
     public double? IconX { get; set; }
     public double? IconY { get; set; }
+    public bool IsCollapsed { get; set; }
+    public bool AreaTransparent { get; set; }
+    public bool TitleTransparent { get; set; }
 
     public MenuCategory Clone()
     {
@@ -32,7 +35,10 @@ public sealed class MenuCategory : IMenuContainer
             DesktopIconScale = DesktopIconScale,
             DesktopBackgroundImagePath = DesktopBackgroundImagePath,
             IconX = IconX,
-            IconY = IconY
+            IconY = IconY,
+            IsCollapsed = IsCollapsed,
+            AreaTransparent = AreaTransparent,
+            TitleTransparent = TitleTransparent
         };
     }
 }

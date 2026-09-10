@@ -4,6 +4,9 @@
   "tray.startWithWindows": "Запускать с Windows",
   "tray.exit": "Выход",
 
+  "desktop.toggleCollapseAll": "Развернуть/свернуть все группы",
+  "desktop.gatherAll": "Собрать группы в центре",
+
   "settings.title": "EasyWinMenu — Настройки",
   "settings.appearance": "Внешний вид",
   "settings.theme": "Тема",
@@ -91,6 +94,10 @@
   "group.newTextFile": "Новый текстовый документ",
   "group.newTextFileName": "Новый текстовый документ",
   "group.folderNamePrompt": "Имя папки:",
+  "group.expand": "Развернуть",
+  "group.collapse": "Свернуть",
+  "group.areaTransparency": "Прозрачная область",
+  "group.titleTransparency": "Прозрачный заголовок",
 
   "common.ok": "ОК",
   "common.cancel": "Отмена",

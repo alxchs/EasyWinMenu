@@ -23,6 +23,7 @@ public partial class App : Application
     private Window? _menuHost;
     private GlobalHotkeyService? _hotkeyService;
     private DesktopOrganizerService? _desktopOrganizer;
+    private DesktopContextMenuHookService? _desktopContextMenuHook;
     private SettingsWindow? _settingsWindow;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -59,6 +60,9 @@ public partial class App : Application
 
         _desktopOrganizer = new DesktopOrganizerService(_iconCache);
         _desktopOrganizer.Refresh(_configuration, OnDesktopGroupLayoutChanged, OnDesktopGroupDeleteRequested);
+
+        _desktopContextMenuHook = new DesktopContextMenuHookService(OnDesktopRightClick);
+        _desktopContextMenuHook.Start();
 
         _trayIcon = new NotifyIcon
         {
@@ -140,6 +144,28 @@ public partial class App : Application
         menu.IsOpen = true;
     }
 
+    private void OnDesktopRightClick(System.Drawing.Point screenPoint)
+    {
+        _menuHost!.Left = screenPoint.X;
+        _menuHost.Top = screenPoint.Y;
+
+        var menu = DesktopContextMenuBuilder.Build(
+            _configuration!.Theme,
+            _desktopOrganizer!.HasOpenGroups,
+            CreateDesktopGroup,
+            _desktopOrganizer.ToggleCollapseAll,
+            _desktopOrganizer.GatherAll,
+            OpenSettingsWindow);
+
+        var devicePoint = ToDeviceIndependentPoint(screenPoint);
+
+        menu.PlacementTarget = _menuHost;
+        menu.Placement = PlacementMode.AbsolutePoint;
+        menu.HorizontalOffset = devicePoint.X;
+        menu.VerticalOffset = devicePoint.Y;
+        menu.IsOpen = true;
+    }
+
     private System.Windows.Point ToDeviceIndependentPoint(System.Drawing.Point screenPoint)
     {
         var transform = PresentationSource.FromVisual(_menuHost!)?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
@@ -181,6 +207,7 @@ public partial class App : Application
         _trayIcon?.Dispose();
         _iconCache?.Dispose();
         _hotkeyService?.Dispose();
+        _desktopContextMenuHook?.Dispose();
         _desktopOrganizer?.CloseAll();
         base.OnExit(e);
     }

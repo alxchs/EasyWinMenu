@@ -4,6 +4,9 @@
   "tray.startWithWindows": "Start with Windows",
   "tray.exit": "Exit",
 
+  "desktop.toggleCollapseAll": "Expand/collapse all groups",
+  "desktop.gatherAll": "Gather groups to center",
+
   "settings.title": "EasyWinMenu - Settings",
   "settings.appearance": "Appearance",
   "settings.theme": "Theme",
@@ -91,6 +94,10 @@
   "group.newTextFile": "New text document",
   "group.newTextFileName": "New Text Document",
   "group.folderNamePrompt": "Folder name:",
+  "group.expand": "Expand",
+  "group.collapse": "Collapse",
+  "group.areaTransparency": "Transparent area",
+  "group.titleTransparency": "Transparent title",
 
   "common.ok": "OK",
   "common.cancel": "Cancel",

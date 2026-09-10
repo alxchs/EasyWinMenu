@@ -35,6 +35,7 @@ using MouseEventArgs = System.Windows.Input.MouseEventArgs;
 using MouseWheelEventArgs = System.Windows.Input.MouseWheelEventArgs;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using Orientation = System.Windows.Controls.Orientation;
+using Panel = System.Windows.Controls.Panel;
 using Separator = System.Windows.Controls.Separator;
 using StackPanel = System.Windows.Controls.StackPanel;
 using Style = System.Windows.Style;
@@ -52,17 +53,22 @@ internal sealed class DesktopGroupWindow : Window
     private const double TileSize = 80;
 
     private readonly MenuCategory _category;
-    private readonly MenuTheme _theme;
+    private MenuTheme _theme;
     private readonly IconCacheService _iconCache;
     private readonly Action<LaunchItem> _onExecute;
     private readonly Action<MenuCategory> _onLayoutChanged;
     private readonly Action<MenuCategory> _onDeleteRequested;
     private readonly ScaleTransform _zoomTransform;
     private readonly Dictionary<MenuCategory, DesktopGroupWindow> _openSubfolders = new();
+    private readonly Dictionary<object, FrameworkElement> _tilesByEntry = new();
+    private readonly HashSet<object> _selectedEntries = new();
 
     private Canvas _canvas = null!;
     private Border _border = null!;
+    private Border _header = null!;
+    private Border _resizeGrip = null!;
     private TextBlock _headerText = null!;
+    private TextBlock _collapseGlyph = null!;
 
     private bool _resizingGroup;
     private System.Windows.Point _resizeStart;
@@ -98,10 +104,28 @@ internal sealed class DesktopGroupWindow : Window
         AllowDrop = true;
 
         Content = BuildContent();
+        SetCollapsed(_category.IsCollapsed);
 
         PreviewMouseWheel += OnPreviewMouseWheel;
         PreviewKeyDown += OnPreviewKeyDown;
         Drop += OnDrop;
+    }
+
+    public bool IsCollapsed => _category.IsCollapsed;
+
+    public void SetCollapsedExternally(bool collapsed)
+    {
+        SetCollapsed(collapsed);
+        _onLayoutChanged(_category);
+    }
+
+    public void MoveToCenterKeepingSize(double centerX, double centerY, double cascadeOffset)
+    {
+        Left = centerX - (_category.DesktopWidth / 2) + cascadeOffset;
+        Top = centerY - (_category.DesktopHeight / 2) + cascadeOffset;
+        _category.DesktopX = Left;
+        _category.DesktopY = Top;
+        _onLayoutChanged(_category);
     }
 
     private FrameworkElement BuildContent()
@@ -114,22 +138,42 @@ internal sealed class DesktopGroupWindow : Window
             Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 1.0),
             FontFamily = new FontFamily(_theme.TitleFontFamily),
             FontSize = _theme.TitleFontSize,
-            FontWeight = _theme.TitleBold ? FontWeights.Bold : FontWeights.Normal
+            FontWeight = _theme.TitleBold ? FontWeights.Bold : FontWeights.Normal,
+            VerticalAlignment = VerticalAlignment.Center
         };
 
-        var header = new Border
+        _collapseGlyph = new TextBlock
         {
-            Background = ThemeBrushes.CreateBrush(_theme.HighlightColor, 1.0),
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = _theme.TitleFontSize,
+            Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 1.0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6, 0, 0, 0),
+            Cursor = Cursors.Hand
+        };
+        _collapseGlyph.MouseLeftButtonDown += (_, e) =>
+        {
+            ToggleCollapse();
+            e.Handled = true;
+        };
+        DockPanel.SetDock(_collapseGlyph, Dock.Right);
+
+        var headerPanel = new DockPanel();
+        headerPanel.Children.Add(_collapseGlyph);
+        headerPanel.Children.Add(_headerText);
+
+        _header = new Border
+        {
             Padding = new Thickness(8, 4, 8, 4),
             Cursor = Cursors.SizeAll,
-            Child = _headerText,
+            Child = headerPanel,
             ContextMenu = BuildHeaderContextMenu()
         };
-        header.MouseLeftButtonDown += OnHeaderMouseLeftButtonDown;
-        DockPanel.SetDock(header, Dock.Top);
-        panel.Children.Add(header);
+        _header.MouseLeftButtonDown += OnHeaderMouseLeftButtonDown;
+        DockPanel.SetDock(_header, Dock.Top);
+        panel.Children.Add(_header);
 
-        var resizeGrip = new Border
+        _resizeGrip = new Border
         {
             Width = 14,
             Height = 14,
@@ -137,11 +181,11 @@ internal sealed class DesktopGroupWindow : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             Cursor = Cursors.SizeNWSE
         };
-        resizeGrip.MouseLeftButtonDown += OnResizeGripMouseDown;
-        resizeGrip.MouseMove += OnResizeGripMouseMove;
-        resizeGrip.MouseLeftButtonUp += OnResizeGripMouseUp;
-        DockPanel.SetDock(resizeGrip, Dock.Bottom);
-        panel.Children.Add(resizeGrip);
+        _resizeGrip.MouseLeftButtonDown += OnResizeGripMouseDown;
+        _resizeGrip.MouseMove += OnResizeGripMouseMove;
+        _resizeGrip.MouseLeftButtonUp += OnResizeGripMouseUp;
+        DockPanel.SetDock(_resizeGrip, Dock.Bottom);
+        panel.Children.Add(_resizeGrip);
 
         _canvas = new Canvas
         {
@@ -150,6 +194,7 @@ internal sealed class DesktopGroupWindow : Window
             RenderTransformOrigin = new System.Windows.Point(0, 0),
             ContextMenu = BuildCanvasContextMenu()
         };
+        _canvas.MouseLeftButtonDown += (_, _) => ClearSelection();
 
         PopulateTiles();
 
@@ -164,6 +209,8 @@ internal sealed class DesktopGroupWindow : Window
             Child = panel
         };
         ApplyBackground();
+        ApplyHeaderBackground();
+        UpdateCollapseGlyph();
 
         if (_theme.ShowShadow)
         {
@@ -181,6 +228,12 @@ internal sealed class DesktopGroupWindow : Window
 
     private void ApplyBackground()
     {
+        if (_category.AreaTransparent)
+        {
+            _border.Background = Brushes.Transparent;
+            return;
+        }
+
         if (!string.IsNullOrWhiteSpace(_category.DesktopBackgroundImagePath) && File.Exists(_category.DesktopBackgroundImagePath))
         {
             _border.Background = new ImageBrush(new BitmapImage(new Uri(_category.DesktopBackgroundImagePath)))
@@ -191,6 +244,28 @@ internal sealed class DesktopGroupWindow : Window
         }
 
         _border.Background = ThemeBrushes.CreateBrush(_theme.BackgroundColor, _theme.Opacity);
+    }
+
+    private void ApplyHeaderBackground()
+    {
+        _header.Background = _category.TitleTransparent
+            ? Brushes.Transparent
+            : ThemeBrushes.CreateBrush(_theme.HighlightColor, 1.0);
+    }
+
+    private void EnsureThemeOverride()
+    {
+        if (_category.ThemeOverride is null)
+        {
+            _category.ThemeOverride = _theme.Clone();
+            _theme = _category.ThemeOverride;
+        }
+    }
+
+    private static string ComputeContrastingTextColor(Color background)
+    {
+        var luminance = ((0.299 * background.R) + (0.587 * background.G) + (0.114 * background.B)) / 255.0;
+        return luminance > 0.55 ? "#000000" : "#FFFFFF";
     }
 
     private ContextMenu CreateContextMenuShell()
@@ -211,9 +286,13 @@ internal sealed class DesktopGroupWindow : Window
         var menu = CreateContextMenuShell();
 
         AddMenuItem(menu, LocalizationService.Get("group.rename"), OnRenameClick);
+        AddMenuItem(menu, _category.IsCollapsed ? LocalizationService.Get("group.expand") : LocalizationService.Get("group.collapse"), ToggleCollapse);
+        menu.Items.Add(new Separator());
         AddMenuItem(menu, LocalizationService.Get("group.backgroundColor"), OnChangeColorClick);
         AddMenuItem(menu, LocalizationService.Get("group.backgroundImage"), OnChangeBackgroundImageClick);
         AddMenuItem(menu, LocalizationService.Get("group.removeBackgroundImage"), OnClearBackgroundImageClick);
+        AddMenuItem(menu, (_category.AreaTransparent ? "✓ " : string.Empty) + LocalizationService.Get("group.areaTransparency"), ToggleAreaTransparency);
+        AddMenuItem(menu, (_category.TitleTransparent ? "✓ " : string.Empty) + LocalizationService.Get("group.titleTransparency"), ToggleTitleTransparency);
         menu.Items.Add(new Separator());
         AddMenuItem(menu, LocalizationService.Get("group.remove"), OnDeleteGroupClick);
 
@@ -464,9 +543,58 @@ internal sealed class DesktopGroupWindow : Window
             return;
         }
 
-        _category.ThemeOverride ??= _theme.Clone();
-        _category.ThemeOverride.BackgroundColor = $"#{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";
+        EnsureThemeOverride();
+        var newColor = Color.FromRgb(dialog.Color.R, dialog.Color.G, dialog.Color.B);
+        _category.ThemeOverride!.BackgroundColor = $"#{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";
+        _category.ThemeOverride.TextColor = ComputeContrastingTextColor(newColor);
         ApplyThemeChange();
+    }
+
+    private void ToggleAreaTransparency()
+    {
+        _category.AreaTransparent = !_category.AreaTransparent;
+        ApplyBackground();
+        _header.ContextMenu = BuildHeaderContextMenu();
+        _onLayoutChanged(_category);
+    }
+
+    private void ToggleTitleTransparency()
+    {
+        _category.TitleTransparent = !_category.TitleTransparent;
+        ApplyHeaderBackground();
+        _header.ContextMenu = BuildHeaderContextMenu();
+        _onLayoutChanged(_category);
+    }
+
+    private void ToggleCollapse()
+    {
+        SetCollapsed(!_category.IsCollapsed);
+        _header.ContextMenu = BuildHeaderContextMenu();
+        _onLayoutChanged(_category);
+    }
+
+    private void SetCollapsed(bool collapsed)
+    {
+        _category.IsCollapsed = collapsed;
+        _canvas.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        _resizeGrip.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+
+        if (collapsed)
+        {
+            SizeToContent = SizeToContent.Height;
+        }
+        else
+        {
+            SizeToContent = SizeToContent.Manual;
+            Height = _category.DesktopHeight;
+        }
+
+        UpdateCollapseGlyph();
+    }
+
+    private void UpdateCollapseGlyph()
+    {
+        _collapseGlyph.Text = _category.IsCollapsed ? "" : "";
     }
 
     private void OnChangeBackgroundImageClick()
@@ -511,6 +639,10 @@ internal sealed class DesktopGroupWindow : Window
     private void ApplyThemeChange()
     {
         ApplyBackground();
+        ApplyHeaderBackground();
+        _headerText.Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 1.0);
+        _collapseGlyph.Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 1.0);
+        PopulateTiles();
         _onLayoutChanged(_category);
     }
 
@@ -562,6 +694,8 @@ internal sealed class DesktopGroupWindow : Window
     private void PopulateTiles()
     {
         _canvas.Children.Clear();
+        _tilesByEntry.Clear();
+        _selectedEntries.Clear();
         var index = 0;
         foreach (var folder in _category.Categories)
         {
@@ -635,8 +769,10 @@ internal sealed class DesktopGroupWindow : Window
         _onLayoutChanged(_category);
     }
 
-    private void AttachTileBehavior(FrameworkElement tile, Action onOpen, Action<double, double> onMoved)
+    private void AttachTileBehavior(FrameworkElement tile, object entry, Action onOpen, Action<double, double> onMoved)
     {
+        _tilesByEntry[entry] = tile;
+
         System.Windows.Point dragStart = default;
         System.Windows.Point tileStart = default;
         var dragging = false;
@@ -646,13 +782,17 @@ internal sealed class DesktopGroupWindow : Window
             if (e.ClickCount == 2)
             {
                 onOpen();
+                e.Handled = true;
                 return;
             }
+
+            SelectEntry(entry, Keyboard.Modifiers == ModifierKeys.Control);
 
             dragging = true;
             dragStart = e.GetPosition(_canvas);
             tileStart = new System.Windows.Point(Canvas.GetLeft(tile), Canvas.GetTop(tile));
             tile.CaptureMouse();
+            e.Handled = true;
         };
 
         tile.MouseMove += (_, e) =>
@@ -681,6 +821,105 @@ internal sealed class DesktopGroupWindow : Window
         };
     }
 
+    private void SelectEntry(object entry, bool additive)
+    {
+        if (additive)
+        {
+            if (!_selectedEntries.Remove(entry))
+            {
+                _selectedEntries.Add(entry);
+            }
+        }
+        else
+        {
+            _selectedEntries.Clear();
+            _selectedEntries.Add(entry);
+        }
+
+        RefreshSelectionVisuals();
+    }
+
+    private void ClearSelection()
+    {
+        if (_selectedEntries.Count == 0)
+        {
+            return;
+        }
+
+        _selectedEntries.Clear();
+        RefreshSelectionVisuals();
+    }
+
+    private void RefreshSelectionVisuals()
+    {
+        foreach (var (entry, tile) in _tilesByEntry)
+        {
+            if (tile is Panel panel)
+            {
+                panel.Background = _selectedEntries.Contains(entry)
+                    ? ThemeBrushes.CreateBrush(_theme.HighlightColor, 1.0)
+                    : Brushes.Transparent;
+            }
+        }
+    }
+
+    private void RemoveSelectedEntries()
+    {
+        if (_selectedEntries.Count == 0)
+        {
+            return;
+        }
+
+        var names = string.Join(", ", _selectedEntries.Select(GetEntryName));
+        var confirmed = MessageBox.Show(
+            this,
+            LocalizationService.Format("item.removeConfirm", names),
+            LocalizationService.Get("common.appName"),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (confirmed != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        foreach (var entry in _selectedEntries.ToList())
+        {
+            switch (entry)
+            {
+                case LaunchItem item:
+                    _category.Items.Remove(item);
+                    break;
+                case MenuCategory folder:
+                    DeleteFolder(folder);
+                    break;
+            }
+        }
+
+        PopulateTiles();
+        _onLayoutChanged(_category);
+    }
+
+    private void RenameSelectedEntry()
+    {
+        switch (_selectedEntries.FirstOrDefault())
+        {
+            case LaunchItem item:
+                RenameItem(item);
+                break;
+            case MenuCategory folder:
+                RenameFolder(folder);
+                break;
+        }
+    }
+
+    private static string GetEntryName(object entry) => entry switch
+    {
+        LaunchItem item => item.Name,
+        MenuCategory folder => folder.Name,
+        _ => string.Empty
+    };
+
     private void AddTile(LaunchItem item, double x, double y)
     {
         var tile = BuildTile(item);
@@ -695,6 +934,7 @@ internal sealed class DesktopGroupWindow : Window
         {
             Orientation = Orientation.Vertical,
             Width = TileSize - 8,
+            Background = Brushes.Transparent,
             Cursor = Cursors.Hand,
             ContextMenu = BuildItemTileContextMenu(item)
         };
@@ -724,6 +964,7 @@ internal sealed class DesktopGroupWindow : Window
 
         AttachTileBehavior(
             stack,
+            item,
             () => _onExecute(item),
             (x, y) =>
             {
@@ -749,6 +990,7 @@ internal sealed class DesktopGroupWindow : Window
         {
             Orientation = Orientation.Vertical,
             Width = TileSize - 8,
+            Background = Brushes.Transparent,
             Cursor = Cursors.Hand,
             ContextMenu = BuildFolderTileContextMenu(folder)
         };
@@ -775,6 +1017,7 @@ internal sealed class DesktopGroupWindow : Window
 
         AttachTileBehavior(
             stack,
+            folder,
             () => OpenSubfolder(folder),
             (x, y) =>
             {
@@ -847,19 +1090,35 @@ internal sealed class DesktopGroupWindow : Window
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (Keyboard.Modifiers != ModifierKeys.Control)
+        if (Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            if (e.Key is Key.OemPlus or Key.Add)
+            {
+                ApplyZoomDelta(0.1);
+                e.Handled = true;
+            }
+            else if (e.Key is Key.OemMinus or Key.Subtract)
+            {
+                ApplyZoomDelta(-0.1);
+                e.Handled = true;
+            }
+
+            return;
+        }
+
+        if (Keyboard.Modifiers != ModifierKeys.None)
         {
             return;
         }
 
-        if (e.Key is Key.OemPlus or Key.Add)
+        if (e.Key == Key.Delete)
         {
-            ApplyZoomDelta(0.1);
+            RemoveSelectedEntries();
             e.Handled = true;
         }
-        else if (e.Key is Key.OemMinus or Key.Subtract)
+        else if (e.Key == Key.F2 && _selectedEntries.Count == 1)
         {
-            ApplyZoomDelta(-0.1);
+            RenameSelectedEntry();
             e.Handled = true;
         }
     }

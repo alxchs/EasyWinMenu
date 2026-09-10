@@ -41,6 +41,41 @@ internal sealed class DesktopOrganizerService(IconCacheService iconCache)
         _windows.Clear();
     }
 
+    public bool HasOpenGroups => _windows.Count > 0;
+
+    public void ToggleCollapseAll()
+    {
+        if (_windows.Count == 0)
+        {
+            return;
+        }
+
+        var shouldCollapse = _windows.Values.Any(window => !window.IsCollapsed);
+        foreach (var window in _windows.Values)
+        {
+            window.SetCollapsedExternally(shouldCollapse);
+        }
+    }
+
+    public void GatherAll()
+    {
+        if (_windows.Count == 0)
+        {
+            return;
+        }
+
+        var workArea = System.Windows.SystemParameters.WorkArea;
+        var centerX = workArea.Left + (workArea.Width / 2);
+        var centerY = workArea.Top + (workArea.Height / 2);
+        var offset = 0.0;
+
+        foreach (var window in _windows.Values)
+        {
+            window.MoveToCenterKeepingSize(centerX, centerY, offset);
+            offset += 24;
+        }
+    }
+
     public static bool RemoveCategory(IMenuContainer container, MenuCategory target)
     {
         if (container.Categories.Remove(target))
