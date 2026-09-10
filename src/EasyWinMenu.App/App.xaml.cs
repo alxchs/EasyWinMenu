@@ -18,6 +18,7 @@ public partial class App : Application
     private IconCacheService? _iconCache;
     private NotifyIcon? _trayIcon;
     private Window? _menuHost;
+    private GlobalHotkeyService? _hotkeyService;
     private SettingsWindow? _settingsWindow;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -42,6 +43,10 @@ public partial class App : Application
         };
         _menuHost.Show();
 
+        _hotkeyService = new GlobalHotkeyService(_menuHost);
+        _hotkeyService.HotkeyPressed += ShowTrayMenu;
+        _hotkeyService.Apply(_configuration.Behavior);
+
         _trayIcon = new NotifyIcon
         {
             Icon = System.Drawing.SystemIcons.Application,
@@ -51,7 +56,21 @@ public partial class App : Application
 
         _trayIcon.MouseClick += (_, args) =>
         {
-            if (args.Button is MouseButtons.Left or MouseButtons.Right)
+            if (args.Button == MouseButtons.Right)
+            {
+                ShowTrayMenu();
+                return;
+            }
+
+            if (args.Button == MouseButtons.Left && _configuration.Behavior.ClickMode == TrayClickMode.SingleClick)
+            {
+                ShowTrayMenu();
+            }
+        };
+
+        _trayIcon.MouseDoubleClick += (_, args) =>
+        {
+            if (args.Button == MouseButtons.Left && _configuration.Behavior.ClickMode == TrayClickMode.DoubleClick)
             {
                 ShowTrayMenu();
             }
@@ -104,12 +123,14 @@ public partial class App : Application
     private void OnConfigurationSaved(object? sender, EventArgs e)
     {
         _configurationStore!.Save(_configuration!);
+        _hotkeyService!.Apply(_configuration!.Behavior);
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
         _trayIcon?.Dispose();
         _iconCache?.Dispose();
+        _hotkeyService?.Dispose();
         base.OnExit(e);
     }
 }

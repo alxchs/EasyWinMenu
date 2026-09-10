@@ -5,6 +5,7 @@ public sealed class LauncherConfiguration : IMenuContainer
     public List<MenuCategory> Categories { get; init; } = [];
     public List<LaunchItem> Items { get; init; } = [];
     public MenuTheme Theme { get; set; } = new();
+    public LauncherBehavior Behavior { get; set; } = new();
 
     public LauncherConfiguration Clone()
     {
@@ -12,7 +13,8 @@ public sealed class LauncherConfiguration : IMenuContainer
         {
             Items = [.. Items.Select(item => item.Clone())],
             Categories = [.. Categories.Select(category => category.Clone())],
-            Theme = Theme.Clone()
+            Theme = Theme.Clone(),
+            Behavior = Behavior.Clone()
         };
     }
 
@@ -23,6 +25,7 @@ public sealed class LauncherConfiguration : IMenuContainer
         Categories.Clear();
         Categories.AddRange(source.Categories.Select(category => category.Clone()));
         Theme = source.Theme.Clone();
+        Behavior = source.Behavior.Clone();
     }
 
     public static LauncherConfiguration CreateDefault()

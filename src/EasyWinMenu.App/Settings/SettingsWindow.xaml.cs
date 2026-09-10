@@ -33,6 +33,60 @@ public partial class SettingsWindow : Window
         _workingConfiguration = configuration.Clone();
 
         RebuildTree();
+        LoadBehavior();
+    }
+
+    private void LoadBehavior()
+    {
+        ClickModeBox.ItemsSource = new[]
+        {
+            new { Mode = TrayClickMode.SingleClick, Label = "Clique simples" },
+            new { Mode = TrayClickMode.DoubleClick, Label = "Duplo clique" }
+        };
+        ClickModeBox.SelectedValue = _workingConfiguration.Behavior.ClickMode;
+
+        HotkeyKeyBox.ItemsSource = new[] { "Space", "Tab" }
+            .Concat(Enumerable.Range('A', 26).Select(code => ((char)code).ToString()))
+            .ToList();
+        HotkeyKeyBox.SelectedItem = _workingConfiguration.Behavior.GlobalHotkeyKey;
+
+        var modifiers = _workingConfiguration.Behavior.GlobalHotkeyModifiers;
+        HotkeyEnabledBox.IsChecked = _workingConfiguration.Behavior.GlobalHotkeyEnabled;
+        HotkeyCtrlBox.IsChecked = modifiers.HasFlag(HotkeyModifiers.Control);
+        HotkeyAltBox.IsChecked = modifiers.HasFlag(HotkeyModifiers.Alt);
+        HotkeyShiftBox.IsChecked = modifiers.HasFlag(HotkeyModifiers.Shift);
+        HotkeyWinBox.IsChecked = modifiers.HasFlag(HotkeyModifiers.Windows);
+    }
+
+    private void SaveBehavior()
+    {
+        var behavior = _workingConfiguration.Behavior;
+        behavior.ClickMode = ClickModeBox.SelectedValue as TrayClickMode? ?? TrayClickMode.SingleClick;
+        behavior.GlobalHotkeyEnabled = HotkeyEnabledBox.IsChecked == true;
+        behavior.GlobalHotkeyKey = HotkeyKeyBox.SelectedItem as string ?? "Space";
+
+        var modifiers = HotkeyModifiers.None;
+        if (HotkeyCtrlBox.IsChecked == true)
+        {
+            modifiers |= HotkeyModifiers.Control;
+        }
+
+        if (HotkeyAltBox.IsChecked == true)
+        {
+            modifiers |= HotkeyModifiers.Alt;
+        }
+
+        if (HotkeyShiftBox.IsChecked == true)
+        {
+            modifiers |= HotkeyModifiers.Shift;
+        }
+
+        if (HotkeyWinBox.IsChecked == true)
+        {
+            modifiers |= HotkeyModifiers.Windows;
+        }
+
+        behavior.GlobalHotkeyModifiers = modifiers;
     }
 
     private void RebuildTree()
@@ -316,6 +370,8 @@ public partial class SettingsWindow : Window
             return;
         }
 
+        SaveBehavior();
+
         new ConfigurationStore(dialog.FileName).Save(_workingConfiguration);
     }
 
@@ -340,10 +396,12 @@ public partial class SettingsWindow : Window
 
         _workingConfiguration.ReplaceContentsWith(imported);
         RebuildTree();
+        LoadBehavior();
     }
 
     private void OnSaveClick(object sender, RoutedEventArgs e)
     {
+        SaveBehavior();
         _target.ReplaceContentsWith(_workingConfiguration);
         ConfigurationSaved?.Invoke(this, EventArgs.Empty);
     }
