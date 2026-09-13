@@ -9,6 +9,7 @@ public sealed class ConfigurationStore(string configFilePath)
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = { new JsonStringEnumConverter() }
     };
 

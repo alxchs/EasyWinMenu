@@ -7,7 +7,20 @@ internal sealed class DesktopOrganizerService(IconCacheService iconCache)
 {
     private readonly Dictionary<MenuCategory, DesktopGroupWindow> _windows = new();
 
-    public void Refresh(LauncherConfiguration configuration, Action<MenuCategory> onLayoutChanged, Action<MenuCategory> onDeleteRequested)
+    /// <summary>Re-reads every open group's appearance from the configuration.</summary>
+    public void ReloadVisuals(LauncherConfiguration configuration)
+    {
+        foreach (var (category, window) in _windows)
+        {
+            window.ReloadVisuals(category.ThemeOverride ?? configuration.Theme);
+        }
+    }
+
+    public void Refresh(
+        LauncherConfiguration configuration,
+        Action<MenuCategory> onLayoutChanged,
+        Action<MenuCategory> onDeleteRequested,
+        IDesktopGroupCommands? commands = null)
     {
         var groups = FindDesktopGroups(configuration).ToList();
 
@@ -25,7 +38,7 @@ internal sealed class DesktopOrganizerService(IconCacheService iconCache)
             }
 
             var theme = category.ThemeOverride ?? configuration.Theme;
-            var window = new DesktopGroupWindow(category, theme, iconCache, LaunchExecutor.Execute, onLayoutChanged, onDeleteRequested);
+            var window = new DesktopGroupWindow(category, theme, iconCache, LaunchExecutor.Execute, onLayoutChanged, onDeleteRequested, commands);
             window.Show();
             _windows[category] = window;
         }
@@ -73,6 +86,43 @@ internal sealed class DesktopOrganizerService(IconCacheService iconCache)
         {
             window.MoveToCenterKeepingSize(centerX, centerY, offset);
             offset += 24;
+        }
+    }
+
+    /// <summary>The list <paramref name="target"/> lives in, so a copy can join it.</summary>
+    public static List<MenuCategory>? FindParentList(IMenuContainer container, MenuCategory target)
+    {
+        if (container.Categories.Contains(target))
+        {
+            return container.Categories;
+        }
+
+        foreach (var category in container.Categories)
+        {
+            var found = FindParentList(category, target);
+            if (found is not null)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Every desktop group in the configuration, whatever its nesting.</summary>
+    public static IEnumerable<MenuCategory> AllDesktopGroups(IMenuContainer container)
+    {
+        foreach (var category in container.Categories)
+        {
+            if (category.IsDesktopGroup)
+            {
+                yield return category;
+            }
+
+            foreach (var nested in AllDesktopGroups(category))
+            {
+                yield return nested;
+            }
         }
     }
 

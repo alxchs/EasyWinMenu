@@ -7,6 +7,17 @@ public sealed class MenuTheme
     public string BorderColor { get; set; } = "#3C3C3C";
     public double CornerRadius { get; set; } = 6;
     public bool ShowShadow { get; set; } = true;
+
+    /// <summary>How far the shadow spreads; 0 gives a hard edge.</summary>
+    public double ShadowBlurRadius { get; set; } = 12;
+
+    /// <summary>How far the shadow is pushed away from the surface.</summary>
+    public double ShadowDepth { get; set; } = 2;
+
+    /// <summary>Direction in degrees, counter-clockwise from due east. 315 casts down-right.</summary>
+    public double ShadowDirection { get; set; } = 315;
+
+    public double ShadowOpacity { get; set; } = 0.35;
     public double ItemSpacing { get; set; } = 2;
     public double ItemPadding { get; set; } = 8;
     public double IconSize { get; set; } = 18;
@@ -28,6 +39,10 @@ public sealed class MenuTheme
             BorderColor = BorderColor,
             CornerRadius = CornerRadius,
             ShowShadow = ShowShadow,
+            ShadowBlurRadius = ShadowBlurRadius,
+            ShadowDepth = ShadowDepth,
+            ShadowDirection = ShadowDirection,
+            ShadowOpacity = ShadowOpacity,
             ItemSpacing = ItemSpacing,
             ItemPadding = ItemPadding,
             IconSize = IconSize,

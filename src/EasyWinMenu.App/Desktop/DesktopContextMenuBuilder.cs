@@ -3,6 +3,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using EasyWinMenu.App.Localization;
 using EasyWinMenu.App.Menu;
+using EasyWinMenu.App.Theming;
 using EasyWinMenu.Core.Models;
 using Application = System.Windows.Application;
 using ContextMenu = System.Windows.Controls.ContextMenu;
@@ -30,19 +31,26 @@ internal static class DesktopContextMenuBuilder
         ApplyPanelAppearance(menu, theme);
         ApplyOpenAnimation(menu, theme);
 
-        AddMenuItem(menu, theme, LocalizationService.Get("tray.newDesktopGroup"), newDesktopGroup, true);
-        AddMenuItem(menu, theme, LocalizationService.Get("desktop.toggleCollapseAll"), toggleCollapseAll, hasOpenGroups);
-        AddMenuItem(menu, theme, LocalizationService.Get("desktop.gatherAll"), gatherAll, hasOpenGroups);
+        AddMenuItem(menu, theme, LocalizationService.Get("tray.newDesktopGroup"), newDesktopGroup, true, "IconAdd");
+        AddMenuItem(menu, theme, LocalizationService.Get("desktop.toggleCollapseAll"), toggleCollapseAll, hasOpenGroups, "IconChevronUp");
+        AddMenuItem(menu, theme, LocalizationService.Get("desktop.gatherAll"), gatherAll, hasOpenGroups, "IconGather");
 
-        menu.Items.Add(new Separator());
-        AddMenuItem(menu, theme, LocalizationService.Get("tray.settings"), openSettings, true);
+        menu.Items.Add(new Separator { Background = ThemeBrushes.CreateBrush(theme.BorderColor, 1.0), Height = 1, Margin = new System.Windows.Thickness(6, 4, 6, 4) });
+        AddMenuItem(menu, theme, LocalizationService.Get("tray.settings"), openSettings, true, "IconSettings");
 
         return menu;
     }
 
-    private static void AddMenuItem(ContextMenu menu, MenuTheme theme, string header, Action handler, bool enabled)
+    private static void AddMenuItem(ContextMenu menu, MenuTheme theme, string header, Action handler, bool enabled, string? iconKey = null)
     {
-        var item = new MenuItem { Header = header, IsEnabled = enabled };
+        var item = new MenuItem
+        {
+            Header = header,
+            IsEnabled = enabled,
+            Icon = iconKey is null
+                ? new System.Windows.Controls.Border { Width = theme.IconSize, Height = theme.IconSize }
+                : AppIcons.Create(iconKey, ThemeBrushes.CreateBrush(theme.TextColor, 0.85), theme.IconSize)
+        };
         ApplyMenuItemAppearance(item, theme);
         item.Click += (_, _) => handler();
         menu.Items.Add(item);

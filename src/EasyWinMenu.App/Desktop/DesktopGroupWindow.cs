@@ -4,12 +4,15 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using EasyWinMenu.App.Localization;
 using EasyWinMenu.App.Menu;
 using EasyWinMenu.App.Services;
+using EasyWinMenu.App.Theming;
 using EasyWinMenu.Core.Models;
 using Application = System.Windows.Application;
 using Border = System.Windows.Controls.Border;
+using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
 using Canvas = System.Windows.Controls.Canvas;
 using Color = System.Windows.Media.Color;
@@ -27,6 +30,8 @@ using Key = System.Windows.Input.Key;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using Keyboard = System.Windows.Input.Keyboard;
 using MenuItem = System.Windows.Controls.MenuItem;
+using ContentControl = System.Windows.Controls.ContentControl;
+using Grid = System.Windows.Controls.Grid;
 using MessageBox = System.Windows.MessageBox;
 using ModifierKeys = System.Windows.Input.ModifierKeys;
 using MouseButtonEventArgs = System.Windows.Input.MouseButtonEventArgs;
@@ -36,7 +41,9 @@ using MouseWheelEventArgs = System.Windows.Input.MouseWheelEventArgs;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using Orientation = System.Windows.Controls.Orientation;
 using Panel = System.Windows.Controls.Panel;
+using PlacementMode = System.Windows.Controls.Primitives.PlacementMode;
 using Separator = System.Windows.Controls.Separator;
+using Slider = System.Windows.Controls.Slider;
 using StackPanel = System.Windows.Controls.StackPanel;
 using Style = System.Windows.Style;
 using TextAlignment = System.Windows.TextAlignment;
@@ -51,6 +58,9 @@ internal sealed class DesktopGroupWindow : Window
     private const double MinIconScale = 0.5;
     private const double MaxIconScale = 3.0;
     private const double TileSize = 80;
+    private const double MinCanvasPadding = 8;
+    private const double CanvasPaddingRatio = 0.05;
+    private const double FolderTapTolerance = 5;
 
     private readonly MenuCategory _category;
     private MenuTheme _theme;
@@ -58,6 +68,7 @@ internal sealed class DesktopGroupWindow : Window
     private readonly Action<LaunchItem> _onExecute;
     private readonly Action<MenuCategory> _onLayoutChanged;
     private readonly Action<MenuCategory> _onDeleteRequested;
+    private readonly IDesktopGroupCommands? _commands;
     private readonly ScaleTransform _zoomTransform;
     private readonly Dictionary<MenuCategory, DesktopGroupWindow> _openSubfolders = new();
     private readonly Dictionary<object, FrameworkElement> _tilesByEntry = new();
@@ -65,12 +76,18 @@ internal sealed class DesktopGroupWindow : Window
 
     private Canvas _canvas = null!;
     private Border _border = null!;
+    private Grid _root = null!;
+    private ContentControl _folderHost = null!;
+    private GroupOverlayWindow? _overlay;
     private Border _header = null!;
     private Border _resizeGrip = null!;
     private TextBlock _headerText = null!;
-    private TextBlock _collapseGlyph = null!;
+    private Border _collapseGlyph = null!;
+    private Border _menuButton = null!;
 
     private bool _resizingGroup;
+    private bool _draggingFolderTile;
+    private System.Windows.Point _folderDragOrigin;
     private System.Windows.Point _resizeStart;
     private double _startWidth;
     private double _startHeight;
@@ -81,8 +98,10 @@ internal sealed class DesktopGroupWindow : Window
         IconCacheService iconCache,
         Action<LaunchItem> onExecute,
         Action<MenuCategory> onLayoutChanged,
-        Action<MenuCategory> onDeleteRequested)
+        Action<MenuCategory> onDeleteRequested,
+        IDesktopGroupCommands? commands = null)
     {
+        _commands = commands;
         _category = category;
         _theme = theme;
         _iconCache = iconCache;
@@ -103,12 +122,13 @@ internal sealed class DesktopGroupWindow : Window
         Height = category.DesktopHeight;
         AllowDrop = true;
 
-        Content = BuildContent();
+        Content = BuildRoot();
         SetCollapsed(_category.IsCollapsed);
 
         PreviewMouseWheel += OnPreviewMouseWheel;
         PreviewKeyDown += OnPreviewKeyDown;
         Drop += OnDrop;
+        Closed += (_, _) => _overlay?.Close();
     }
 
     public bool IsCollapsed => _category.IsCollapsed;
@@ -128,6 +148,163 @@ internal sealed class DesktopGroupWindow : Window
         _onLayoutChanged(_category);
     }
 
+    /// <summary>
+    /// Both looks are built up front and swapped by visibility, so the panel canvas,
+    /// header and grip stay alive (and keep working) while the folder look is showing.
+    /// </summary>
+    private FrameworkElement BuildRoot()
+    {
+        _folderHost = new ContentControl
+        {
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(10, 10, 10, 6),
+            Visibility = Visibility.Collapsed
+        };
+        _folderHost.MouseLeftButtonDown += OnFolderTileMouseDown;
+        _folderHost.MouseMove += OnFolderTileMouseMove;
+        _folderHost.MouseLeftButtonUp += OnFolderTileMouseUp;
+
+        _root = new Grid { Background = Brushes.Transparent };
+        _root.Children.Add(BuildContent());
+        _root.Children.Add(_folderHost);
+        return _root;
+    }
+
+    private bool IsAppFolder => _category.DisplayMode == DesktopGroupDisplayMode.AppFolder;
+
+    /// <summary>
+    /// Icons keep at least a twentieth of the group clear on every side, so nothing
+    /// sits flush against the title bar or the border however the group is resized.
+    /// </summary>
+    private double PaddingX => Math.Max(MinCanvasPadding, _category.DesktopWidth * CanvasPaddingRatio);
+
+    private double PaddingY => Math.Max(MinCanvasPadding, _category.DesktopHeight * CanvasPaddingRatio);
+
+    private void ApplyDisplayMode()
+    {
+        if (IsAppFolder)
+        {
+            // A ContextMenu cannot be shared between two owners, so the tile gets its own.
+            _folderHost.ContextMenu = BuildHeaderContextMenu();
+            RefreshFolderTile();
+            _border.Visibility = Visibility.Collapsed;
+            _folderHost.Visibility = Visibility.Visible;
+            SizeToContent = SizeToContent.WidthAndHeight;
+            return;
+        }
+
+        _folderHost.Visibility = Visibility.Collapsed;
+        _border.Visibility = Visibility.Visible;
+
+        // SizeToContent has to be relaxed before Width and Height are assigned:
+        // while it is still automatic the assignment is discarded, which is how the
+        // panel used to come back from the folder look wearing the tile's size.
+        SizeToContent = _category.IsCollapsed ? SizeToContent.Height : SizeToContent.Manual;
+        Width = _category.DesktopWidth;
+
+        if (!_category.IsCollapsed)
+        {
+            Height = _category.DesktopHeight;
+        }
+    }
+
+    private void RefreshFolderTile()
+    {
+        if (!IsAppFolder)
+        {
+            return;
+        }
+
+        _folderHost.Content = AppFolderTile.Build(_category, _theme, _iconCache);
+    }
+
+    private void ToggleDisplayMode()
+    {
+        if (!IsAppFolder)
+        {
+            // Remember where the panel stood so the tile takes its top-left corner.
+            _category.PanelX = Left;
+            _category.PanelY = Top;
+        }
+
+        _category.DisplayMode = IsAppFolder ? DesktopGroupDisplayMode.Panel : DesktopGroupDisplayMode.AppFolder;
+        _header.ContextMenu = BuildHeaderContextMenu();
+        ApplyDisplayMode();
+        _onLayoutChanged(_category);
+    }
+
+    private void ToggleBadge()
+    {
+        _category.ShowBadge = !_category.ShowBadge;
+        _header.ContextMenu = BuildHeaderContextMenu();
+        ApplyDisplayMode();
+        _onLayoutChanged(_category);
+    }
+
+    private void OnFolderTileMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        _draggingFolderTile = true;
+        _folderDragOrigin = PointToScreen(e.GetPosition(this));
+        _folderHost.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void OnFolderTileMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_draggingFolderTile)
+        {
+            return;
+        }
+
+        var current = PointToScreen(e.GetPosition(this));
+        Left += current.X - _folderDragOrigin.X;
+        Top += current.Y - _folderDragOrigin.Y;
+        _folderDragOrigin = PointToScreen(e.GetPosition(this));
+    }
+
+    private void OnFolderTileMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_draggingFolderTile)
+        {
+            return;
+        }
+
+        _draggingFolderTile = false;
+        _folderHost.ReleaseMouseCapture();
+
+        // A press that barely moved is a tap, not a drag: snap back and open the sheet.
+        if (Math.Abs(Left - _category.DesktopX) < FolderTapTolerance
+            && Math.Abs(Top - _category.DesktopY) < FolderTapTolerance)
+        {
+            Left = _category.DesktopX;
+            Top = _category.DesktopY;
+
+            // Let this click finish before another window takes focus, otherwise the
+            // captured mouse-up drags activation back here and the sheet closes at once.
+            Dispatcher.BeginInvoke(OpenOverlay, DispatcherPriority.Input);
+            return;
+        }
+
+        _category.DesktopX = Left;
+        _category.DesktopY = Top;
+        _onLayoutChanged(_category);
+    }
+
+    private void OpenOverlay()
+    {
+        if (_overlay is not null)
+        {
+            _overlay.Activate();
+            return;
+        }
+
+        _overlay = new GroupOverlayWindow(_category, _theme, _iconCache, _onExecute, this);
+        _overlay.Closed += (_, _) => _overlay = null;
+        _overlay.Show();
+        _overlay.Activate();
+    }
+
     private FrameworkElement BuildContent()
     {
         var panel = new DockPanel();
@@ -142,30 +319,22 @@ internal sealed class DesktopGroupWindow : Window
             VerticalAlignment = VerticalAlignment.Center
         };
 
-        _collapseGlyph = new TextBlock
-        {
-            FontFamily = new FontFamily("Segoe MDL2 Assets"),
-            FontSize = _theme.TitleFontSize,
-            Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 1.0),
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(6, 0, 0, 0),
-            Cursor = Cursors.Hand
-        };
-        _collapseGlyph.MouseLeftButtonDown += (_, e) =>
-        {
-            ToggleCollapse();
-            e.Handled = true;
-        };
+        _collapseGlyph = BuildHeaderButton(ToggleCollapse);
         DockPanel.SetDock(_collapseGlyph, Dock.Right);
 
+        _menuButton = BuildHeaderButton(OpenHeaderMenu);
+        _menuButton.Child = AppIcons.Create("IconMore", ThemeBrushes.CreateBrush(_theme.TextColor, 1.0), _theme.TitleFontSize + 3);
+        _menuButton.ToolTip = LocalizationService.Get("group.menu");
+        DockPanel.SetDock(_menuButton, Dock.Right);
+
         var headerPanel = new DockPanel();
+        headerPanel.Children.Add(_menuButton);
         headerPanel.Children.Add(_collapseGlyph);
         headerPanel.Children.Add(_headerText);
 
         _header = new Border
         {
-            Padding = new Thickness(8, 4, 8, 4),
-            Cursor = Cursors.SizeAll,
+            Padding = new Thickness(8, 4, 4, 4),
             Child = headerPanel,
             ContextMenu = BuildHeaderContextMenu()
         };
@@ -175,11 +344,22 @@ internal sealed class DesktopGroupWindow : Window
 
         _resizeGrip = new Border
         {
-            Width = 14,
-            Height = 14,
-            Background = ThemeBrushes.CreateBrush(_theme.BorderColor, 1.0),
+            Width = 16,
+            Height = 16,
+            Background = Brushes.Transparent,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Cursor = Cursors.SizeNWSE
+            Cursor = Cursors.SizeNWSE,
+            Child = new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse("M11 3L3 11 M11 7L7 11 M11 11L10.5 11.5"),
+                Stroke = ThemeBrushes.CreateBrush(_theme.TextColor, 0.5),
+                StrokeThickness = 1.4,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                Stretch = Stretch.None,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            }
         };
         _resizeGrip.MouseLeftButtonDown += OnResizeGripMouseDown;
         _resizeGrip.MouseMove += OnResizeGripMouseMove;
@@ -212,23 +392,87 @@ internal sealed class DesktopGroupWindow : Window
         ApplyHeaderBackground();
         UpdateCollapseGlyph();
 
-        if (_theme.ShowShadow)
-        {
-            _border.Effect = new DropShadowEffect
-            {
-                BlurRadius = 12,
-                ShadowDepth = 2,
-                Opacity = 0.35,
-                Color = Colors.Black
-            };
-        }
+        _border.Effect = BuildGroupShadow(_theme);
 
         return _border;
     }
 
+    /// <summary>A flat square target in the title bar that does not start a window drag.</summary>
+    private Border BuildHeaderButton(Action onClick)
+    {
+        var button = new Border
+        {
+            Width = _theme.TitleFontSize + 14,
+            Height = _theme.TitleFontSize + 14,
+            CornerRadius = new CornerRadius(4),
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 0, 0)
+        };
+
+        var hover = ThemeBrushes.CreateBrush(_theme.TextColor, 0.14);
+        button.MouseEnter += (_, _) => button.Background = hover;
+        button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
+        button.MouseLeftButtonDown += (_, e) =>
+        {
+            e.Handled = true;
+            onClick();
+        };
+
+        return button;
+    }
+
+    /// <summary>
+    /// Hands the icon over to Explorer's own menu, third-party entries included. It is
+    /// opened from the dispatcher so our themed menu has closed first: the shell menu
+    /// runs its own message loop and needs the foreground to itself.
+    /// </summary>
+    private void ShowStandardMenu(LaunchItem item)
+    {
+        if (!ShellCommands.TryResolveTarget(item, out var path))
+        {
+            return;
+        }
+
+        var point = System.Windows.Forms.Cursor.Position;
+        var extendedVerbs = Keyboard.Modifiers == ModifierKeys.Shift;
+
+        Dispatcher.BeginInvoke(
+            () => ShellContextMenu.TryShow(this, path, point, extendedVerbs),
+            DispatcherPriority.ApplicationIdle);
+    }
+
+    private void OpenHeaderMenu()
+    {
+        // Rebuilt per click so checkmarks and enabled states reflect the current group.
+        var menu = BuildHeaderContextMenu();
+        menu.PlacementTarget = _menuButton;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    /// <summary>The configured shadow, or null when it is switched off.</summary>
+    internal static DropShadowEffect? BuildGroupShadow(MenuTheme theme)
+    {
+        if (!theme.ShowShadow)
+        {
+            return null;
+        }
+
+        return new DropShadowEffect
+        {
+            BlurRadius = theme.ShadowBlurRadius,
+            ShadowDepth = theme.ShadowDepth,
+            Direction = theme.ShadowDirection,
+            Opacity = theme.ShadowOpacity,
+            Color = Colors.Black
+        };
+    }
+
     private void ApplyBackground()
     {
-        if (_category.AreaTransparent)
+        if (_category.AreaOpacity <= 0)
         {
             _border.Background = Brushes.Transparent;
             return;
@@ -238,19 +482,19 @@ internal sealed class DesktopGroupWindow : Window
         {
             _border.Background = new ImageBrush(new BitmapImage(new Uri(_category.DesktopBackgroundImagePath)))
             {
-                Stretch = Stretch.UniformToFill
+                Stretch = Stretch.UniformToFill,
+                Opacity = _category.AreaOpacity
             };
             return;
         }
 
-        _border.Background = ThemeBrushes.CreateBrush(_theme.BackgroundColor, _theme.Opacity);
+        // The group slider rides on top of the theme's own opacity rather than replacing it.
+        _border.Background = ThemeBrushes.CreateBrush(_theme.BackgroundColor, _theme.Opacity * _category.AreaOpacity);
     }
 
     private void ApplyHeaderBackground()
     {
-        _header.Background = _category.TitleTransparent
-            ? Brushes.Transparent
-            : ThemeBrushes.CreateBrush(_theme.HighlightColor, 1.0);
+        _header.Background = ThemeBrushes.CreateBrush(_theme.HighlightColor, _category.TitleOpacity);
     }
 
     private void EnsureThemeOverride()
@@ -264,8 +508,50 @@ internal sealed class DesktopGroupWindow : Window
 
     private static string ComputeContrastingTextColor(Color background)
     {
-        var luminance = ((0.299 * background.R) + (0.587 * background.G) + (0.114 * background.B)) / 255.0;
-        return luminance > 0.55 ? "#000000" : "#FFFFFF";
+        return RelativeLuminance(background) > 0.55 ? "#000000" : "#FFFFFF";
+    }
+
+    private static double RelativeLuminance(Color color)
+    {
+        return ((0.299 * color.R) + (0.587 * color.G) + (0.114 * color.B)) / 255.0;
+    }
+
+    /// <summary>
+    /// Label colour is derived, never taken from the theme: the text sits on whatever
+    /// the group is painted with, and a fixed colour disappears as soon as that changes.
+    /// A background image can be anything, so those labels get white text and lean on
+    /// the shadow underneath them instead.
+    /// </summary>
+    private Brush TileTextBrush()
+    {
+        if (!string.IsNullOrWhiteSpace(_category.DesktopBackgroundImagePath))
+        {
+            return Brushes.White;
+        }
+
+        var background = (Color)ColorConverter.ConvertFromString(_theme.BackgroundColor)!;
+
+        // A see-through group shows the wallpaper, which is usually the darker bet.
+        var effective = _theme.Opacity * _category.AreaOpacity;
+        if (effective < 0.5)
+        {
+            return Brushes.White;
+        }
+
+        return ThemeBrushes.CreateBrush(ComputeContrastingTextColor(background), 1.0);
+    }
+
+    /// <summary>Keeps a label readable over a background image or a translucent group.</summary>
+    private static DropShadowEffect TileTextShadow()
+    {
+        return new DropShadowEffect
+        {
+            BlurRadius = 4,
+            ShadowDepth = 1,
+            Direction = 315,
+            Opacity = 0.85,
+            Color = Colors.Black
+        };
     }
 
     private ContextMenu CreateContextMenuShell()
@@ -285,16 +571,64 @@ internal sealed class DesktopGroupWindow : Window
     {
         var menu = CreateContextMenuShell();
 
-        AddMenuItem(menu, LocalizationService.Get("group.rename"), OnRenameClick);
-        AddMenuItem(menu, _category.IsCollapsed ? LocalizationService.Get("group.expand") : LocalizationService.Get("group.collapse"), ToggleCollapse);
-        menu.Items.Add(new Separator());
-        AddMenuItem(menu, LocalizationService.Get("group.backgroundColor"), OnChangeColorClick);
-        AddMenuItem(menu, LocalizationService.Get("group.backgroundImage"), OnChangeBackgroundImageClick);
+        if (IsAppFolder)
+        {
+            AddMenuItem(menu, LocalizationService.Get("group.openFolder"), OpenOverlay, "IconOpenExternal");
+        }
+        else
+        {
+            AddMenuItem(
+                menu,
+                _category.IsCollapsed ? LocalizationService.Get("group.expand") : LocalizationService.Get("group.collapse"),
+                ToggleCollapse,
+                _category.IsCollapsed ? "IconChevronDown" : "IconChevronUp");
+        }
+
+        AddMenuItem(menu, LocalizationService.Get("group.rename"), OnRenameClick, "IconRename");
+
+        menu.Items.Add(BuildSeparator());
+        AddMenuItem(
+            menu,
+            LocalizationService.Get(IsAppFolder ? "group.stylePanel" : "group.styleAppFolder"),
+            ToggleDisplayMode,
+            IsAppFolder ? "IconStylePanel" : "IconStyleAppFolder");
+        AddCheckItem(menu, LocalizationService.Get("group.showBadge"), _category.ShowBadge, ToggleBadge, "IconBadge");
+
+        menu.Items.Add(BuildSeparator());
+        AddMenuItem(menu, LocalizationService.Get("group.backgroundColor"), OnChangeColorClick, "IconColor");
+        AddMenuItem(menu, LocalizationService.Get("group.backgroundImage"), OnChangeBackgroundImageClick, "IconImage");
         AddMenuItem(menu, LocalizationService.Get("group.removeBackgroundImage"), OnClearBackgroundImageClick);
-        AddMenuItem(menu, (_category.AreaTransparent ? "✓ " : string.Empty) + LocalizationService.Get("group.areaTransparency"), ToggleAreaTransparency);
-        AddMenuItem(menu, (_category.TitleTransparent ? "✓ " : string.Empty) + LocalizationService.Get("group.titleTransparency"), ToggleTitleTransparency);
-        menu.Items.Add(new Separator());
-        AddMenuItem(menu, LocalizationService.Get("group.remove"), OnDeleteGroupClick);
+
+        var opacityMenu = CreateMenuItem(LocalizationService.Get("group.opacity"), "IconOpacity");
+        AddOpacitySlider(opacityMenu, LocalizationService.Get("group.areaOpacity"), _category.AreaOpacity, SetAreaOpacity);
+        AddOpacitySlider(opacityMenu, LocalizationService.Get("group.titleOpacity"), _category.TitleOpacity, SetTitleOpacity);
+        menu.Items.Add(opacityMenu);
+
+        if (_commands is not null)
+        {
+            menu.Items.Add(BuildSeparator());
+            AddMenuItem(menu, LocalizationService.Get("group.duplicate"), () => _commands.Duplicate(_category), "IconDuplicate");
+            AddMenuItem(menu, LocalizationService.Get("group.wallpaperAsBackground"), () => _commands.ApplyWallpaper(_category), "IconImage");
+
+            var shareMenu = CreateMenuItem(LocalizationService.Get("group.shareVisual"), "IconStylePanel");
+            AddMenuItem(shareMenu, LocalizationService.Get("group.applyVisualToAll"), () => _commands.ApplyVisualToAllGroups(_category));
+            AddMenuItem(shareMenu, LocalizationService.Get("group.setAsDefaultVisual"), () => _commands.SetAsDefaultVisual(_category));
+            AddMenuItem(shareMenu, LocalizationService.Get("group.wallpaperForAll"), () => _commands.ApplyWallpaper(null));
+            menu.Items.Add(shareMenu);
+        }
+
+        menu.Items.Add(BuildSeparator());
+
+        var isEmpty = GroupEntries.Count(_category) == 0;
+        var removeItem = CreateMenuItem(LocalizationService.Get("group.remove"), "IconDelete");
+        removeItem.IsEnabled = isEmpty;
+        removeItem.Click += (_, _) => OnDeleteGroupClick();
+        if (!isEmpty)
+        {
+            removeItem.ToolTip = LocalizationService.Get("group.removeOnlyEmpty");
+        }
+
+        menu.Items.Add(removeItem);
 
         return menu;
     }
@@ -303,23 +637,23 @@ internal sealed class DesktopGroupWindow : Window
     {
         var menu = CreateContextMenuShell();
 
-        var newMenu = CreateMenuItem(LocalizationService.Get("group.newMenu"));
-        AddMenuItem(newMenu, LocalizationService.Get("group.newFolder"), CreateSubfolder);
-        AddMenuItem(newMenu, LocalizationService.Get("group.newTextFile"), CreateTextFile);
+        var newMenu = CreateMenuItem(LocalizationService.Get("group.newMenu"), "IconAdd");
+        AddMenuItem(newMenu, LocalizationService.Get("group.newFolder"), CreateSubfolder, "IconFolder");
+        AddMenuItem(newMenu, LocalizationService.Get("group.newTextFile"), CreateTextFile, "IconFile");
         menu.Items.Add(newMenu);
-        menu.Items.Add(new Separator());
+        menu.Items.Add(BuildSeparator());
 
-        AddMenuItem(menu, LocalizationService.Get("group.arrangeIcons"), ArrangeIconsAutomatically);
+        AddMenuItem(menu, LocalizationService.Get("group.arrangeIcons"), ArrangeIconsAutomatically, "IconGrid");
 
-        var sortMenu = CreateMenuItem(LocalizationService.Get("group.sortBy"));
+        var sortMenu = CreateMenuItem(LocalizationService.Get("group.sortBy"), "IconSort");
         AddMenuItem(sortMenu, LocalizationService.Get("group.sortByName"), SortByName);
         AddMenuItem(sortMenu, LocalizationService.Get("group.sortByType"), SortByType);
         menu.Items.Add(sortMenu);
 
-        var sizeMenu = CreateMenuItem(LocalizationService.Get("group.iconSize"));
-        AddMenuItem(sizeMenu, LocalizationService.Get("group.iconSizeSmall"), () => SetIconScale(0.75));
-        AddMenuItem(sizeMenu, LocalizationService.Get("group.iconSizeMedium"), () => SetIconScale(1.0));
-        AddMenuItem(sizeMenu, LocalizationService.Get("group.iconSizeLarge"), () => SetIconScale(1.5));
+        var sizeMenu = CreateMenuItem(LocalizationService.Get("group.iconSize"), "IconIconSize");
+        AddCheckItem(sizeMenu, LocalizationService.Get("group.iconSizeSmall"), IsIconScale(0.75), () => SetIconScale(0.75));
+        AddCheckItem(sizeMenu, LocalizationService.Get("group.iconSizeMedium"), IsIconScale(1.0), () => SetIconScale(1.0));
+        AddCheckItem(sizeMenu, LocalizationService.Get("group.iconSizeLarge"), IsIconScale(1.5), () => SetIconScale(1.5));
         menu.Items.Add(sizeMenu);
 
         return menu;
@@ -328,22 +662,51 @@ internal sealed class DesktopGroupWindow : Window
     private ContextMenu BuildItemTileContextMenu(LaunchItem item)
     {
         var menu = CreateContextMenuShell();
-        AddMenuItem(menu, LocalizationService.Get("item.open"), () => _onExecute(item));
-        AddMenuItem(menu, LocalizationService.Get("item.rename"), () => RenameItem(item));
-        AddMenuItem(menu, LocalizationService.Get("item.removeFromGroup"), () => RemoveItem(item));
+        AddMenuItem(menu, LocalizationService.Get("item.open"), () => _onExecute(item), "IconOpenExternal");
+
+        if (ShellCommands.HasFileTarget(item))
+        {
+            AddMenuItem(menu, LocalizationService.Get("item.runAsAdmin"), () => ShellCommands.RunAsAdministrator(item), "IconShield");
+            AddMenuItem(menu, LocalizationService.Get("item.openFileLocation"), () => ShellCommands.RevealInExplorer(item), "IconFolderOpen");
+            menu.Items.Add(BuildSeparator());
+            AddMenuItem(menu, LocalizationService.Get("item.copyPath"), () => ShellCommands.CopyPath(item), "IconCopy");
+        }
+
+        AddMenuItem(menu, LocalizationService.Get("item.rename"), () => RenameItem(item), "IconRename");
+        menu.Items.Add(BuildSeparator());
+        AddMenuItem(menu, LocalizationService.Get("item.removeFromGroup"), () => RemoveItem(item), "IconDelete");
+
+        if (ShellCommands.HasFileTarget(item))
+        {
+            menu.Items.Add(BuildSeparator());
+            AddMenuItem(menu, LocalizationService.Get("item.properties"), () => ShellCommands.ShowProperties(item), "IconProperties");
+            AddMenuItem(menu, LocalizationService.Get("item.standardMenu"), () => ShowStandardMenu(item), "IconShellMenu");
+        }
+
         return menu;
     }
 
     private ContextMenu BuildFolderTileContextMenu(MenuCategory folder)
     {
         var menu = CreateContextMenuShell();
-        AddMenuItem(menu, LocalizationService.Get("item.open"), () => OpenSubfolder(folder));
-        AddMenuItem(menu, LocalizationService.Get("item.rename"), () => RenameFolder(folder));
-        AddMenuItem(menu, LocalizationService.Get("item.removeFromGroup"), () => RemoveFolder(folder));
+        AddMenuItem(menu, LocalizationService.Get("item.open"), () => OpenSubfolder(folder), "IconFolder");
+        AddMenuItem(menu, LocalizationService.Get("item.rename"), () => RenameFolder(folder), "IconRename");
+        menu.Items.Add(BuildSeparator());
+
+        var isEmpty = GroupEntries.Count(folder) == 0;
+        var removeItem = CreateMenuItem(LocalizationService.Get("item.removeFromGroup"), "IconDelete");
+        removeItem.IsEnabled = isEmpty;
+        removeItem.Click += (_, _) => RemoveFolder(folder);
+        if (!isEmpty)
+        {
+            removeItem.ToolTip = LocalizationService.Get("group.removeOnlyEmpty");
+        }
+
+        menu.Items.Add(removeItem);
         return menu;
     }
 
-    private MenuItem CreateMenuItem(string header)
+    private MenuItem CreateMenuItem(string header, string? iconKey = null)
     {
         var item = new MenuItem
         {
@@ -352,7 +715,12 @@ internal sealed class DesktopGroupWindow : Window
             Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 1.0),
             FontFamily = new FontFamily(_theme.ItemFontFamily),
             FontSize = _theme.ItemFontSize,
-            Padding = new Thickness(_theme.ItemPadding, _theme.ItemPadding / 2, _theme.ItemPadding, _theme.ItemPadding / 2)
+            Padding = new Thickness(_theme.ItemPadding, _theme.ItemPadding / 2, _theme.ItemPadding, _theme.ItemPadding / 2),
+            Icon = BuildMenuIcon(iconKey),
+
+            // Read by the submenu popup in the template, not by the row itself.
+            Background = ThemeBrushes.CreateBrush(_theme.BackgroundColor, _theme.Opacity),
+            BorderBrush = ThemeBrushes.CreateBrush(_theme.BorderColor, 1.0)
         };
         MenuThemeProperties.SetHighlightBrush(item, ThemeBrushes.CreateBrush(_theme.HighlightColor, 1.0));
         MenuThemeProperties.SetHighlightCornerRadius(item, new CornerRadius(4));
@@ -360,9 +728,90 @@ internal sealed class DesktopGroupWindow : Window
         return item;
     }
 
-    private void AddMenuItem(ItemsControl parent, string header, Action handler)
+    /// <summary>
+    /// Every row reserves the icon column even when it has no icon, so headers stay on
+    /// one vertical line instead of stepping in and out as icons come and go.
+    /// </summary>
+    private FrameworkElement BuildMenuIcon(string? iconKey)
     {
-        var item = CreateMenuItem(header);
+        var size = _theme.ItemFontSize + 3;
+        if (iconKey is null)
+        {
+            return new Border { Width = size, Height = size };
+        }
+
+        return AppIcons.Create(iconKey, ThemeBrushes.CreateBrush(_theme.TextColor, 0.85), size)
+            ?? new Border { Width = size, Height = size };
+    }
+
+    private Separator BuildSeparator()
+    {
+        return new Separator
+        {
+            Background = ThemeBrushes.CreateBrush(_theme.BorderColor, 1.0),
+            Height = 1,
+            Margin = new Thickness(6, 4, 6, 4)
+        };
+    }
+
+    private bool IsIconScale(double scale) => Math.Abs(_category.DesktopIconScale - scale) < 0.01;
+
+    private void AddCheckItem(ItemsControl parent, string header, bool isChecked, Action handler, string? iconKey = null)
+    {
+        // A tick in the icon column is how Windows shows a setting that is on; when it
+        // is off the row keeps its own icon, or an empty column if it has none.
+        AddMenuItem(parent, header, handler, isChecked ? "IconCheck" : iconKey);
+    }
+
+    /// <summary>
+    /// A live slider inside the menu. The value is applied while dragging so the group
+    /// updates under the pointer, but only written to the config once the drag ends.
+    /// </summary>
+    private void AddOpacitySlider(ItemsControl parent, string label, double value, Action<double> apply)
+    {
+        var caption = new TextBlock
+        {
+            Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 1.0),
+            FontFamily = new FontFamily(_theme.ItemFontFamily),
+            FontSize = _theme.ItemFontSize - 1
+        };
+
+        var slider = new Slider
+        {
+            Minimum = 0,
+            Maximum = 1,
+            Value = value,
+            Width = 168,
+            SmallChange = 0.05,
+            LargeChange = 0.1,
+            Margin = new Thickness(0, 6, 0, 0)
+        };
+
+        void UpdateCaption() => caption.Text = $"{label}   {slider.Value * 100:0}%";
+
+        UpdateCaption();
+        slider.ValueChanged += (_, _) =>
+        {
+            UpdateCaption();
+            apply(slider.Value);
+        };
+        slider.LostMouseCapture += (_, _) => _onLayoutChanged(_category);
+        slider.KeyUp += (_, _) => _onLayoutChanged(_category);
+
+        var panel = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(0, 2, 0, 4) };
+        panel.Children.Add(caption);
+        panel.Children.Add(slider);
+
+        var item = CreateMenuItem(string.Empty);
+        item.Header = panel;
+        item.StaysOpenOnClick = true;
+        MenuThemeProperties.SetHighlightBrush(item, Brushes.Transparent);
+        parent.Items.Add(item);
+    }
+
+    private void AddMenuItem(ItemsControl parent, string header, Action handler, string? iconKey = null)
+    {
+        var item = CreateMenuItem(header, iconKey);
         item.Click += (_, _) => handler();
         parent.Items.Add(item);
     }
@@ -529,6 +978,7 @@ internal sealed class DesktopGroupWindow : Window
 
         _category.Name = prompt.Value;
         _headerText.Text = prompt.Value;
+        RefreshFolderTile();
         _onLayoutChanged(_category);
     }
 
@@ -550,17 +1000,17 @@ internal sealed class DesktopGroupWindow : Window
         ApplyThemeChange();
     }
 
-    private void ToggleAreaTransparency()
+    private void SetAreaOpacity(double value)
     {
-        _category.AreaTransparent = !_category.AreaTransparent;
+        _category.AreaOpacity = value;
         ApplyBackground();
         _header.ContextMenu = BuildHeaderContextMenu();
         _onLayoutChanged(_category);
     }
 
-    private void ToggleTitleTransparency()
+    private void SetTitleOpacity(double value)
     {
-        _category.TitleTransparent = !_category.TitleTransparent;
+        _category.TitleOpacity = value;
         ApplyHeaderBackground();
         _header.ContextMenu = BuildHeaderContextMenu();
         _onLayoutChanged(_category);
@@ -579,22 +1029,17 @@ internal sealed class DesktopGroupWindow : Window
         _canvas.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
         _resizeGrip.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
 
-        if (collapsed)
-        {
-            SizeToContent = SizeToContent.Height;
-        }
-        else
-        {
-            SizeToContent = SizeToContent.Manual;
-            Height = _category.DesktopHeight;
-        }
-
         UpdateCollapseGlyph();
+        ApplyDisplayMode();
     }
 
     private void UpdateCollapseGlyph()
     {
-        _collapseGlyph.Text = _category.IsCollapsed ? "" : "";
+        _collapseGlyph.Child = AppIcons.Create(
+            _category.IsCollapsed ? "IconChevronDown" : "IconChevronUp",
+            ThemeBrushes.CreateBrush(_theme.TextColor, 1.0),
+            _theme.TitleFontSize + 3);
+        _collapseGlyph.ToolTip = LocalizationService.Get(_category.IsCollapsed ? "group.expand" : "group.collapse");
     }
 
     private void OnChangeBackgroundImageClick()
@@ -636,13 +1081,22 @@ internal sealed class DesktopGroupWindow : Window
         }
     }
 
+    /// <summary>Rebuilds the whole window after its category was rewritten from outside.</summary>
+    public void ReloadVisuals(MenuTheme theme)
+    {
+        _theme = theme;
+        Content = BuildRoot();
+        SetCollapsed(_category.IsCollapsed);
+    }
+
     private void ApplyThemeChange()
     {
         ApplyBackground();
         ApplyHeaderBackground();
         _headerText.Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 1.0);
-        _collapseGlyph.Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 1.0);
+        UpdateCollapseGlyph();
         PopulateTiles();
+        ApplyDisplayMode();
         _onLayoutChanged(_category);
     }
 
@@ -699,15 +1153,23 @@ internal sealed class DesktopGroupWindow : Window
         var index = 0;
         foreach (var folder in _category.Categories)
         {
-            AddFolderTile(folder, folder.IconX ?? (index % 3) * TileSize, folder.IconY ?? (index / 3) * TileSize);
+            AddFolderTile(
+                folder,
+                folder.IconX ?? PaddingX + ((index % 3) * TileSize),
+                folder.IconY ?? PaddingY + ((index / 3) * TileSize));
             index++;
         }
 
         foreach (var item in _category.Items.Where(i => i.IsDesktopPinned))
         {
-            AddTile(item, item.DesktopIconX ?? (index % 3) * TileSize, item.DesktopIconY ?? (index / 3) * TileSize);
+            AddTile(
+                item,
+                item.DesktopIconX ?? PaddingX + ((index % 3) * TileSize),
+                item.DesktopIconY ?? PaddingY + ((index / 3) * TileSize));
             index++;
         }
+
+        RefreshFolderTile();
     }
 
     private void ArrangeIconsAutomatically()
@@ -736,12 +1198,13 @@ internal sealed class DesktopGroupWindow : Window
 
     private void ArrangeInGrid(IEnumerable<object> orderedEntries)
     {
-        var columns = Math.Max(1, (int)(_category.DesktopWidth / TileSize));
+        var usableWidth = _category.DesktopWidth - (PaddingX * 2);
+        var columns = Math.Max(1, (int)(usableWidth / TileSize));
         var index = 0;
         foreach (var entry in orderedEntries)
         {
-            var x = (index % columns) * TileSize;
-            var y = (index / columns) * TileSize;
+            var x = PaddingX + ((index % columns) * TileSize);
+            var y = PaddingY + ((index / columns) * TileSize);
             switch (entry)
             {
                 case LaunchItem item:
@@ -817,8 +1280,25 @@ internal sealed class DesktopGroupWindow : Window
 
             dragging = false;
             tile.ReleaseMouseCapture();
-            onMoved(Canvas.GetLeft(tile), Canvas.GetTop(tile));
+
+            var x = ClampToCanvas(Canvas.GetLeft(tile), tile.ActualWidth, _canvas.ActualWidth, PaddingX);
+            var y = ClampToCanvas(Canvas.GetTop(tile), tile.ActualHeight, _canvas.ActualHeight, PaddingY);
+            Canvas.SetLeft(tile, x);
+            Canvas.SetTop(tile, y);
+            onMoved(x, y);
         };
+    }
+
+    private static double ClampToCanvas(double value, double tileSize, double canvasSize, double padding)
+    {
+        // A canvas that has not been measured yet cannot bound anything; leave the value be.
+        if (double.IsNaN(value) || canvasSize <= 0)
+        {
+            return double.IsNaN(value) ? padding : value;
+        }
+
+        var max = Math.Max(padding, canvasSize - padding - tileSize);
+        return Math.Clamp(value, padding, max);
     }
 
     private void SelectEntry(object entry, bool additive)
@@ -870,10 +1350,33 @@ internal sealed class DesktopGroupWindow : Window
             return;
         }
 
-        var names = string.Join(", ", _selectedEntries.Select(GetEntryName));
+        // The Delete key answers to the same rule as the menu: a folder that still
+        // holds something is left alone rather than quietly taken with the selection.
+        var removable = _selectedEntries
+            .Where(entry => entry is not MenuCategory folder || GroupEntries.Count(folder) == 0)
+            .ToList();
+
+        if (removable.Count == 0)
+        {
+            MessageBox.Show(
+                this,
+                LocalizationService.Get("group.removeOnlyEmpty"),
+                LocalizationService.Get("common.appName"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var names = string.Join(", ", removable.Select(GetEntryName));
+        var prompt = LocalizationService.Format("item.removeConfirm", names);
+        if (removable.Count < _selectedEntries.Count)
+        {
+            prompt += Environment.NewLine + Environment.NewLine + LocalizationService.Get("group.removeOnlyEmpty");
+        }
+
         var confirmed = MessageBox.Show(
             this,
-            LocalizationService.Format("item.removeConfirm", names),
+            prompt,
             LocalizationService.Get("common.appName"),
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
@@ -883,7 +1386,7 @@ internal sealed class DesktopGroupWindow : Window
             return;
         }
 
-        foreach (var entry in _selectedEntries.ToList())
+        foreach (var entry in removable)
         {
             switch (entry)
             {
@@ -954,12 +1457,13 @@ internal sealed class DesktopGroupWindow : Window
         stack.Children.Add(new TextBlock
         {
             Text = item.Name,
-            Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 1.0),
+            Foreground = TileTextBrush(),
             FontFamily = new FontFamily(_theme.ItemFontFamily),
             FontSize = _theme.ItemFontSize,
             TextAlignment = TextAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
-            HorizontalAlignment = HorizontalAlignment.Center
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Effect = TileTextShadow()
         });
 
         AttachTileBehavior(
@@ -1000,19 +1504,20 @@ internal sealed class DesktopGroupWindow : Window
             Text = "",
             FontFamily = new FontFamily("Segoe MDL2 Assets"),
             FontSize = _theme.IconSize * 1.6,
-            Foreground = ThemeBrushes.CreateBrush(_theme.HighlightColor, 1.0),
+            Foreground = TileTextBrush(),
             HorizontalAlignment = HorizontalAlignment.Center
         });
 
         stack.Children.Add(new TextBlock
         {
             Text = folder.Name,
-            Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 1.0),
+            Foreground = TileTextBrush(),
             FontFamily = new FontFamily(_theme.ItemFontFamily),
             FontSize = _theme.ItemFontSize,
             TextAlignment = TextAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
-            HorizontalAlignment = HorizontalAlignment.Center
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Effect = TileTextShadow()
         });
 
         AttachTileBehavior(
@@ -1036,7 +1541,17 @@ internal sealed class DesktopGroupWindow : Window
             return;
         }
 
-        DragMove();
+        // Shown only while the button is held: hovering the title is not a move.
+        _header.Cursor = Cursors.SizeAll;
+        try
+        {
+            DragMove();
+        }
+        finally
+        {
+            _header.Cursor = Cursors.Arrow;
+        }
+
         _category.DesktopX = Left;
         _category.DesktopY = Top;
         _onLayoutChanged(_category);

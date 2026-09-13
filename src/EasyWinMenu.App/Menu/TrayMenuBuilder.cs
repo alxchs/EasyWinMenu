@@ -6,6 +6,7 @@ using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using EasyWinMenu.App.Localization;
 using EasyWinMenu.App.Services;
+using EasyWinMenu.App.Theming;
 using EasyWinMenu.Core.Models;
 using Application = System.Windows.Application;
 using ContextMenu = System.Windows.Controls.ContextMenu;
@@ -16,6 +17,7 @@ using ItemCollection = System.Windows.Controls.ItemCollection;
 using MenuItem = System.Windows.Controls.MenuItem;
 using Separator = System.Windows.Controls.Separator;
 using Style = System.Windows.Style;
+using Border = System.Windows.Controls.Border;
 
 namespace EasyWinMenu.App.Menu;
 
@@ -25,8 +27,11 @@ internal static class TrayMenuBuilder
         LauncherConfiguration configuration,
         IconCacheService iconCache,
         bool startWithWindowsEnabled,
+        bool hasOpenGroups,
         Action openSettings,
         Action createDesktopGroup,
+        Action toggleCollapseAll,
+        Action gatherAll,
         Action<bool> setStartWithWindows,
         Action exit)
     {
@@ -42,33 +47,52 @@ internal static class TrayMenuBuilder
 
         if (configuration.Items.Count > 0 || configuration.Categories.Count > 0)
         {
-            menu.Items.Add(new Separator());
+            menu.Items.Add(BuildSeparator(theme));
         }
 
-        var settingsItem = new MenuItem { Header = LocalizationService.Get("tray.settings") };
-        ApplyMenuItemAppearance(settingsItem, theme, theme);
-        settingsItem.Click += (_, _) => openSettings();
-        menu.Items.Add(settingsItem);
-
         var newGroupItem = new MenuItem { Header = LocalizationService.Get("tray.newDesktopGroup") };
-        ApplyMenuItemAppearance(newGroupItem, theme, theme);
+        ApplyMenuItemAppearance(newGroupItem, theme, theme, "IconAdd");
         newGroupItem.Click += (_, _) => createDesktopGroup();
         menu.Items.Add(newGroupItem);
+
+        var collapseAllItem = new MenuItem
+        {
+            Header = LocalizationService.Get("desktop.toggleCollapseAll"),
+            IsEnabled = hasOpenGroups
+        };
+        ApplyMenuItemAppearance(collapseAllItem, theme, theme, "IconChevronUp");
+        collapseAllItem.Click += (_, _) => toggleCollapseAll();
+        menu.Items.Add(collapseAllItem);
+
+        var gatherAllItem = new MenuItem
+        {
+            Header = LocalizationService.Get("desktop.gatherAll"),
+            IsEnabled = hasOpenGroups
+        };
+        ApplyMenuItemAppearance(gatherAllItem, theme, theme, "IconGather");
+        gatherAllItem.Click += (_, _) => gatherAll();
+        menu.Items.Add(gatherAllItem);
+
+        menu.Items.Add(BuildSeparator(theme));
 
         var startupItem = new MenuItem
         {
             Header = LocalizationService.Get("tray.startWithWindows"),
-            IsCheckable = true,
             IsChecked = startWithWindowsEnabled
         };
-        ApplyMenuItemAppearance(startupItem, theme, theme);
-        startupItem.Click += (_, _) => setStartWithWindows(startupItem.IsChecked);
+        ApplyMenuItemAppearance(startupItem, theme, theme, startWithWindowsEnabled ? "IconCheck" : "IconStartup");
+        startupItem.Click += (_, _) => setStartWithWindows(!startWithWindowsEnabled);
         menu.Items.Add(startupItem);
 
-        menu.Items.Add(new Separator());
+        var settingsItem = new MenuItem { Header = LocalizationService.Get("tray.settings") };
+        ApplyMenuItemAppearance(settingsItem, theme, theme, "IconSettings");
+        settingsItem.Click += (_, _) => openSettings();
+        menu.Items.Add(settingsItem);
+
+        menu.Items.Add(BuildSeparator(theme));
 
         var exitItem = new MenuItem { Header = LocalizationService.Get("tray.exit") };
-        ApplyMenuItemAppearance(exitItem, theme, theme);
+        ApplyMenuItemAppearance(exitItem, theme, theme, "IconPower");
         exitItem.Click += (_, _) => exit();
         menu.Items.Add(exitItem);
 
@@ -128,8 +152,9 @@ internal static class TrayMenuBuilder
         }
     }
 
-    private static void ApplyMenuItemAppearance(MenuItem item, MenuTheme rowTheme, MenuTheme panelTheme)
+    private static void ApplyMenuItemAppearance(MenuItem item, MenuTheme rowTheme, MenuTheme panelTheme, string? iconKey = null)
     {
+        item.Icon ??= BuildCommandIcon(iconKey, rowTheme);
         item.Style = (Style)Application.Current.Resources["EasyWinMenuMenuItemStyle"];
         item.Foreground = ThemeBrushes.CreateBrush(rowTheme.TextColor, 1.0);
         item.FontFamily = new FontFamily(rowTheme.ItemFontFamily);
@@ -142,12 +167,38 @@ internal static class TrayMenuBuilder
         ApplyPanelAppearance(item, panelTheme);
     }
 
-    private static UIElement? BuildIcon(LaunchItem item, MenuTheme theme, IconCacheService iconCache)
+    /// <summary>
+    /// A line icon for a command row, or an empty box of the same size when the row has
+    /// none, so every header in the menu starts on the same vertical line.
+    /// </summary>
+    private static UIElement BuildCommandIcon(string? iconKey, MenuTheme theme)
+    {
+        var size = theme.IconSize;
+        if (iconKey is null)
+        {
+            return new Border { Width = size, Height = size };
+        }
+
+        return AppIcons.Create(iconKey, ThemeBrushes.CreateBrush(theme.TextColor, 0.85), size)
+            ?? new Border { Width = size, Height = size };
+    }
+
+    private static Separator BuildSeparator(MenuTheme theme)
+    {
+        return new Separator
+        {
+            Background = ThemeBrushes.CreateBrush(theme.BorderColor, 1.0),
+            Height = 1,
+            Margin = new Thickness(6, 4, 6, 4)
+        };
+    }
+
+    private static UIElement BuildIcon(LaunchItem item, MenuTheme theme, IconCacheService iconCache)
     {
         var icon = iconCache.GetIcon(item.IconOverridePath ?? item.Target);
         if (icon is null)
         {
-            return null;
+            return new Border { Width = theme.IconSize, Height = theme.IconSize };
         }
 
         return new Image

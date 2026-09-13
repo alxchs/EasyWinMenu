@@ -58,6 +58,10 @@ public partial class ThemeEditWindow : ModernWindow
         ItemFontFamilyBox.Text = theme.ItemFontFamily;
         ItemFontSizeBox.Text = theme.ItemFontSize.ToString(CultureInfo.InvariantCulture);
         AnimationDurationBox.Text = theme.AnimationDurationMs.ToString(CultureInfo.InvariantCulture);
+        ShadowBlurBox.Text = theme.ShadowBlurRadius.ToString(CultureInfo.InvariantCulture);
+        ShadowDepthBox.Text = theme.ShadowDepth.ToString(CultureInfo.InvariantCulture);
+        ShadowDirectionBox.Text = theme.ShadowDirection.ToString(CultureInfo.InvariantCulture);
+        ShadowOpacityBox.Text = theme.ShadowOpacity.ToString(CultureInfo.InvariantCulture);
     }
 
     private void OnResetClick(object sender, RoutedEventArgs e)
@@ -107,7 +111,11 @@ public partial class ThemeEditWindow : ModernWindow
             TitleBold = TitleBoldBox.IsChecked == true,
             ItemFontFamily = ItemFontFamilyBox.Text.Trim(),
             ItemFontSize = ParseDouble(ItemFontSizeBox.Text, 13),
-            AnimationDurationMs = (int)ParseDouble(AnimationDurationBox.Text, 120)
+            AnimationDurationMs = (int)ParseDouble(AnimationDurationBox.Text, 120),
+            ShadowBlurRadius = ParseDouble(ShadowBlurBox.Text, 12),
+            ShadowDepth = ParseDouble(ShadowDepthBox.Text, 2),
+            ShadowDirection = ParseDouble(ShadowDirectionBox.Text, 315),
+            ShadowOpacity = ParseDouble(ShadowOpacityBox.Text, 0.35)
         };
     }
 

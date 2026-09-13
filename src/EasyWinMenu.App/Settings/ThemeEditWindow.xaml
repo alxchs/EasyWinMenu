@@ -4,7 +4,7 @@
                       xmlns:theming="clr-namespace:EasyWinMenu.App.Theming"
                       xmlns:loc="clr-namespace:EasyWinMenu.App.Localization"
                       Title="{loc:Loc theme.title}"
-                      Width="420" Height="660"
+                      Width="440" Height="720"
                       WindowStartupLocation="CenterOwner"
                       ResizeMode="NoResize"
                       ShowInTaskbar="False">
@@ -29,6 +29,10 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
@@ -94,6 +98,18 @@
 
                 <TextBlock Text="{loc:Loc theme.animationDuration}" Grid.Row="15" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
                 <TextBox x:Name="AnimationDurationBox" Grid.Row="15" Grid.Column="1" Margin="0,0,0,8" />
+
+                <TextBlock Text="{loc:Loc theme.shadowBlur}" Grid.Row="16" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBox x:Name="ShadowBlurBox" Grid.Row="16" Grid.Column="1" Margin="0,0,0,8" />
+
+                <TextBlock Text="{loc:Loc theme.shadowDepth}" Grid.Row="17" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBox x:Name="ShadowDepthBox" Grid.Row="17" Grid.Column="1" Margin="0,0,0,8" />
+
+                <TextBlock Text="{loc:Loc theme.shadowDirection}" Grid.Row="18" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBox x:Name="ShadowDirectionBox" Grid.Row="18" Grid.Column="1" Margin="0,0,0,8" />
+
+                <TextBlock Text="{loc:Loc theme.shadowOpacity}" Grid.Row="19" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" />
+                <TextBox x:Name="ShadowOpacityBox" Grid.Row="19" Grid.Column="1" Margin="0,0,0,8" />
             </Grid>
         </ScrollViewer>
     </DockPanel>

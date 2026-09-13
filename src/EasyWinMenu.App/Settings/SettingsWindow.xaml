@@ -4,41 +4,41 @@
                       xmlns:theming="clr-namespace:EasyWinMenu.App.Theming"
                       xmlns:loc="clr-namespace:EasyWinMenu.App.Localization"
                       Title="{loc:Loc settings.title}"
-                      Width="560" Height="620"
+                      Width="640" Height="640"
                       WindowStartupLocation="CenterScreen">
     <DockPanel Margin="12">
         <GroupBox Header="{loc:Loc settings.appearance}" DockPanel.Dock="Top" Margin="0,0,0,8">
-            <StackPanel Orientation="Horizontal" Margin="4">
+            <WrapPanel Orientation="Horizontal">
                 <TextBlock Text="{loc:Loc settings.theme}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                <ComboBox x:Name="AppThemeBox" Width="140" Margin="0,0,20,0" DisplayMemberPath="Label" SelectedValuePath="Mode" />
+                <ComboBox x:Name="AppThemeBox" Width="140" Margin="0,0,20,0" ItemTemplate="{StaticResource AppLabelItemTemplate}" SelectedValuePath="Mode" />
                 <TextBlock Text="{loc:Loc settings.language}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                <ComboBox x:Name="LanguageBox" Width="160" DisplayMemberPath="Label" SelectedValuePath="Code" />
-            </StackPanel>
+                <ComboBox x:Name="LanguageBox" Width="160" ItemTemplate="{StaticResource AppLabelItemTemplate}" SelectedValuePath="Code" />
+            </WrapPanel>
         </GroupBox>
         <GroupBox Header="{loc:Loc settings.behavior}" DockPanel.Dock="Top" Margin="0,0,0,8">
-            <StackPanel Orientation="Horizontal" Margin="4">
-                <TextBlock Text="{loc:Loc settings.openMenuWith}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                <ComboBox x:Name="ClickModeBox" Width="140" Margin="0,0,20,0" DisplayMemberPath="Label" SelectedValuePath="Mode" />
+            <WrapPanel Orientation="Horizontal">
+                <TextBlock Text="{loc:Loc settings.openMenuWith}" VerticalAlignment="Center" Margin="0,0,8,4" />
+                <ComboBox x:Name="ClickModeBox" Width="140" Margin="0,0,20,0" ItemTemplate="{StaticResource AppLabelItemTemplate}" SelectedValuePath="Mode" />
                 <CheckBox x:Name="HotkeyEnabledBox" Content="{loc:Loc settings.globalHotkey}" VerticalAlignment="Center" Margin="0,0,8,0" />
                 <CheckBox x:Name="HotkeyCtrlBox" Content="Ctrl" VerticalAlignment="Center" Margin="0,0,6,0" />
                 <CheckBox x:Name="HotkeyAltBox" Content="Alt" VerticalAlignment="Center" Margin="0,0,6,0" />
                 <CheckBox x:Name="HotkeyShiftBox" Content="Shift" VerticalAlignment="Center" Margin="0,0,6,0" />
                 <CheckBox x:Name="HotkeyWinBox" Content="Win" VerticalAlignment="Center" Margin="0,0,12,0" />
-                <ComboBox x:Name="HotkeyKeyBox" Width="70" />
-            </StackPanel>
+                <ComboBox x:Name="HotkeyKeyBox" Width="80" />
+            </WrapPanel>
         </GroupBox>
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
-            <Button Content="{loc:Loc settings.newCategory}" Padding="8,4" Margin="0,0,8,0" Click="OnAddCategoryClick" />
-            <Button Content="{loc:Loc settings.newItem}" Padding="8,4" Margin="0,0,8,0" Click="OnAddItemClick" />
-            <Button Content="{loc:Loc settings.edit}" Padding="8,4" Margin="0,0,8,0" Click="OnEditClick" />
-            <Button Content="{loc:Loc settings.delete}" Padding="8,4" Margin="0,0,8,0" Click="OnDeleteClick" />
-            <Button Content="{loc:Loc settings.themeButton}" Padding="8,4" Click="OnEditThemeClick" />
+            <Button Content="{loc:Loc settings.newCategory}" Margin="0,0,8,0" Click="OnAddCategoryClick" />
+            <Button Content="{loc:Loc settings.newItem}" Margin="0,0,8,0" Click="OnAddItemClick" />
+            <Button Content="{loc:Loc settings.edit}" Margin="0,0,8,0" Click="OnEditClick" />
+            <Button Content="{loc:Loc settings.delete}" Margin="0,0,8,0" Click="OnDeleteClick" />
+            <Button Content="{loc:Loc settings.themeButton}" Click="OnEditThemeClick" />
         </StackPanel>
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-            <Button Content="{loc:Loc settings.export}" Width="90" Padding="0,4" Margin="0,0,8,0" Click="OnExportClick" />
-            <Button Content="{loc:Loc settings.import}" Width="90" Padding="0,4" Margin="0,0,16,0" Click="OnImportClick" />
-            <Button Content="{loc:Loc settings.save}" Width="90" Padding="0,4" Margin="0,0,8,0" Click="OnSaveClick" />
-            <Button Content="{loc:Loc settings.close}" Width="90" Padding="0,4" Click="OnCloseClick" />
+            <Button Content="{loc:Loc settings.export}" Width="96" Margin="0,0,8,0" Click="OnExportClick" />
+            <Button Content="{loc:Loc settings.import}" Width="96" Margin="0,0,16,0" Click="OnImportClick" />
+            <Button Content="{loc:Loc settings.save}" Width="96" Margin="0,0,8,0" Click="OnSaveClick" />
+            <Button Content="{loc:Loc settings.close}" Width="96" Click="OnCloseClick" />
         </StackPanel>
         <TreeView x:Name="MenuTree"
                   AllowDrop="True"

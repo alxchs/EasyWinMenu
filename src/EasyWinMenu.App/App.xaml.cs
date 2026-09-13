@@ -14,7 +14,7 @@ using Application = System.Windows.Application;
 
 namespace EasyWinMenu.App;
 
-public partial class App : Application
+public partial class App : Application, IDesktopGroupCommands
 {
     private ConfigurationStore? _configurationStore;
     private LauncherConfiguration? _configuration;
@@ -23,7 +23,6 @@ public partial class App : Application
     private Window? _menuHost;
     private GlobalHotkeyService? _hotkeyService;
     private DesktopOrganizerService? _desktopOrganizer;
-    private DesktopContextMenuHookService? _desktopContextMenuHook;
     private SettingsWindow? _settingsWindow;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -59,10 +58,7 @@ public partial class App : Application
         _hotkeyService.Apply(_configuration.Behavior);
 
         _desktopOrganizer = new DesktopOrganizerService(_iconCache);
-        _desktopOrganizer.Refresh(_configuration, OnDesktopGroupLayoutChanged, OnDesktopGroupDeleteRequested);
-
-        _desktopContextMenuHook = new DesktopContextMenuHookService(OnDesktopRightClick);
-        _desktopContextMenuHook.Start();
+        RefreshDesktopGroups();
 
         _trayIcon = new NotifyIcon
         {
@@ -99,11 +95,91 @@ public partial class App : Application
         _configurationStore!.Save(_configuration!);
     }
 
+    private void RefreshDesktopGroups()
+    {
+        _desktopOrganizer!.Refresh(
+            _configuration!,
+            OnDesktopGroupLayoutChanged,
+            OnDesktopGroupDeleteRequested,
+            this);
+    }
+
+    /// <summary>Writes the configuration out and repaints whatever is already on screen.</summary>
+    private void SaveAndReloadGroups()
+    {
+        _configurationStore!.Save(_configuration!);
+        RefreshDesktopGroups();
+        _desktopOrganizer!.ReloadVisuals(_configuration!);
+    }
+
+    void IDesktopGroupCommands.Duplicate(MenuCategory source)
+    {
+        var parent = DesktopOrganizerService.FindParentList(_configuration!, source) ?? _configuration!.Categories;
+
+        var copy = source.Clone();
+        copy.Name = LocalizationService.Format("group.copySuffix", source.Name);
+
+        // Offset so the copy is visibly a second group rather than hiding the original.
+        copy.DesktopX = source.DesktopX + 28;
+        copy.DesktopY = source.DesktopY + 28;
+
+        parent.Add(copy);
+        SaveAndReloadGroups();
+    }
+
+    void IDesktopGroupCommands.ApplyVisualToAllGroups(MenuCategory source)
+    {
+        foreach (var group in DesktopOrganizerService.AllDesktopGroups(_configuration!))
+        {
+            if (!ReferenceEquals(group, source))
+            {
+                group.CopyVisualFrom(source);
+            }
+        }
+
+        SaveAndReloadGroups();
+    }
+
+    void IDesktopGroupCommands.SetAsDefaultVisual(MenuCategory source)
+    {
+        // Becomes what groups without an override show, and what new ones start from.
+        _configuration!.Theme = (source.ThemeOverride ?? _configuration.Theme).Clone();
+        SaveAndReloadGroups();
+    }
+
+    void IDesktopGroupCommands.ApplyWallpaper(MenuCategory? target)
+    {
+        var wallpaper = WallpaperService.TryGetCurrentWallpaper();
+        if (wallpaper is null)
+        {
+            System.Windows.MessageBox.Show(
+                LocalizationService.Get("group.wallpaperUnavailable"),
+                LocalizationService.Get("common.appName"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        if (target is not null)
+        {
+            target.DesktopBackgroundImagePath = wallpaper;
+        }
+        else
+        {
+            foreach (var group in DesktopOrganizerService.AllDesktopGroups(_configuration!))
+            {
+                group.DesktopBackgroundImagePath = wallpaper;
+            }
+        }
+
+        SaveAndReloadGroups();
+    }
+
     private void OnDesktopGroupDeleteRequested(MenuCategory category)
     {
         DesktopOrganizerService.RemoveCategory(_configuration!, category);
         _configurationStore!.Save(_configuration!);
-        _desktopOrganizer!.Refresh(_configuration!, OnDesktopGroupLayoutChanged, OnDesktopGroupDeleteRequested);
+        RefreshDesktopGroups();
     }
 
     private void CreateDesktopGroup()
@@ -116,7 +192,7 @@ public partial class App : Application
 
         _configuration!.Categories.Add(new MenuCategory { Name = prompt.Value, IsDesktopGroup = true });
         _configurationStore!.Save(_configuration);
-        _desktopOrganizer!.Refresh(_configuration, OnDesktopGroupLayoutChanged, OnDesktopGroupDeleteRequested);
+        RefreshDesktopGroups();
     }
 
     private void ShowTrayMenu()
@@ -130,8 +206,11 @@ public partial class App : Application
             _configuration!,
             _iconCache!,
             StartupRegistration.IsEnabled(),
+            _desktopOrganizer!.HasOpenGroups,
             OpenSettingsWindow,
             CreateDesktopGroup,
+            _desktopOrganizer.ToggleCollapseAll,
+            _desktopOrganizer.GatherAll,
             StartupRegistration.SetEnabled,
             Shutdown);
 
@@ -141,28 +220,6 @@ public partial class App : Application
         menu.Placement = PlacementMode.AbsolutePoint;
         menu.HorizontalOffset = cursorPosition.X;
         menu.VerticalOffset = cursorPosition.Y;
-        menu.IsOpen = true;
-    }
-
-    private void OnDesktopRightClick(System.Drawing.Point screenPoint)
-    {
-        _menuHost!.Left = screenPoint.X;
-        _menuHost.Top = screenPoint.Y;
-
-        var menu = DesktopContextMenuBuilder.Build(
-            _configuration!.Theme,
-            _desktopOrganizer!.HasOpenGroups,
-            CreateDesktopGroup,
-            _desktopOrganizer.ToggleCollapseAll,
-            _desktopOrganizer.GatherAll,
-            OpenSettingsWindow);
-
-        var devicePoint = ToDeviceIndependentPoint(screenPoint);
-
-        menu.PlacementTarget = _menuHost;
-        menu.Placement = PlacementMode.AbsolutePoint;
-        menu.HorizontalOffset = devicePoint.X;
-        menu.VerticalOffset = devicePoint.Y;
         menu.IsOpen = true;
     }
 
@@ -194,7 +251,8 @@ public partial class App : Application
     {
         _configurationStore!.Save(_configuration!);
         _hotkeyService!.Apply(_configuration!.Behavior);
-        _desktopOrganizer!.Refresh(_configuration!, OnDesktopGroupLayoutChanged, OnDesktopGroupDeleteRequested);
+        RefreshDesktopGroups();
+        _desktopOrganizer!.ReloadVisuals(_configuration!);
         AppThemeService.Apply(_configuration!.Behavior.AppTheme);
         LocalizationService.SetLanguage(
             string.IsNullOrEmpty(_configuration!.Behavior.Language)
@@ -207,7 +265,6 @@ public partial class App : Application
         _trayIcon?.Dispose();
         _iconCache?.Dispose();
         _hotkeyService?.Dispose();
-        _desktopContextMenuHook?.Dispose();
         _desktopOrganizer?.CloseAll();
         base.OnExit(e);
     }
