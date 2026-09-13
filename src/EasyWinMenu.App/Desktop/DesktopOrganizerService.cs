@@ -1,13 +1,121 @@
 using EasyWinMenu.App.Services;
+using System.Windows;
+using System.Windows.Threading;
 using EasyWinMenu.Core.Models;
+using Microsoft.Win32;
 
 namespace EasyWinMenu.App.Desktop;
 
 internal sealed class DesktopOrganizerService(IconCacheService iconCache)
 {
+    private static readonly TimeSpan DisplaySettleDelay = TimeSpan.FromMilliseconds(1500);
+    private static readonly TimeSpan PlacementHold = TimeSpan.FromSeconds(3);
+
     private readonly Dictionary<MenuCategory, DesktopGroupWindow> _windows = new();
+    private IReadOnlyList<Rect>? _lastWorkAreas;
+    private DispatcherTimer? _displaySettleTimer;
+
+    public void StartWatchingDisplays()
+    {
+        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+    }
+
+    public void StopWatchingDisplays()
+    {
+        // SystemEvents is static: a handler left attached outlives this service.
+        SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        _displaySettleTimer?.Stop();
+    }
+
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        // Raised on a system thread; the windows belong to the UI thread.
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            foreach (var window in _windows.Values)
+            {
+                window.HoldPlacement(PlacementHold);
+            }
+
+            // Several notifications arrive for one plug or unplug, and Windows moves its
+            // own windows in the middle of them; act once, after it has finished.
+            if (_displaySettleTimer is null)
+            {
+                _displaySettleTimer = new DispatcherTimer { Interval = DisplaySettleDelay };
+                _displaySettleTimer.Tick += (_, _) =>
+                {
+                    _displaySettleTimer.Stop();
+                    EnsureGroupsReachable();
+                };
+            }
+
+            _displaySettleTimer.Stop();
+            _displaySettleTimer.Start();
+        });
+    }
+
+    /// <summary>
+    /// Makes every group reachable on the monitors connected now. A group whose home is on
+    /// screen goes home; one stranded on a monitor that went away is carried to the
+    /// nearest remaining monitor, keeping its relative place when the old layout is known.
+    /// Rescued positions are never saved, so a group returns home when its monitor does.
+    /// </summary>
+    public void EnsureGroupsReachable()
+    {
+        var reference = _windows.Values.FirstOrDefault();
+        if (reference is null)
+        {
+            return;
+        }
+
+        var areas = DisplayInventory.WorkAreas(reference);
+        if (areas.Count == 0)
+        {
+            return;
+        }
+
+        var taken = new List<System.Windows.Point>();
+        foreach (var window in _windows.Values)
+        {
+            var home = window.HomeRect;
+
+            if (MonitorPlacement.IsReachable(home, areas))
+            {
+                if (Math.Abs(window.Left - home.X) > 0.5 || Math.Abs(window.Top - home.Y) > 0.5)
+                {
+                    window.PlaceWithoutSaving(home.X, home.Y);
+                }
+
+                continue;
+            }
+
+            var destination = areas[MonitorPlacement.IndexOfOwner(home, areas)];
+
+            var position = _lastWorkAreas is { Count: > 0 } previous && MonitorPlacement.IsReachable(home, previous)
+                ? MonitorPlacement.MapBetween(home, previous[MonitorPlacement.IndexOfOwner(home, previous)], destination)
+                : MonitorPlacement.ClampInto(home.Location, home.Size, destination);
+
+            position = MonitorPlacement.AvoidStacking(position, home.Size, destination, taken);
+            window.PlaceWithoutSaving(position.X, position.Y);
+        }
+
+        // Only a layout that shows every home is worth remembering as the one to map from.
+        if (_windows.Values.All(window => MonitorPlacement.IsReachable(window.HomeRect, areas)))
+        {
+            _lastWorkAreas = areas;
+        }
+    }
 
     /// <summary>Re-reads every open group's appearance from the configuration.</summary>
+    /// <summary>Brings back every group Windows minimized and then failed to restore.</summary>
+    public void RestoreMinimizedGroups()
+    {
+        foreach (var window in _windows.Values)
+        {
+            window.RestoreIfMinimized();
+        }
+    }
+
     public void ReloadVisuals(LauncherConfiguration configuration)
     {
         foreach (var (category, window) in _windows)
@@ -42,6 +150,8 @@ internal sealed class DesktopOrganizerService(IconCacheService iconCache)
             window.Show();
             _windows[category] = window;
         }
+
+        EnsureGroupsReachable();
     }
 
     public void CloseAll()

@@ -55,14 +55,16 @@ public partial class App : Application, IDesktopGroupCommands
 
         _hotkeyService = new GlobalHotkeyService(_menuHost);
         _hotkeyService.HotkeyPressed += ShowTrayMenu;
+        _hotkeyService.RestoreGroupsRequested += () => _desktopOrganizer?.RestoreMinimizedGroups();
         _hotkeyService.Apply(_configuration.Behavior);
 
         _desktopOrganizer = new DesktopOrganizerService(_iconCache);
         RefreshDesktopGroups();
+        _desktopOrganizer.StartWatchingDisplays();
 
         _trayIcon = new NotifyIcon
         {
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = LoadTrayIcon(),
             Visible = true,
             Text = LocalizationService.Get("common.appName")
         };
@@ -88,6 +90,23 @@ public partial class App : Application, IDesktopGroupCommands
                 ShowTrayMenu();
             }
         };
+    }
+
+    /// <summary>
+    /// The app icon at the size the tray asks for. Picking the frame by the system's
+    /// small-icon size, rather than letting it scale the largest one, is what keeps the
+    /// tile gaps crisp on a high-DPI tray.
+    /// </summary>
+    private static System.Drawing.Icon LoadTrayIcon()
+    {
+        var resource = GetResourceStream(new Uri("pack://application:,,,/Assets/EasyWin.ico"));
+        if (resource is null)
+        {
+            return System.Drawing.SystemIcons.Application;
+        }
+
+        using var stream = resource.Stream;
+        return new System.Drawing.Icon(stream, SystemInformation.SmallIconSize);
     }
 
     private void OnDesktopGroupLayoutChanged(MenuCategory category)
@@ -265,6 +284,7 @@ public partial class App : Application, IDesktopGroupCommands
         _trayIcon?.Dispose();
         _iconCache?.Dispose();
         _hotkeyService?.Dispose();
+        _desktopOrganizer?.StopWatchingDisplays();
         _desktopOrganizer?.CloseAll();
         base.OnExit(e);
     }

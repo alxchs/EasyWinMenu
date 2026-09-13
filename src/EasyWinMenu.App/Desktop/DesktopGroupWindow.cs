@@ -86,6 +86,9 @@ internal sealed class DesktopGroupWindow : Window
     private Border _menuButton = null!;
 
     private bool _resizingGroup;
+    private System.Windows.Point? _placedAt;
+    private DateTime _holdPlacementUntil;
+    private DispatcherTimer? _persistMoveTimer;
     private bool _draggingFolderTile;
     private System.Windows.Point _folderDragOrigin;
     private System.Windows.Point _resizeStart;
@@ -127,11 +130,139 @@ internal sealed class DesktopGroupWindow : Window
 
         PreviewMouseWheel += OnPreviewMouseWheel;
         PreviewKeyDown += OnPreviewKeyDown;
+        LocationChanged += OnLocationChanged;
         Drop += OnDrop;
         Closed += (_, _) => _overlay?.Close();
     }
 
     public bool IsCollapsed => _category.IsCollapsed;
+
+    /// <summary>
+    /// Brings this group back after Windows hid it, and does the same for any open
+    /// subfolders. Measured directly rather than assumed: Show Desktop does not minimize
+    /// a window with no taskbar button — WindowState stays Normal — it just brings the
+    /// desktop's own window to the front of the z-order and leaves ours buried under it.
+    /// Toggling Topmost is the standard way to force a window back to the front of its
+    /// z-order band without stealing focus permanently. The WindowState check stays as
+    /// a second line of defence, in case some other trigger does minimize it for real.
+    /// </summary>
+    internal void RestoreIfMinimized()
+    {
+        if (WindowState == WindowState.Minimized)
+        {
+            WindowState = WindowState.Normal;
+        }
+
+        Topmost = true;
+        Topmost = false;
+
+        foreach (var subfolder in _openSubfolders.Values)
+        {
+            subfolder.RestoreIfMinimized();
+        }
+    }
+
+    /// <summary>
+    /// Where the group lives by choice, at its current size. It can differ from where
+    /// the window is: a group rescued off a monitor that went away keeps this as its
+    /// home, so it can walk back when the monitor returns.
+    /// </summary>
+    internal Rect HomeRect => new(
+        _category.DesktopX,
+        _category.DesktopY,
+        ActualWidth > 0 ? ActualWidth : _category.DesktopWidth,
+        ActualHeight > 0 ? ActualHeight : _category.DesktopHeight);
+
+    /// <summary>Moves the window without recording the move as the group's new home.</summary>
+    internal void PlaceWithoutSaving(double left, double top)
+    {
+        // Remembered rather than flagged: WPF reports the move after this method has
+        // returned, so a "moving now" flag is already clear by the time anyone checks it.
+        _placedAt = new System.Windows.Point(left, top);
+        Left = left;
+        Top = top;
+    }
+
+    /// <summary>
+    /// Ignores moves for a while. Windows shuffles windows on its own while monitors come
+    /// and go, and remembering those shuffles would overwrite the group's real home.
+    /// </summary>
+    internal void HoldPlacement(TimeSpan duration)
+    {
+        _holdPlacementUntil = DateTime.UtcNow + duration;
+    }
+
+    private void OnLocationChanged(object? sender, EventArgs e)
+    {
+        if (DateTime.UtcNow < _holdPlacementUntil)
+        {
+            return;
+        }
+
+        if (_persistMoveTimer is null)
+        {
+            _persistMoveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+            _persistMoveTimer.Tick += (_, _) =>
+            {
+                _persistMoveTimer.Stop();
+                PersistExternalMove();
+            };
+        }
+
+        // Debounced: a drag reports dozens of positions and only the last one matters.
+        _persistMoveTimer.Stop();
+        _persistMoveTimer.Start();
+    }
+
+    /// <summary>
+    /// Remembers a move this class did not make itself — Windows' own Win+Shift+arrow,
+    /// for instance, when the shell handles the shortcut before the group ever sees it.
+    /// </summary>
+    private void PersistExternalMove()
+    {
+        if (DateTime.UtcNow < _holdPlacementUntil)
+        {
+            return;
+        }
+
+        // Still exactly where this class put it: that was a placement, not a user's move.
+        if (_placedAt is { } placed && Math.Abs(Left - placed.X) < 0.5 && Math.Abs(Top - placed.Y) < 0.5)
+        {
+            return;
+        }
+
+        if (Math.Abs(Left - _category.DesktopX) < 0.5 && Math.Abs(Top - _category.DesktopY) < 0.5)
+        {
+            return;
+        }
+
+        _category.DesktopX = Left;
+        _category.DesktopY = Top;
+        _onLayoutChanged(_category);
+    }
+
+    /// <summary>
+    /// Carries the group to the monitor beside the one it is on, keeping its relative
+    /// place. With a single monitor there is nowhere to go and nothing happens.
+    /// </summary>
+    private void MoveToAdjacentMonitor(int direction)
+    {
+        var areas = DisplayInventory.WorkAreas(this);
+        var current = new Rect(Left, Top, ActualWidth, ActualHeight);
+        var from = MonitorPlacement.IndexOfOwner(current, areas);
+
+        if (MonitorPlacement.AdjacentIndex(from, areas, direction) is not { } to)
+        {
+            return;
+        }
+
+        var position = MonitorPlacement.MapBetween(current, areas[from], areas[to]);
+        PlaceWithoutSaving(position.X, position.Y);
+
+        _category.DesktopX = position.X;
+        _category.DesktopY = position.Y;
+        _onLayoutChanged(_category);
+    }
 
     public void SetCollapsedExternally(bool collapsed)
     {
@@ -1605,6 +1736,15 @@ internal sealed class DesktopGroupWindow : Window
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        // The same shortcut Windows uses to send a window to another monitor.
+        if (e.Key is Key.Left or Key.Right
+            && Keyboard.Modifiers == (ModifierKeys.Windows | ModifierKeys.Shift))
+        {
+            MoveToAdjacentMonitor(e.Key == Key.Left ? -1 : +1);
+            e.Handled = true;
+            return;
+        }
+
         if (Keyboard.Modifiers == ModifierKeys.Control)
         {
             if (e.Key is Key.OemPlus or Key.Add)

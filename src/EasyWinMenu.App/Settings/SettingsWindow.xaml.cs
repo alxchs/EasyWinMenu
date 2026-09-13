@@ -62,9 +62,11 @@ public partial class SettingsWindow : ModernWindow
         };
         ClickModeBox.SelectedValue = _workingConfiguration.Behavior.ClickMode;
 
-        HotkeyKeyBox.ItemsSource = new[] { "Space", "Tab" }
+        var hotkeyKeys = new[] { "Space", "Tab" }
             .Concat(Enumerable.Range('A', 26).Select(code => ((char)code).ToString()))
             .ToList();
+
+        HotkeyKeyBox.ItemsSource = hotkeyKeys;
         HotkeyKeyBox.SelectedItem = _workingConfiguration.Behavior.GlobalHotkeyKey;
 
         var modifiers = _workingConfiguration.Behavior.GlobalHotkeyModifiers;
@@ -73,6 +75,16 @@ public partial class SettingsWindow : ModernWindow
         HotkeyAltBox.IsChecked = modifiers.HasFlag(HotkeyModifiers.Alt);
         HotkeyShiftBox.IsChecked = modifiers.HasFlag(HotkeyModifiers.Shift);
         HotkeyWinBox.IsChecked = modifiers.HasFlag(HotkeyModifiers.Windows);
+
+        RestoreHotkeyKeyBox.ItemsSource = hotkeyKeys;
+        RestoreHotkeyKeyBox.SelectedItem = _workingConfiguration.Behavior.RestoreGroupsHotkeyKey;
+
+        var restoreModifiers = _workingConfiguration.Behavior.RestoreGroupsHotkeyModifiers;
+        RestoreHotkeyEnabledBox.IsChecked = _workingConfiguration.Behavior.RestoreGroupsHotkeyEnabled;
+        RestoreHotkeyCtrlBox.IsChecked = restoreModifiers.HasFlag(HotkeyModifiers.Control);
+        RestoreHotkeyAltBox.IsChecked = restoreModifiers.HasFlag(HotkeyModifiers.Alt);
+        RestoreHotkeyShiftBox.IsChecked = restoreModifiers.HasFlag(HotkeyModifiers.Shift);
+        RestoreHotkeyWinBox.IsChecked = restoreModifiers.HasFlag(HotkeyModifiers.Windows);
     }
 
     private void SaveBehavior()
@@ -106,6 +118,32 @@ public partial class SettingsWindow : ModernWindow
         }
 
         behavior.GlobalHotkeyModifiers = modifiers;
+
+        behavior.RestoreGroupsHotkeyEnabled = RestoreHotkeyEnabledBox.IsChecked == true;
+        behavior.RestoreGroupsHotkeyKey = RestoreHotkeyKeyBox.SelectedItem as string ?? "D";
+
+        var restoreModifiers = HotkeyModifiers.None;
+        if (RestoreHotkeyCtrlBox.IsChecked == true)
+        {
+            restoreModifiers |= HotkeyModifiers.Control;
+        }
+
+        if (RestoreHotkeyAltBox.IsChecked == true)
+        {
+            restoreModifiers |= HotkeyModifiers.Alt;
+        }
+
+        if (RestoreHotkeyShiftBox.IsChecked == true)
+        {
+            restoreModifiers |= HotkeyModifiers.Shift;
+        }
+
+        if (RestoreHotkeyWinBox.IsChecked == true)
+        {
+            restoreModifiers |= HotkeyModifiers.Windows;
+        }
+
+        behavior.RestoreGroupsHotkeyModifiers = restoreModifiers;
     }
 
     private void RebuildTree()

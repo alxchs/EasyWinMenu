@@ -6,16 +6,26 @@ using EasyWinMenu.Core.Models;
 
 namespace EasyWinMenu.App.Services;
 
+/// <summary>Registers the app's two system-wide hotkeys: open the tray menu, and restore hidden groups.</summary>
 internal sealed class GlobalHotkeyService : IDisposable
 {
     private const int WmHotKey = 0x0312;
-    private const int HotkeyId = 0xA1F3;
+    private const int MenuHotkeyId = 0xA1F3;
+    private const int RestoreHotkeyId = 0xA1F4;
 
     private readonly Window _host;
     private readonly HwndSource _source;
-    private bool _registered;
+    private bool _menuRegistered;
+    private bool _restoreRegistered;
 
+    /// <summary>The configured shortcut for opening the tray menu.</summary>
     public event Action? HotkeyPressed;
+
+    /// <summary>
+    /// The configured shortcut for un-minimizing groups Windows hid and never brought
+    /// back — the fix for Show Desktop's one-way trip on windows with no taskbar button.
+    /// </summary>
+    public event Action? RestoreGroupsRequested;
 
     public GlobalHotkeyService(Window host)
     {
@@ -26,37 +36,59 @@ internal sealed class GlobalHotkeyService : IDisposable
 
     public void Apply(LauncherBehavior behavior)
     {
-        Unregister();
-
-        if (!behavior.GlobalHotkeyEnabled || !Enum.TryParse<Key>(behavior.GlobalHotkeyKey, out var key))
-        {
-            return;
-        }
-
-        var virtualKey = (uint)KeyInterop.VirtualKeyFromKey(key);
-        var modifiers = ToNativeModifiers(behavior.GlobalHotkeyModifiers);
         var handle = new WindowInteropHelper(_host).Handle;
 
-        _registered = RegisterHotKey(handle, HotkeyId, modifiers, virtualKey);
+        Unregister(handle, MenuHotkeyId, ref _menuRegistered);
+        Unregister(handle, RestoreHotkeyId, ref _restoreRegistered);
+
+        if (behavior.GlobalHotkeyEnabled && Enum.TryParse<Key>(behavior.GlobalHotkeyKey, out var menuKey))
+        {
+            _menuRegistered = RegisterHotKey(
+                handle,
+                MenuHotkeyId,
+                ToNativeModifiers(behavior.GlobalHotkeyModifiers),
+                (uint)KeyInterop.VirtualKeyFromKey(menuKey));
+        }
+
+        if (behavior.RestoreGroupsHotkeyEnabled && Enum.TryParse<Key>(behavior.RestoreGroupsHotkeyKey, out var restoreKey))
+        {
+            _restoreRegistered = RegisterHotKey(
+                handle,
+                RestoreHotkeyId,
+                ToNativeModifiers(behavior.RestoreGroupsHotkeyModifiers),
+                (uint)KeyInterop.VirtualKeyFromKey(restoreKey));
+        }
     }
 
-    private void Unregister()
+    private static void Unregister(IntPtr handle, int id, ref bool registered)
     {
-        if (!_registered)
+        if (!registered)
         {
             return;
         }
 
-        UnregisterHotKey(new WindowInteropHelper(_host).Handle, HotkeyId);
-        _registered = false;
+        UnregisterHotKey(handle, id);
+        registered = false;
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == WmHotKey && wParam.ToInt32() == HotkeyId)
+        if (msg != WmHotKey)
         {
-            HotkeyPressed?.Invoke();
-            handled = true;
+            return IntPtr.Zero;
+        }
+
+        switch (wParam.ToInt32())
+        {
+            case MenuHotkeyId:
+                HotkeyPressed?.Invoke();
+                handled = true;
+                break;
+
+            case RestoreHotkeyId:
+                RestoreGroupsRequested?.Invoke();
+                handled = true;
+                break;
         }
 
         return IntPtr.Zero;
@@ -90,7 +122,9 @@ internal sealed class GlobalHotkeyService : IDisposable
 
     public void Dispose()
     {
-        Unregister();
+        var handle = new WindowInteropHelper(_host).Handle;
+        Unregister(handle, MenuHotkeyId, ref _menuRegistered);
+        Unregister(handle, RestoreHotkeyId, ref _restoreRegistered);
         _source.RemoveHook(WndProc);
     }
 

@@ -16,16 +16,27 @@
             </WrapPanel>
         </GroupBox>
         <GroupBox Header="{loc:Loc settings.behavior}" DockPanel.Dock="Top" Margin="0,0,0,8">
-            <WrapPanel Orientation="Horizontal">
-                <TextBlock Text="{loc:Loc settings.openMenuWith}" VerticalAlignment="Center" Margin="0,0,8,4" />
-                <ComboBox x:Name="ClickModeBox" Width="140" Margin="0,0,20,0" ItemTemplate="{StaticResource AppLabelItemTemplate}" SelectedValuePath="Mode" />
-                <CheckBox x:Name="HotkeyEnabledBox" Content="{loc:Loc settings.globalHotkey}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                <CheckBox x:Name="HotkeyCtrlBox" Content="Ctrl" VerticalAlignment="Center" Margin="0,0,6,0" />
-                <CheckBox x:Name="HotkeyAltBox" Content="Alt" VerticalAlignment="Center" Margin="0,0,6,0" />
-                <CheckBox x:Name="HotkeyShiftBox" Content="Shift" VerticalAlignment="Center" Margin="0,0,6,0" />
-                <CheckBox x:Name="HotkeyWinBox" Content="Win" VerticalAlignment="Center" Margin="0,0,12,0" />
-                <ComboBox x:Name="HotkeyKeyBox" Width="80" />
-            </WrapPanel>
+            <StackPanel>
+                <WrapPanel Orientation="Horizontal">
+                    <TextBlock Text="{loc:Loc settings.openMenuWith}" VerticalAlignment="Center" Margin="0,0,8,4" />
+                    <ComboBox x:Name="ClickModeBox" Width="140" Margin="0,0,20,0" ItemTemplate="{StaticResource AppLabelItemTemplate}" SelectedValuePath="Mode" />
+                    <CheckBox x:Name="HotkeyEnabledBox" Content="{loc:Loc settings.globalHotkey}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <CheckBox x:Name="HotkeyCtrlBox" Content="Ctrl" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <CheckBox x:Name="HotkeyAltBox" Content="Alt" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <CheckBox x:Name="HotkeyShiftBox" Content="Shift" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <CheckBox x:Name="HotkeyWinBox" Content="Win" VerticalAlignment="Center" Margin="0,0,12,0" />
+                    <ComboBox x:Name="HotkeyKeyBox" Width="80" />
+                </WrapPanel>
+                <WrapPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <CheckBox x:Name="RestoreHotkeyEnabledBox" Content="{loc:Loc settings.restoreGroupsHotkey}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <CheckBox x:Name="RestoreHotkeyCtrlBox" Content="Ctrl" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <CheckBox x:Name="RestoreHotkeyAltBox" Content="Alt" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <CheckBox x:Name="RestoreHotkeyShiftBox" Content="Shift" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <CheckBox x:Name="RestoreHotkeyWinBox" Content="Win" VerticalAlignment="Center" Margin="0,0,12,0" />
+                    <ComboBox x:Name="RestoreHotkeyKeyBox" Width="80" />
+                </WrapPanel>
+                <TextBlock Text="{loc:Loc settings.restoreGroupsHotkeyHint}" Style="{StaticResource AppHintText}" Margin="0,6,0,0" />
+            </StackPanel>
         </GroupBox>
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
             <Button Content="{loc:Loc settings.newCategory}" Margin="0,0,8,0" Click="OnAddCategoryClick" />
