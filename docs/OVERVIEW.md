@@ -44,11 +44,20 @@ sabe desenhar uma janela ou chamar uma API do Windows vive em `EasyWinMenu.App`.
 ## Compilar
 
 ```
-mkfile d src/EasyWinMenu.App/EasyWinMenu.App.csproj
+mkfile d      # ou mkfile r — de dentro da raiz do repo, acha o EasyWinMenu.slnx sozinho
 ```
 
-`mkfile` não reconhece o `.slnx` da raiz — precisa apontar para o `.csproj` do
-App (ele arrasta o `EasyWinMenu.Core` pela referência de projeto).
+O SDK do .NET já entende `.slnx` nativamente (`dotnet build`/`publish`), e o
+`mkfile` reconhece a extensão — não precisa mais apontar para o `.csproj` só
+para compilar. **Exceção:** `mkfile package` (gerar o instalador) ainda
+precisa do caminho explícito do `.csproj` do App:
+
+```
+mkfile package src/EasyWinMenu.App/EasyWinMenu.App.csproj
+```
+
+porque é ao lado desse arquivo que o `mkfile` procura
+`tools\build_installer.ps1` — ver "Instalador e distribuição" abaixo.
 
 ## Instalador e distribuição
 
