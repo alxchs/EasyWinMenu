@@ -28,27 +28,36 @@ internal static class AppFolderTile
     private const int MosaicColumns = 3;
     private const int MosaicCapacity = MosaicColumns * MosaicColumns;
 
-    public static FrameworkElement Build(MenuCategory category, MenuTheme theme, IconCacheService iconCache)
+    /// <summary>
+    /// <paramref name="scale"/> grows every measurement that goes into the tile itself
+    /// (not just its final on-screen pixels via a transform) — the caller that wants a
+    /// bigger tile on the desktop gets one whose hit-test area actually matches what is
+    /// drawn, instead of relying on a `LayoutTransform` that can leave clicks landing on
+    /// the pre-scale bounds.
+    /// </summary>
+    public static FrameworkElement Build(MenuCategory category, MenuTheme theme, IconCacheService iconCache, double scale = 1.0)
     {
+        var plateSize = PlateSize * scale;
+
         var plate = new Border
         {
-            Width = PlateSize,
-            Height = PlateSize,
-            CornerRadius = new CornerRadius(PlateSize * 0.26),
-            Padding = new Thickness(PlateSize * 0.11),
+            Width = plateSize,
+            Height = plateSize,
+            CornerRadius = new CornerRadius(plateSize * 0.26),
+            Padding = new Thickness(plateSize * 0.11),
             Background = BuildPlateBackground(category, theme),
-            Child = BuildMosaic(category, theme, iconCache)
+            Child = BuildMosaic(category, theme, iconCache, plateSize)
         };
 
         plate.Effect = DesktopGroupWindow.BuildGroupShadow(theme);
 
-        var plateLayer = new Grid { Width = PlateSize, Height = PlateSize };
+        var plateLayer = new Grid { Width = plateSize, Height = plateSize };
         plateLayer.Children.Add(plate);
 
         var count = GroupEntries.Count(category);
         if (category.ShowBadge && count > 0)
         {
-            plateLayer.Children.Add(BuildBadge(count, theme));
+            plateLayer.Children.Add(BuildBadge(count, theme, scale));
         }
 
         var stack = new StackPanel
@@ -58,7 +67,7 @@ internal static class AppFolderTile
             Background = Brushes.Transparent
         };
         stack.Children.Add(plateLayer);
-        stack.Children.Add(BuildCaption(category, theme));
+        stack.Children.Add(BuildCaption(category, theme, plateSize, scale));
 
         return stack;
     }
@@ -82,19 +91,19 @@ internal static class AppFolderTile
             (byte)(color.B * factor));
     }
 
-    private static UIElement BuildMosaic(MenuCategory category, MenuTheme theme, IconCacheService iconCache)
+    private static UIElement BuildMosaic(MenuCategory category, MenuTheme theme, IconCacheService iconCache, double plateSize)
     {
         var mosaic = new UniformGrid { Columns = MosaicColumns, Rows = MosaicColumns };
 
         foreach (var entry in GroupEntries.Enumerate(category).Take(MosaicCapacity))
         {
-            mosaic.Children.Add(BuildMosaicCell(entry, theme, iconCache));
+            mosaic.Children.Add(BuildMosaicCell(entry, theme, iconCache, plateSize));
         }
 
         return mosaic;
     }
 
-    private static UIElement BuildMosaicCell(object entry, MenuTheme theme, IconCacheService iconCache)
+    private static UIElement BuildMosaicCell(object entry, MenuTheme theme, IconCacheService iconCache, double plateSize)
     {
         var icon = GroupEntries.IconOf(entry, iconCache);
         if (icon is not null)
@@ -110,23 +119,23 @@ internal static class AppFolderTile
         // Subfolders and unresolved targets fall back to a glyph so the mosaic keeps its rhythm.
         return new TextBlock
         {
-            Text = entry is MenuCategory ? "" : "",
+            Text = entry is MenuCategory ? "" : "",
             FontFamily = new FontFamily("Segoe MDL2 Assets"),
-            FontSize = PlateSize * 0.16,
+            FontSize = plateSize * 0.16,
             Foreground = ThemeBrushes.CreateBrush(theme.TextColor, 0.75),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
     }
 
-    private static UIElement BuildBadge(int count, MenuTheme theme)
+    private static UIElement BuildBadge(int count, MenuTheme theme, double scale)
     {
         var text = new TextBlock
         {
             Text = count > 99 ? "99+" : count.ToString(),
             Foreground = Brushes.White,
             FontFamily = new FontFamily(theme.ItemFontFamily),
-            FontSize = 11,
+            FontSize = 11 * scale,
             FontWeight = FontWeights.SemiBold,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
@@ -134,31 +143,31 @@ internal static class AppFolderTile
 
         return new Border
         {
-            MinWidth = 22,
-            Height = 22,
-            CornerRadius = new CornerRadius(11),
-            Padding = new Thickness(6, 0, 6, 0),
+            MinWidth = 22 * scale,
+            Height = 22 * scale,
+            CornerRadius = new CornerRadius(11 * scale),
+            Padding = new Thickness(6 * scale, 0, 6 * scale, 0),
             Background = new SolidColorBrush(Color.FromRgb(0xE5, 0x39, 0x35)),
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, -7, -7, 0),
+            Margin = new Thickness(0, -7 * scale, -7 * scale, 0),
             Child = text
         };
     }
 
-    private static UIElement BuildCaption(MenuCategory category, MenuTheme theme)
+    private static UIElement BuildCaption(MenuCategory category, MenuTheme theme, double plateSize, double scale)
     {
         return new TextBlock
         {
             Text = category.Name,
             Foreground = ThemeBrushes.CreateBrush(theme.TextColor, 1.0),
             FontFamily = new FontFamily(theme.TitleFontFamily),
-            FontSize = theme.ItemFontSize,
+            FontSize = theme.ItemFontSize * scale,
             FontWeight = theme.TitleBold ? FontWeights.SemiBold : FontWeights.Normal,
             TextAlignment = TextAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
-            MaxWidth = PlateSize + 24,
-            Margin = new Thickness(0, 6, 0, 0),
+            MaxWidth = plateSize + (24 * scale),
+            Margin = new Thickness(0, 6 * scale, 0, 0),
             HorizontalAlignment = HorizontalAlignment.Center,
             Effect = new DropShadowEffect
             {

@@ -327,11 +327,7 @@ internal sealed class DesktopGroupWindow : Window
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(10, 10, 10, 6),
-            Visibility = Visibility.Collapsed,
-            // The closed-folder look reads too small next to full-size desktop icons;
-            // a LayoutTransform (not RenderTransform) grows it for real, so the window's
-            // own SizeToContent picks up the bigger footprint instead of clipping it.
-            LayoutTransform = new ScaleTransform(AppFolderDesktopScale, AppFolderDesktopScale)
+            Visibility = Visibility.Collapsed
         };
         _folderHost.MouseLeftButtonDown += OnFolderTileMouseDown;
         _folderHost.MouseMove += OnFolderTileMouseMove;
@@ -474,7 +470,7 @@ internal sealed class DesktopGroupWindow : Window
             return;
         }
 
-        _folderHost.Content = AppFolderTile.Build(_category, _theme, _iconCache);
+        _folderHost.Content = AppFolderTile.Build(_category, _theme, _iconCache, AppFolderDesktopScale);
     }
 
     private void ToggleDisplayMode()
@@ -1161,7 +1157,7 @@ internal sealed class DesktopGroupWindow : Window
 
         AddMenuItem(menu, LocalizationService.Get("item.rename"), () => RenameItem(item), "IconRename");
         menu.Items.Add(BuildSeparator());
-        AddMenuItem(menu, LocalizationService.Get("item.removeFromGroup"), () => RemoveItem(item), "IconDelete");
+        AddMenuItem(menu, LocalizationService.Get("item.removeFromGroup"), () => RemoveEntryRespectingSelection(item, () => RemoveItem(item)), "IconDelete");
 
         if (ShellCommands.HasFileTarget(item))
         {
@@ -1181,10 +1177,11 @@ internal sealed class DesktopGroupWindow : Window
         menu.Items.Add(BuildSeparator());
 
         var isEmpty = GroupEntries.Count(folder) == 0;
+        var partOfMultiSelection = _selectedEntries.Count > 1 && _selectedEntries.Contains(folder);
         var removeItem = CreateMenuItem(LocalizationService.Get("item.removeFromGroup"), "IconDelete");
-        removeItem.IsEnabled = isEmpty;
-        removeItem.Click += (_, _) => RemoveFolder(folder);
-        if (!isEmpty)
+        removeItem.IsEnabled = isEmpty || partOfMultiSelection;
+        removeItem.Click += (_, _) => RemoveEntryRespectingSelection(folder, () => RemoveFolder(folder));
+        if (!isEmpty && !partOfMultiSelection)
         {
             removeItem.ToolTip = LocalizationService.Get("group.removeOnlyEmpty");
         }
@@ -1723,10 +1720,22 @@ internal sealed class DesktopGroupWindow : Window
         }
     }
 
+    /// <summary>
+    /// Lays entries out on a grid sized for the panel as it stands right now — its own
+    /// width and the icons' own scale both feed the cell size, so a resize or a zoom
+    /// change reflows the grid instead of leaving it arranged for a size that no longer
+    /// applies.
+    /// </summary>
     private void ArrangeInGrid(IEnumerable<object> orderedEntries)
     {
+        // Positions are stored in the canvas's own pre-zoom coordinates — the render
+        // transform (_zoomTransform) scales them again on screen. So only how many
+        // columns fit needs the icon scale (a bigger icon needs more on-screen room,
+        // meaning fewer of them per row); the spacing between those columns must stay
+        // in plain, unscaled TileSize units, or the transform would apply the scale
+        // twice and blow the grid past the panel's actual width.
         var usableWidth = _category.DesktopWidth - (PaddingX * 2);
-        var columns = Math.Max(1, (int)(usableWidth / TileSize));
+        var columns = Math.Max(1, (int)(usableWidth / (TileSize * _category.DesktopIconScale)));
         var index = 0;
         foreach (var entry in orderedEntries)
         {
@@ -1756,7 +1765,7 @@ internal sealed class DesktopGroupWindow : Window
         _category.DesktopIconScale = scale;
         _zoomTransform.ScaleX = scale;
         _zoomTransform.ScaleY = scale;
-        _onLayoutChanged(_category);
+        FinishStructuralChange();
     }
 
     private void AttachTileBehavior(FrameworkElement tile, object entry, Action onOpen, Action<double, double> onMoved)
@@ -1911,6 +1920,24 @@ internal sealed class DesktopGroupWindow : Window
                     : Brushes.Transparent;
             }
         }
+    }
+
+    /// <summary>
+    /// A right-click's own "Remove" always used to act on just the tile under the mouse,
+    /// even with several tiles highlighted — the same click in Explorer acts on the
+    /// whole selection instead. Route through <see cref="RemoveSelectedEntries"/> when the
+    /// clicked entry is part of a multi-selection; otherwise this one tile is the whole
+    /// story, so its own single-item removal (with its own confirmation wording) applies.
+    /// </summary>
+    private void RemoveEntryRespectingSelection(object entry, Action removeSingle)
+    {
+        if (_selectedEntries.Count > 1 && _selectedEntries.Contains(entry))
+        {
+            RemoveSelectedEntries();
+            return;
+        }
+
+        removeSingle();
     }
 
     private void RemoveSelectedEntries()
@@ -2075,6 +2102,10 @@ internal sealed class DesktopGroupWindow : Window
             Cursor = Cursors.Hand,
             ContextMenu = BuildFolderTileContextMenu(folder)
         };
+        // The "Remove" item's enabled state depends on the selection at the moment of
+        // the click, not whenever the tile last happened to be rebuilt — rebuild the
+        // menu fresh right before it opens rather than let that state go stale.
+        stack.PreviewMouseRightButtonDown += (_, _) => stack.ContextMenu = BuildFolderTileContextMenu(folder);
 
         stack.Children.Add(new TextBlock
         {
@@ -2217,7 +2248,7 @@ internal sealed class DesktopGroupWindow : Window
         _category.DesktopHeight = Height;
         _category.DesktopX = Left;
         _category.DesktopY = Top;
-        _onLayoutChanged(_category);
+        FinishStructuralChange();
     }
 
     private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
