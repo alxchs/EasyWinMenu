@@ -120,9 +120,26 @@ funciona de fora desta rede, sem custo.
   - Ícones no modo painel são organizados por um dos três modos "vivos" de
     `IconArrangement` (grade automática, por nome, por tipo) ou por posição
     livre (`None`, o padrão). O modo escolhido é salvo em
-    `MenuCategory.IconArrangement` e reaplicado sozinho (`ReapplyArrangementIfActive`
-    via `FinishStructuralChange`) toda vez que algo muda — soltar um arquivo,
-    colar, apagar, renomear — não só no momento em que o menu foi clicado.
+    `MenuCategory.IconArrangement` e reaplicado sozinho (`FinishStructuralChange`)
+    toda vez que algo muda o conteúdo ou o tamanho do grupo — soltar um
+    arquivo, colar, apagar, renomear, **redimensionar o painel** (`OnResizeMouseUp`)
+    e **mudar o zoom dos ícones** (`SetIconScale`) — não só no momento em que
+    o menu de organizar foi clicado.
+  - `ArrangeInGrid` calcula quantas colunas cabem usando `TileSize * DesktopIconScale`,
+    mas posiciona cada ícone em unidades de `TileSize` puro (sem multiplicar
+    pelo zoom): as posições vivem no espaço de coordenadas de **antes** do
+    `RenderTransform` do canvas, que já aplica esse mesmo zoom de novo na
+    hora de desenhar. Multiplicar as duas vezes faz a grade "vazar" para
+    fora do painel a qualquer zoom acima de 1×; só a conta de colunas
+    precisa saber do zoom, para caber menos ícones por linha quando eles
+    estão maiores.
+  - O "Remover" do menu de um ícone ou pasta age sobre a seleção inteira
+    quando o item clicado faz parte de uma seleção múltipla
+    (`RemoveEntryRespectingSelection`), do mesmo jeito que o Explorer — antes
+    disso, clicar em "remover" com vários itens marcados só removia o item
+    sob o mouse. O menu de uma pasta é reconstruído a cada clique direito
+    (`PreviewMouseRightButtonDown`) porque se "pode remover" depende da
+    seleção no momento do clique, não de quando o ladrilho foi desenhado.
   - A borda do painel não vem do tema: é derivada da cor de fundo efetiva,
     10% mais clara (ou 10% mais escura, quando o fundo já é branco ou quase
     branco) — `ComputeGroupBorderColor`, recalculada toda vez que o fundo
