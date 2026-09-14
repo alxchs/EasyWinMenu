@@ -344,7 +344,18 @@ uma pasta) precisa se comportar do mesmo jeito que o Explorer: clicar em
 "remover" com vários itens marcados age sobre todos eles, não só o que está
 debaixo do mouse.
 
-## 15. Documentação e versionamento
+## 15. O ladrilho de App Folder parou de responder a clique
+
+O ladrilho fechado (estilo App Folder) na área de trabalho ficou 40% maior
+numa sessão anterior usando um `LayoutTransform` no controle que o hospeda.
+Isso quebrou a interação: dava para ver o ladrilho, mas clicar nele não
+abria mais a pasta. Troque a abordagem — em vez de desenhar no tamanho
+normal e esticar depois, faça o `AppFolderTile` nascer já nas medidas
+finais (um parâmetro de escala que multiplica cada medida antes de montar o
+visual). Mais seguro por construção: não existe uma camada de transform
+separada para o hit-test poder discordar do que foi desenhado.
+
+## 16. Documentação e versionamento
 
 Mantenha dois documentos sempre sincronizados com o código, atualizados no
 mesmo commit de qualquer mudança:

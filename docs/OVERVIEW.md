@@ -159,9 +159,15 @@ funciona de fora desta rede, sem custo.
 - **`AppFolderTile`** — o ladrilho fechado: mosaico 3×3 dos primeiros ícones,
   selo de contagem, nome do grupo. Puramente desenho, sem estado. Ao ser
   colocado como o ícone do grupo na área de trabalho (`DesktopGroupWindow`,
-  modo App Folder), é desenhado **40% maior** via `LayoutTransform` — o
-  tamanho de fábrica do `AppFolderTile` é usado sem escala em qualquer outro
-  lugar que venha a reutilizá-lo.
+  modo App Folder), é desenhado **40% maior** — `Build` recebe um parâmetro
+  `scale` e todas as medidas (plate, mosaico, selo, legenda) nascem já no
+  tamanho final. A primeira versão fazia isso com um `LayoutTransform` no
+  `ContentControl` que hospeda o ladrilho: visualmente idêntico, mas deixava
+  o ladrilho **sem responder a clique** — a área de acerto do hit-test não
+  acompanhava com segurança o tamanho pós-transform num `Window` com
+  `SizeToContent`. Escalar as medidas na origem elimina a camada de
+  transform inteira, então o que é desenhado é exatamente o que recebe o
+  clique.
 - **`GroupOverlayWindow`** — a folha que abre ao tocar o ladrilho. Tamanho:
   `min(2× a largura/altura do painel, 60%/50% da área útil do monitor)`,
   centralizada, nunca em tela cheia. Navega para dentro de subpastas sem abrir

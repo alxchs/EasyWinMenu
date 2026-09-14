@@ -327,11 +327,7 @@ internal sealed class DesktopGroupWindow : Window
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(10, 10, 10, 6),
-            Visibility = Visibility.Collapsed,
-            // The closed-folder look reads too small next to full-size desktop icons;
-            // a LayoutTransform (not RenderTransform) grows it for real, so the window's
-            // own SizeToContent picks up the bigger footprint instead of clipping it.
-            LayoutTransform = new ScaleTransform(AppFolderDesktopScale, AppFolderDesktopScale)
+            Visibility = Visibility.Collapsed
         };
         _folderHost.MouseLeftButtonDown += OnFolderTileMouseDown;
         _folderHost.MouseMove += OnFolderTileMouseMove;
@@ -474,7 +470,7 @@ internal sealed class DesktopGroupWindow : Window
             return;
         }
 
-        _folderHost.Content = AppFolderTile.Build(_category, _theme, _iconCache);
+        _folderHost.Content = AppFolderTile.Build(_category, _theme, _iconCache, AppFolderDesktopScale);
     }
 
     private void ToggleDisplayMode()
