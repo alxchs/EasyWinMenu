@@ -50,6 +50,9 @@ public sealed class MenuCategory : IMenuContainer
     public double? PanelY { get; set; }
     public bool ShowBadge { get; set; } = true;
 
+    /// <summary>How this group's icons are kept laid out. See <see cref="IconArrangement"/>.</summary>
+    public IconArrangement IconArrangement { get; set; } = IconArrangement.None;
+
     /// <summary>
     /// Takes on another group's appearance — theme, opacities, backdrop and badge —
     /// while leaving its own contents, position and size alone.
@@ -87,7 +90,8 @@ public sealed class MenuCategory : IMenuContainer
             DisplayMode = DisplayMode,
             PanelX = PanelX,
             PanelY = PanelY,
-            ShowBadge = ShowBadge
+            ShowBadge = ShowBadge,
+            IconArrangement = IconArrangement
         };
     }
 }

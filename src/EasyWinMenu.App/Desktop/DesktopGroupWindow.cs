@@ -2,6 +2,8 @@ using System.IO;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Documents;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -61,6 +63,11 @@ internal sealed class DesktopGroupWindow : Window
     private const double MinCanvasPadding = 8;
     private const double CanvasPaddingRatio = 0.05;
     private const double FolderTapTolerance = 5;
+    private const double MinGroupWidth = 140;
+    private const double MinGroupHeight = 120;
+    private const double ResizeEdgeThickness = 6;
+    private const double ResizeCornerSize = 14;
+    private const double AppFolderDesktopScale = 1.4;
 
     private readonly MenuCategory _category;
     private MenuTheme _theme;
@@ -80,20 +87,45 @@ internal sealed class DesktopGroupWindow : Window
     private ContentControl _folderHost = null!;
     private GroupOverlayWindow? _overlay;
     private Border _header = null!;
-    private Border _resizeGrip = null!;
+    private readonly List<Border> _resizeHandles = new();
     private TextBlock _headerText = null!;
     private Border _collapseGlyph = null!;
     private Border _menuButton = null!;
+    private readonly Dictionary<object, TextBlock> _captionsByEntry = new();
+    private readonly Dictionary<object, Action> _openActionsByEntry = new();
 
-    private bool _resizingGroup;
+    private Border _searchBar = null!;
+    private System.Windows.Controls.TextBox _searchBox = null!;
+    private TextBlock _searchCountText = null!;
+    private System.Windows.Controls.Primitives.Popup _searchPopup = null!;
+    private System.Windows.Controls.ListBox _searchResultsList = null!;
+    private readonly List<object> _searchMatches = new();
+    private string _lastSearchText = string.Empty;
+
+    private ResizeEdge _resizeEdge = ResizeEdge.None;
     private System.Windows.Point? _placedAt;
     private DateTime _holdPlacementUntil;
     private DispatcherTimer? _persistMoveTimer;
     private bool _draggingFolderTile;
     private System.Windows.Point _folderDragOrigin;
-    private System.Windows.Point _resizeStart;
-    private double _startWidth;
-    private double _startHeight;
+    private System.Windows.Point _resizeOrigin;
+    private double _resizeStartLeft;
+    private double _resizeStartTop;
+    private double _resizeStartWidth;
+    private double _resizeStartHeight;
+
+    private enum ResizeEdge
+    {
+        None,
+        N,
+        S,
+        E,
+        W,
+        NE,
+        NW,
+        SE,
+        SW
+    }
 
     public DesktopGroupWindow(
         MenuCategory category,
@@ -132,7 +164,12 @@ internal sealed class DesktopGroupWindow : Window
         PreviewKeyDown += OnPreviewKeyDown;
         LocationChanged += OnLocationChanged;
         Drop += OnDrop;
-        Closed += (_, _) => _overlay?.Close();
+        Closed += (_, _) =>
+        {
+            _overlay?.Close();
+            _pendingCuts.RemoveAll(p => ReferenceEquals(p.Owner, this));
+            StopPendingCutWatcherIfIdle();
+        };
     }
 
     public bool IsCollapsed => _category.IsCollapsed;
@@ -290,7 +327,11 @@ internal sealed class DesktopGroupWindow : Window
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(10, 10, 10, 6),
-            Visibility = Visibility.Collapsed
+            Visibility = Visibility.Collapsed,
+            // The closed-folder look reads too small next to full-size desktop icons;
+            // a LayoutTransform (not RenderTransform) grows it for real, so the window's
+            // own SizeToContent picks up the bigger footprint instead of clipping it.
+            LayoutTransform = new ScaleTransform(AppFolderDesktopScale, AppFolderDesktopScale)
         };
         _folderHost.MouseLeftButtonDown += OnFolderTileMouseDown;
         _folderHost.MouseMove += OnFolderTileMouseMove;
@@ -299,7 +340,91 @@ internal sealed class DesktopGroupWindow : Window
         _root = new Grid { Background = Brushes.Transparent };
         _root.Children.Add(BuildContent());
         _root.Children.Add(_folderHost);
+        _root.Children.Add(_searchPopup);
+        BuildResizeHandles(_root);
         return _root;
+    }
+
+    /// <summary>
+    /// Eight thin, invisible strips laid over the window's own edges and corners so the
+    /// whole perimeter resizes, the way a normal titled window does — not just the one
+    /// corner a single grip could reach. They sit on top (added last) so they win the
+    /// hit test over the header or canvas in that last handful of pixels.
+    /// </summary>
+    private void BuildResizeHandles(Grid root)
+    {
+        _resizeHandles.Clear();
+
+        AddResizeHandle(root, ResizeEdge.N, Cursors.SizeNS,
+            HorizontalAlignment.Stretch, VerticalAlignment.Top,
+            double.NaN, ResizeEdgeThickness,
+            new Thickness(ResizeCornerSize, 0, ResizeCornerSize, 0));
+        AddResizeHandle(root, ResizeEdge.S, Cursors.SizeNS,
+            HorizontalAlignment.Stretch, VerticalAlignment.Bottom,
+            double.NaN, ResizeEdgeThickness,
+            new Thickness(ResizeCornerSize, 0, ResizeCornerSize, 0));
+        AddResizeHandle(root, ResizeEdge.W, Cursors.SizeWE,
+            HorizontalAlignment.Left, VerticalAlignment.Stretch,
+            ResizeEdgeThickness, double.NaN,
+            new Thickness(0, ResizeCornerSize, 0, ResizeCornerSize));
+        AddResizeHandle(root, ResizeEdge.E, Cursors.SizeWE,
+            HorizontalAlignment.Right, VerticalAlignment.Stretch,
+            ResizeEdgeThickness, double.NaN,
+            new Thickness(0, ResizeCornerSize, 0, ResizeCornerSize));
+
+        AddResizeHandle(root, ResizeEdge.NW, Cursors.SizeNWSE,
+            HorizontalAlignment.Left, VerticalAlignment.Top,
+            ResizeCornerSize, ResizeCornerSize, new Thickness(0));
+        AddResizeHandle(root, ResizeEdge.SE, Cursors.SizeNWSE,
+            HorizontalAlignment.Right, VerticalAlignment.Bottom,
+            ResizeCornerSize, ResizeCornerSize, new Thickness(0));
+        AddResizeHandle(root, ResizeEdge.NE, Cursors.SizeNESW,
+            HorizontalAlignment.Right, VerticalAlignment.Top,
+            ResizeCornerSize, ResizeCornerSize, new Thickness(0));
+        AddResizeHandle(root, ResizeEdge.SW, Cursors.SizeNESW,
+            HorizontalAlignment.Left, VerticalAlignment.Bottom,
+            ResizeCornerSize, ResizeCornerSize, new Thickness(0));
+    }
+
+    private void AddResizeHandle(
+        Grid root,
+        ResizeEdge edge,
+        System.Windows.Input.Cursor cursor,
+        HorizontalAlignment horizontalAlignment,
+        VerticalAlignment verticalAlignment,
+        double width,
+        double height,
+        Thickness margin)
+    {
+        var handle = new Border
+        {
+            Background = Brushes.Transparent,
+            Cursor = cursor,
+            HorizontalAlignment = horizontalAlignment,
+            VerticalAlignment = verticalAlignment,
+            Margin = margin,
+            // Matches the panel's own rounding so a corner handle's hit area follows the
+            // curve instead of squaring it off — invisible either way, but it keeps the
+            // cursor change lined up with where the eye reads the corner as starting.
+            CornerRadius = new CornerRadius(_theme.CornerRadius)
+        };
+
+        if (!double.IsNaN(width))
+        {
+            handle.Width = width;
+        }
+
+        if (!double.IsNaN(height))
+        {
+            handle.Height = height;
+        }
+
+        handle.MouseLeftButtonDown += (sender, e) => OnResizeMouseDown(edge, (UIElement)sender, e);
+        handle.MouseMove += OnResizeMouseMove;
+        handle.MouseLeftButtonUp += OnResizeMouseUp;
+
+        root.Children.Add(handle);
+        _resizeHandles.Add(handle);
     }
 
     private bool IsAppFolder => _category.DisplayMode == DesktopGroupDisplayMode.AppFolder;
@@ -321,12 +446,14 @@ internal sealed class DesktopGroupWindow : Window
             RefreshFolderTile();
             _border.Visibility = Visibility.Collapsed;
             _folderHost.Visibility = Visibility.Visible;
+            SetResizeHandlesVisible(false);
             SizeToContent = SizeToContent.WidthAndHeight;
             return;
         }
 
         _folderHost.Visibility = Visibility.Collapsed;
         _border.Visibility = Visibility.Visible;
+        SetResizeHandlesVisible(!_category.IsCollapsed);
 
         // SizeToContent has to be relaxed before Width and Height are assigned:
         // while it is still automatic the assignment is discarded, which is how the
@@ -473,30 +600,9 @@ internal sealed class DesktopGroupWindow : Window
         DockPanel.SetDock(_header, Dock.Top);
         panel.Children.Add(_header);
 
-        _resizeGrip = new Border
-        {
-            Width = 16,
-            Height = 16,
-            Background = Brushes.Transparent,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Cursor = Cursors.SizeNWSE,
-            Child = new System.Windows.Shapes.Path
-            {
-                Data = Geometry.Parse("M11 3L3 11 M11 7L7 11 M11 11L10.5 11.5"),
-                Stroke = ThemeBrushes.CreateBrush(_theme.TextColor, 0.5),
-                StrokeThickness = 1.4,
-                StrokeStartLineCap = PenLineCap.Round,
-                StrokeEndLineCap = PenLineCap.Round,
-                Stretch = Stretch.None,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            }
-        };
-        _resizeGrip.MouseLeftButtonDown += OnResizeGripMouseDown;
-        _resizeGrip.MouseMove += OnResizeGripMouseMove;
-        _resizeGrip.MouseLeftButtonUp += OnResizeGripMouseUp;
-        DockPanel.SetDock(_resizeGrip, Dock.Bottom);
-        panel.Children.Add(_resizeGrip);
+        _searchBar = BuildSearchBar();
+        DockPanel.SetDock(_searchBar, Dock.Top);
+        panel.Children.Add(_searchBar);
 
         _canvas = new Canvas
         {
@@ -513,7 +619,6 @@ internal sealed class DesktopGroupWindow : Window
 
         _border = new Border
         {
-            BorderBrush = ThemeBrushes.CreateBrush(_theme.BorderColor, 1.0),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(_theme.CornerRadius),
             ClipToBounds = true,
@@ -526,6 +631,233 @@ internal sealed class DesktopGroupWindow : Window
         _border.Effect = BuildGroupShadow(_theme);
 
         return _border;
+    }
+
+    /// <summary>
+    /// A Ctrl+F search strip docked under the header, hidden until asked for. The match
+    /// list itself lives in a <see cref="System.Windows.Controls.Primitives.Popup"/>
+    /// anchored to this bar rather than in the DockPanel flow, so it floats over the
+    /// icons instead of pushing them down.
+    /// </summary>
+    private Border BuildSearchBar()
+    {
+        _searchCountText = new TextBlock
+        {
+            Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 0.65),
+            FontFamily = new FontFamily(_theme.ItemFontFamily),
+            FontSize = Math.Max(10, _theme.ItemFontSize - 1),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6, 0, 0, 0)
+        };
+        DockPanel.SetDock(_searchCountText, Dock.Right);
+
+        _searchBox = new System.Windows.Controls.TextBox
+        {
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 1.0),
+            FontFamily = new FontFamily(_theme.ItemFontFamily),
+            FontSize = _theme.ItemFontSize,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        _searchBox.TextChanged += (_, _) => UpdateSearchMatches(_searchBox.Text);
+
+        var row = new DockPanel();
+        row.Children.Add(_searchCountText);
+        row.Children.Add(_searchBox);
+
+        var bar = new Border
+        {
+            Padding = new Thickness(8, 4, 8, 4),
+            Visibility = Visibility.Collapsed,
+            Child = row
+        };
+        ApplySearchBarAppearance(bar);
+
+        _searchResultsList = new System.Windows.Controls.ListBox
+        {
+            MaxHeight = 240,
+            Background = ThemeBrushes.CreateBrush(_theme.BackgroundColor, 0.98),
+            BorderBrush = ThemeBrushes.CreateBrush(_theme.BorderColor, 1.0),
+            BorderThickness = new Thickness(1)
+        };
+
+        _searchPopup = new System.Windows.Controls.Primitives.Popup
+        {
+            PlacementTarget = bar,
+            Placement = PlacementMode.Bottom,
+            StaysOpen = true,
+            AllowsTransparency = true,
+            Child = _searchResultsList
+        };
+        bar.SizeChanged += (_, _) => _searchPopup.Width = bar.ActualWidth;
+
+        return bar;
+    }
+
+    private void ApplySearchBarAppearance(Border bar)
+    {
+        bar.Background = ThemeBrushes.CreateBrush(_theme.HighlightColor, 0.18);
+        bar.BorderBrush = ThemeBrushes.CreateBrush(_theme.BorderColor, 1.0);
+        bar.BorderThickness = new Thickness(0, 0, 0, 1);
+    }
+
+    /// <summary>Only meaningful in the free-canvas panel look — the closed folder tile has no icons to search.</summary>
+    private void OpenFindOverlay()
+    {
+        if (IsAppFolder)
+        {
+            return;
+        }
+
+        _searchBar.Visibility = Visibility.Visible;
+        _searchBox.Text = _lastSearchText;
+        _searchBox.SelectAll();
+        Keyboard.Focus(_searchBox);
+        UpdateSearchMatches(_searchBox.Text);
+    }
+
+    /// <summary>
+    /// Remembers the query exactly at the moment the user picked a result or backed out
+    /// with Esc — never at, say, a stray loss of focus — so the next Ctrl+F picks up
+    /// where this one left off.
+    /// </summary>
+    private void CloseFindOverlay(bool rememberQuery)
+    {
+        if (_searchBar.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        if (rememberQuery)
+        {
+            _lastSearchText = _searchBox.Text;
+        }
+
+        _searchPopup.IsOpen = false;
+        _searchBar.Visibility = Visibility.Collapsed;
+        ClearAllHighlights();
+        _searchMatches.Clear();
+        _searchResultsList.Items.Clear();
+        Keyboard.ClearFocus();
+    }
+
+    private void UpdateSearchMatches(string query)
+    {
+        ClearAllHighlights();
+        _searchMatches.Clear();
+        _searchResultsList.Items.Clear();
+
+        if (string.IsNullOrEmpty(query))
+        {
+            _searchCountText.Text = string.Empty;
+            _searchPopup.IsOpen = false;
+            return;
+        }
+
+        foreach (var entry in GroupEntries.Enumerate(_category))
+        {
+            var name = GroupEntries.NameOf(entry);
+            var matchIndex = name.IndexOf(query, StringComparison.CurrentCultureIgnoreCase);
+            if (matchIndex < 0)
+            {
+                continue;
+            }
+
+            _searchMatches.Add(entry);
+
+            if (_captionsByEntry.TryGetValue(entry, out var caption))
+            {
+                ApplyNameHighlight(caption, name, matchIndex, query.Length);
+            }
+
+            var resultText = new TextBlock
+            {
+                Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 1.0),
+                FontFamily = new FontFamily(_theme.ItemFontFamily),
+                FontSize = _theme.ItemFontSize
+            };
+            ApplyNameHighlight(resultText, name, matchIndex, query.Length);
+
+            var listItem = new System.Windows.Controls.ListBoxItem { Content = resultText, Tag = entry };
+            listItem.PreviewMouseLeftButtonDown += (_, _) =>
+            {
+                _searchResultsList.SelectedItem = listItem;
+                ActivateSelectedSearchResult();
+            };
+            _searchResultsList.Items.Add(listItem);
+        }
+
+        _searchCountText.Text = LocalizationService.Format("group.searchCount", _searchMatches.Count);
+
+        if (_searchResultsList.Items.Count > 0)
+        {
+            _searchResultsList.SelectedIndex = 0;
+        }
+
+        _searchPopup.IsOpen = _searchResultsList.Items.Count > 0;
+    }
+
+    private void MoveSearchSelection(int delta)
+    {
+        if (_searchResultsList.Items.Count == 0)
+        {
+            return;
+        }
+
+        var next = Math.Clamp(_searchResultsList.SelectedIndex + delta, 0, _searchResultsList.Items.Count - 1);
+        _searchResultsList.SelectedIndex = next;
+        _searchResultsList.ScrollIntoView(_searchResultsList.SelectedItem);
+    }
+
+    /// <summary>Enter on a result does exactly what double-clicking the icon itself would.</summary>
+    private void ActivateSelectedSearchResult()
+    {
+        if (_searchResultsList.SelectedItem is not System.Windows.Controls.ListBoxItem { Tag: { } entry })
+        {
+            return;
+        }
+
+        CloseFindOverlay(rememberQuery: true);
+        if (_openActionsByEntry.TryGetValue(entry, out var open))
+        {
+            open();
+        }
+    }
+
+    private void ApplyNameHighlight(TextBlock textBlock, string name, int matchIndex, int matchLength)
+    {
+        textBlock.Inlines.Clear();
+        if (matchIndex < 0)
+        {
+            textBlock.Inlines.Add(new Run(name));
+            return;
+        }
+
+        if (matchIndex > 0)
+        {
+            textBlock.Inlines.Add(new Run(name[..matchIndex]));
+        }
+
+        textBlock.Inlines.Add(new Run(name.Substring(matchIndex, matchLength))
+        {
+            FontWeight = FontWeights.Bold,
+            Background = ThemeBrushes.CreateBrush(_theme.HighlightColor, 1.0)
+        });
+
+        var tailStart = matchIndex + matchLength;
+        if (tailStart < name.Length)
+        {
+            textBlock.Inlines.Add(new Run(name[tailStart..]));
+        }
+    }
+
+    private void ClearAllHighlights()
+    {
+        foreach (var (entry, textBlock) in _captionsByEntry)
+        {
+            textBlock.Text = GroupEntries.NameOf(entry);
+        }
     }
 
     /// <summary>A flat square target in the title bar that does not start a window drag.</summary>
@@ -603,6 +935,8 @@ internal sealed class DesktopGroupWindow : Window
 
     private void ApplyBackground()
     {
+        _border.BorderBrush = new SolidColorBrush(ComputeGroupBorderColor());
+
         if (_category.AreaOpacity <= 0)
         {
             _border.Background = Brushes.Transparent;
@@ -621,6 +955,28 @@ internal sealed class DesktopGroupWindow : Window
 
         // The group slider rides on top of the theme's own opacity rather than replacing it.
         _border.Background = ThemeBrushes.CreateBrush(_theme.BackgroundColor, _theme.Opacity * _category.AreaOpacity);
+    }
+
+    /// <summary>
+    /// Derived from the face colour rather than the theme's own border swatch, so the
+    /// outline always reads against whatever the group is painted with: 10% lighter than
+    /// the face, except when the face is white (or close enough that lightening it would
+    /// go nowhere), where 10% darker is what actually shows.
+    /// </summary>
+    private Color ComputeGroupBorderColor()
+    {
+        var face = (Color)ColorConverter.ConvertFromString(_theme.BackgroundColor)!;
+        return RelativeLuminance(face) > 0.9 ? ShiftColor(face, -0.10) : ShiftColor(face, 0.10);
+    }
+
+    /// <summary>A positive factor moves each channel toward white, a negative one toward black.</summary>
+    private static Color ShiftColor(Color color, double factor)
+    {
+        byte Shift(byte channel) => factor >= 0
+            ? (byte)Math.Clamp(channel + ((255 - channel) * factor), 0, 255)
+            : (byte)Math.Clamp(channel * (1 + factor), 0, 255);
+
+        return Color.FromArgb(color.A, Shift(color.R), Shift(color.G), Shift(color.B));
     }
 
     private void ApplyHeaderBackground()
@@ -956,8 +1312,7 @@ internal sealed class DesktopGroupWindow : Window
         }
 
         _category.Categories.Add(new MenuCategory { Name = prompt.Value });
-        PopulateTiles();
-        _onLayoutChanged(_category);
+        FinishStructuralChange();
     }
 
     private void CreateTextFile()
@@ -977,8 +1332,7 @@ internal sealed class DesktopGroupWindow : Window
         };
 
         _category.Items.Add(item);
-        PopulateTiles();
-        _onLayoutChanged(_category);
+        FinishStructuralChange();
     }
 
     private string GetGroupFilesDirectory()
@@ -1011,8 +1365,7 @@ internal sealed class DesktopGroupWindow : Window
         }
 
         item.Name = prompt.Value;
-        PopulateTiles();
-        _onLayoutChanged(_category);
+        FinishStructuralChange();
     }
 
     private void RemoveItem(LaunchItem item)
@@ -1030,8 +1383,7 @@ internal sealed class DesktopGroupWindow : Window
         }
 
         _category.Items.Remove(item);
-        PopulateTiles();
-        _onLayoutChanged(_category);
+        FinishStructuralChange();
     }
 
     private void RenameFolder(MenuCategory folder)
@@ -1043,8 +1395,7 @@ internal sealed class DesktopGroupWindow : Window
         }
 
         folder.Name = prompt.Value;
-        PopulateTiles();
-        _onLayoutChanged(_category);
+        FinishStructuralChange();
     }
 
     private void RemoveFolder(MenuCategory folder)
@@ -1073,8 +1424,7 @@ internal sealed class DesktopGroupWindow : Window
         }
 
         _category.Categories.Remove(folder);
-        PopulateTiles();
-        _onLayoutChanged(_category);
+        FinishStructuralChange();
     }
 
     private void OpenSubfolder(MenuCategory folder)
@@ -1158,7 +1508,7 @@ internal sealed class DesktopGroupWindow : Window
     {
         _category.IsCollapsed = collapsed;
         _canvas.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
-        _resizeGrip.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        SetResizeHandlesVisible(!collapsed);
 
         UpdateCollapseGlyph();
         ApplyDisplayMode();
@@ -1255,11 +1605,10 @@ internal sealed class DesktopGroupWindow : Window
             };
 
             _category.Items.Add(item);
-            AddTile(item, item.DesktopIconX.Value, item.DesktopIconY.Value);
             offset += 16;
         }
 
-        _onLayoutChanged(_category);
+        FinishStructuralChange();
     }
 
     private static LaunchItemType InferType(string path)
@@ -1280,6 +1629,8 @@ internal sealed class DesktopGroupWindow : Window
     {
         _canvas.Children.Clear();
         _tilesByEntry.Clear();
+        _captionsByEntry.Clear();
+        _openActionsByEntry.Clear();
         _selectedEntries.Clear();
         var index = 0;
         foreach (var folder in _category.Categories)
@@ -1301,30 +1652,75 @@ internal sealed class DesktopGroupWindow : Window
         }
 
         RefreshFolderTile();
+        RefreshCutVisuals();
     }
 
     private void ArrangeIconsAutomatically()
     {
-        IEnumerable<object> entries = _category.Categories
-            .Cast<object>()
-            .Concat(_category.Items.Where(i => i.IsDesktopPinned));
-        ArrangeInGrid(entries);
+        _category.IconArrangement = IconArrangement.Grid;
+        ArrangeInGrid(GridOrder());
     }
 
     private void SortByName()
     {
-        var folders = _category.Categories.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase);
-        var items = _category.Items.Where(i => i.IsDesktopPinned).OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
-        ArrangeInGrid(folders.Cast<object>().Concat(items));
+        _category.IconArrangement = IconArrangement.ByName;
+        ArrangeInGrid(NameOrder());
     }
 
     private void SortByType()
+    {
+        _category.IconArrangement = IconArrangement.ByType;
+        ArrangeInGrid(TypeOrder());
+    }
+
+    private IEnumerable<object> GridOrder()
+    {
+        return _category.Categories
+            .Cast<object>()
+            .Concat(_category.Items.Where(i => i.IsDesktopPinned));
+    }
+
+    private IEnumerable<object> NameOrder()
+    {
+        var folders = _category.Categories.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase);
+        var items = _category.Items.Where(i => i.IsDesktopPinned).OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
+        return folders.Cast<object>().Concat(items);
+    }
+
+    private IEnumerable<object> TypeOrder()
     {
         var folders = _category.Categories.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase);
         var items = _category.Items.Where(i => i.IsDesktopPinned)
             .OrderBy(i => i.Type)
             .ThenBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
-        ArrangeInGrid(folders.Cast<object>().Concat(items));
+        return folders.Cast<object>().Concat(items);
+    }
+
+    /// <summary>
+    /// Keeps a live arrangement (grid / by name / by type) honest after the set of icons
+    /// changes underneath it — a drop, a paste, a delete, a rename. Without this, picking
+    /// "sort by name" would only ever reflect the moment it was clicked instead of
+    /// following the group as it actually stands. Free placement (<see cref="IconArrangement.None"/>)
+    /// just persists and repaints, same as before this existed.
+    /// </summary>
+    private void FinishStructuralChange()
+    {
+        switch (_category.IconArrangement)
+        {
+            case IconArrangement.Grid:
+                ArrangeInGrid(GridOrder());
+                return;
+            case IconArrangement.ByName:
+                ArrangeInGrid(NameOrder());
+                return;
+            case IconArrangement.ByType:
+                ArrangeInGrid(TypeOrder());
+                return;
+            default:
+                PopulateTiles();
+                _onLayoutChanged(_category);
+                return;
+        }
     }
 
     private void ArrangeInGrid(IEnumerable<object> orderedEntries)
@@ -1366,6 +1762,8 @@ internal sealed class DesktopGroupWindow : Window
     private void AttachTileBehavior(FrameworkElement tile, object entry, Action onOpen, Action<double, double> onMoved)
     {
         _tilesByEntry[entry] = tile;
+        _openActionsByEntry[entry] = onOpen;
+        AttachHoverEffect(tile, entry);
 
         System.Windows.Point dragStart = default;
         System.Windows.Point tileStart = default;
@@ -1418,6 +1816,47 @@ internal sealed class DesktopGroupWindow : Window
             Canvas.SetTop(tile, y);
             onMoved(x, y);
         };
+    }
+
+    /// <summary>
+    /// The lift a link or card gets on a web page: a soft tint plus a slight scale-up,
+    /// eased in and out instead of snapping, so an icon visibly answers the mouse the
+    /// instant it arrives. Left alone while the tile is selected — the selection
+    /// highlight already says more than a hover tint could.
+    /// </summary>
+    private void AttachHoverEffect(FrameworkElement tile, object entry)
+    {
+        tile.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
+        var scale = new ScaleTransform(1, 1);
+        tile.RenderTransform = scale;
+
+        tile.MouseEnter += (_, _) =>
+        {
+            AnimateScale(scale, 1.08);
+            if (tile is Panel panel && !_selectedEntries.Contains(entry))
+            {
+                panel.Background = ThemeBrushes.CreateBrush(_theme.HighlightColor, 0.45);
+            }
+        };
+
+        tile.MouseLeave += (_, _) =>
+        {
+            AnimateScale(scale, 1.0);
+            if (tile is Panel panel && !_selectedEntries.Contains(entry))
+            {
+                panel.Background = Brushes.Transparent;
+            }
+        };
+    }
+
+    private static void AnimateScale(ScaleTransform transform, double to)
+    {
+        var animation = new DoubleAnimation(to, TimeSpan.FromMilliseconds(120))
+        {
+            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+        };
+        transform.BeginAnimation(ScaleTransform.ScaleXProperty, animation);
+        transform.BeginAnimation(ScaleTransform.ScaleYProperty, animation);
     }
 
     private static double ClampToCanvas(double value, double tileSize, double canvasSize, double padding)
@@ -1525,13 +1964,18 @@ internal sealed class DesktopGroupWindow : Window
                     _category.Items.Remove(item);
                     break;
                 case MenuCategory folder:
-                    DeleteFolder(folder);
+                    _category.Categories.Remove(folder);
+                    if (_openSubfolders.TryGetValue(folder, out var openWindow))
+                    {
+                        openWindow.Close();
+                        _openSubfolders.Remove(folder);
+                    }
+
                     break;
             }
         }
 
-        PopulateTiles();
-        _onLayoutChanged(_category);
+        FinishStructuralChange();
     }
 
     private void RenameSelectedEntry()
@@ -1585,7 +2029,7 @@ internal sealed class DesktopGroupWindow : Window
             });
         }
 
-        stack.Children.Add(new TextBlock
+        var caption = new TextBlock
         {
             Text = item.Name,
             Foreground = TileTextBrush(),
@@ -1595,7 +2039,9 @@ internal sealed class DesktopGroupWindow : Window
             TextWrapping = TextWrapping.Wrap,
             HorizontalAlignment = HorizontalAlignment.Center,
             Effect = TileTextShadow()
-        });
+        };
+        stack.Children.Add(caption);
+        _captionsByEntry[item] = caption;
 
         AttachTileBehavior(
             stack,
@@ -1639,7 +2085,7 @@ internal sealed class DesktopGroupWindow : Window
             HorizontalAlignment = HorizontalAlignment.Center
         });
 
-        stack.Children.Add(new TextBlock
+        var caption = new TextBlock
         {
             Text = folder.Name,
             Foreground = TileTextBrush(),
@@ -1649,7 +2095,9 @@ internal sealed class DesktopGroupWindow : Window
             TextWrapping = TextWrapping.Wrap,
             HorizontalAlignment = HorizontalAlignment.Center,
             Effect = TileTextShadow()
-        });
+        };
+        stack.Children.Add(caption);
+        _captionsByEntry[folder] = caption;
 
         AttachTileBehavior(
             stack,
@@ -1688,38 +2136,87 @@ internal sealed class DesktopGroupWindow : Window
         _onLayoutChanged(_category);
     }
 
-    private void OnResizeGripMouseDown(object sender, MouseButtonEventArgs e)
+    private void SetResizeHandlesVisible(bool visible)
     {
-        _resizingGroup = true;
-        _resizeStart = PointToScreen(e.GetPosition(this));
-        _startWidth = Width;
-        _startHeight = Height;
-        ((UIElement)sender).CaptureMouse();
+        var visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var handle in _resizeHandles)
+        {
+            handle.Visibility = visibility;
+        }
     }
 
-    private void OnResizeGripMouseMove(object sender, MouseEventArgs e)
+    private void OnResizeMouseDown(ResizeEdge edge, UIElement source, MouseButtonEventArgs e)
     {
-        if (!_resizingGroup)
+        _resizeEdge = edge;
+        _resizeOrigin = PointToScreen(e.GetPosition(this));
+        _resizeStartLeft = Left;
+        _resizeStartTop = Top;
+        _resizeStartWidth = Width;
+        _resizeStartHeight = Height;
+        source.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void OnResizeMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_resizeEdge == ResizeEdge.None)
         {
             return;
         }
 
         var current = PointToScreen(e.GetPosition(this));
-        Width = Math.Max(140, _startWidth + (current.X - _resizeStart.X));
-        Height = Math.Max(120, _startHeight + (current.Y - _resizeStart.Y));
+        var deltaX = current.X - _resizeOrigin.X;
+        var deltaY = current.Y - _resizeOrigin.Y;
+
+        var growsFromLeft = _resizeEdge is ResizeEdge.W or ResizeEdge.NW or ResizeEdge.SW;
+        var growsFromTop = _resizeEdge is ResizeEdge.N or ResizeEdge.NE or ResizeEdge.NW;
+
+        var newWidth = _resizeStartWidth;
+        if (_resizeEdge is ResizeEdge.E or ResizeEdge.NE or ResizeEdge.SE)
+        {
+            newWidth = _resizeStartWidth + deltaX;
+        }
+        else if (growsFromLeft)
+        {
+            newWidth = _resizeStartWidth - deltaX;
+        }
+
+        var newHeight = _resizeStartHeight;
+        if (_resizeEdge is ResizeEdge.S or ResizeEdge.SE or ResizeEdge.SW)
+        {
+            newHeight = _resizeStartHeight + deltaY;
+        }
+        else if (growsFromTop)
+        {
+            newHeight = _resizeStartHeight - deltaY;
+        }
+
+        newWidth = Math.Max(MinGroupWidth, newWidth);
+        newHeight = Math.Max(MinGroupHeight, newHeight);
+
+        // The opposite edge is the anchor: it must not move while this one is dragged.
+        var newLeft = growsFromLeft ? _resizeStartLeft + _resizeStartWidth - newWidth : _resizeStartLeft;
+        var newTop = growsFromTop ? _resizeStartTop + _resizeStartHeight - newHeight : _resizeStartTop;
+
+        Width = newWidth;
+        Height = newHeight;
+        Left = newLeft;
+        Top = newTop;
     }
 
-    private void OnResizeGripMouseUp(object sender, MouseButtonEventArgs e)
+    private void OnResizeMouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (!_resizingGroup)
+        if (_resizeEdge == ResizeEdge.None)
         {
             return;
         }
 
-        _resizingGroup = false;
+        _resizeEdge = ResizeEdge.None;
         ((UIElement)sender).ReleaseMouseCapture();
         _category.DesktopWidth = Width;
         _category.DesktopHeight = Height;
+        _category.DesktopX = Left;
+        _category.DesktopY = Top;
         _onLayoutChanged(_category);
     }
 
@@ -1736,6 +2233,35 @@ internal sealed class DesktopGroupWindow : Window
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        // While the find bar is open it owns the keyboard outright: everything from
+        // plain letters (typed into the search box further down the tunnel) to Escape
+        // and the result list's own Up/Down/Enter is decided here first.
+        if (_searchBar.Visibility == Visibility.Visible)
+        {
+            if (e.Key == Key.Escape)
+            {
+                CloseFindOverlay(rememberQuery: true);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Down)
+            {
+                MoveSearchSelection(1);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Up)
+            {
+                MoveSearchSelection(-1);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Enter)
+            {
+                ActivateSelectedSearchResult();
+                e.Handled = true;
+            }
+
+            return;
+        }
+
         // The same shortcut Windows uses to send a window to another monitor.
         if (e.Key is Key.Left or Key.Right
             && Keyboard.Modifiers == (ModifierKeys.Windows | ModifierKeys.Shift))
@@ -1757,6 +2283,31 @@ internal sealed class DesktopGroupWindow : Window
                 ApplyZoomDelta(-0.1);
                 e.Handled = true;
             }
+            else if (e.Key == Key.A)
+            {
+                SelectAllEntries();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.C)
+            {
+                CopySelectedToClipboard(cut: false);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.X)
+            {
+                CopySelectedToClipboard(cut: true);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.V)
+            {
+                PasteFromClipboard();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.F)
+            {
+                OpenFindOverlay();
+                e.Handled = true;
+            }
 
             return;
         }
@@ -1776,6 +2327,210 @@ internal sealed class DesktopGroupWindow : Window
             RenameSelectedEntry();
             e.Handled = true;
         }
+    }
+
+    private void SelectAllEntries()
+    {
+        _selectedEntries.Clear();
+        foreach (var entry in GroupEntries.Enumerate(_category))
+        {
+            _selectedEntries.Add(entry);
+        }
+
+        RefreshSelectionVisuals();
+    }
+
+    /// <summary>
+    /// Puts the selected tiles' underlying files on the Windows clipboard as a real
+    /// file drop, so Ctrl+V works here and in Explorer alike. Subfolders are skipped:
+    /// they are this app's own grouping, not a real folder on disk, so there is nothing
+    /// to hand the clipboard.
+    /// </summary>
+    private void CopySelectedToClipboard(bool cut)
+    {
+        var candidates = _selectedEntries
+            .OfType<LaunchItem>()
+            .Select(item => (item, path: ShellCommands.TryResolveTarget(item, out var resolved) ? resolved : null))
+            .Where(x => x.path is not null)
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            return;
+        }
+
+        var data = new System.Windows.DataObject();
+        data.SetData(System.Windows.DataFormats.FileDrop, candidates.Select(x => x.path!).ToArray());
+        // The convention Explorer itself uses to tell a paste-as-copy from a paste-as-move.
+        data.SetData("Preferred DropEffect", new MemoryStream(BitConverter.GetBytes(cut ? 2 : 5)));
+
+        try
+        {
+            System.Windows.Clipboard.SetDataObject(data, true);
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            // Another process owns the clipboard right now; nothing to recover.
+            return;
+        }
+
+        // Whatever was pending before belongs to a clipboard state that no longer
+        // exists — this copy or cut just replaced it.
+        ClearPendingCuts();
+
+        if (!cut)
+        {
+            return;
+        }
+
+        foreach (var (item, path) in candidates)
+        {
+            _pendingCuts.Add(new PendingCut(this, item, path!));
+        }
+
+        RefreshCutVisuals();
+        StartPendingCutWatcher();
+    }
+
+    /// <summary>Accepts files copied or cut anywhere in Windows the same way a drag-drop does.</summary>
+    private void PasteFromClipboard()
+    {
+        if (!System.Windows.Clipboard.ContainsFileDropList())
+        {
+            return;
+        }
+
+        var paths = System.Windows.Clipboard.GetFileDropList()
+            .Cast<string>()
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .ToArray();
+
+        if (paths.Length == 0)
+        {
+            return;
+        }
+
+        var offset = 0.0;
+        foreach (var path in paths)
+        {
+            var item = new LaunchItem
+            {
+                Name = Path.GetFileNameWithoutExtension(path),
+                Type = InferType(path),
+                Target = path,
+                IsDesktopPinned = true,
+                DesktopIconX = PaddingX + offset,
+                DesktopIconY = PaddingY + offset
+            };
+
+            _category.Items.Add(item);
+            offset += 16;
+        }
+
+        // This paste is what finally consumes a pending Ctrl+X: only now does the
+        // source group actually let go of it, whether the paste landed here or in
+        // another group in this same app.
+        FinalizePendingCuts(paths);
+        FinishStructuralChange();
+    }
+
+    private sealed record PendingCut(DesktopGroupWindow Owner, LaunchItem Item, string Path);
+
+    private static readonly List<PendingCut> _pendingCuts = new();
+    private static DispatcherTimer? _pendingCutWatcher;
+
+    /// <summary>Half-opacity, the same way Explorer dims an icon between Cut and Paste.</summary>
+    private void RefreshCutVisuals()
+    {
+        foreach (var (entry, tile) in _tilesByEntry)
+        {
+            tile.Opacity = _pendingCuts.Any(p => ReferenceEquals(p.Owner, this) && ReferenceEquals(p.Item, entry))
+                ? 0.5
+                : 1.0;
+        }
+    }
+
+    private static void ClearPendingCuts()
+    {
+        if (_pendingCuts.Count == 0)
+        {
+            return;
+        }
+
+        var owners = _pendingCuts.Select(p => p.Owner).Distinct().ToList();
+        _pendingCuts.Clear();
+        foreach (var owner in owners)
+        {
+            owner.RefreshCutVisuals();
+        }
+
+        StopPendingCutWatcherIfIdle();
+    }
+
+    private static void FinalizePendingCuts(IReadOnlyCollection<string> pastedPaths)
+    {
+        var matched = _pendingCuts
+            .Where(p => pastedPaths.Contains(p.Path, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+
+        RemovePendingCuts(matched);
+    }
+
+    private static void RemovePendingCuts(List<PendingCut> pending)
+    {
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var group in pending.GroupBy(p => p.Owner))
+        {
+            foreach (var entry in group)
+            {
+                group.Key._category.Items.Remove(entry.Item);
+                _pendingCuts.Remove(entry);
+            }
+
+            group.Key.FinishStructuralChange();
+        }
+
+        StopPendingCutWatcherIfIdle();
+    }
+
+    private static void StartPendingCutWatcher()
+    {
+        if (_pendingCutWatcher is not null)
+        {
+            return;
+        }
+
+        // Real Explorer never tells us a cut file was pasted elsewhere and physically
+        // moved — the only outside signal available is that the file stops existing at
+        // the path it was cut from. Polling is the only option; a couple of seconds of
+        // lag before the icon disappears is an acceptable trade for not hooking the shell.
+        _pendingCutWatcher = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _pendingCutWatcher.Tick += (_, _) => CheckPendingCutsAgainstDisk();
+        _pendingCutWatcher.Start();
+    }
+
+    private static void CheckPendingCutsAgainstDisk()
+    {
+        var gone = _pendingCuts
+            .Where(p => !File.Exists(p.Path) && !Directory.Exists(p.Path))
+            .ToList();
+
+        RemovePendingCuts(gone);
+    }
+
+    private static void StopPendingCutWatcherIfIdle()
+    {
+        if (_pendingCuts.Count > 0 || _pendingCutWatcher is null)
+        {
+            return;
+        }
+
+        _pendingCutWatcher.Stop();
+        _pendingCutWatcher = null;
     }
 
     private void ApplyZoomDelta(double delta)

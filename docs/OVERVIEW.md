@@ -59,8 +59,54 @@ App (ele arrasta o `EasyWinMenu.Core` pela referência de projeto).
   alternando por visibilidade em vez de reconstruir; isso é o que permite
   voltar de um modo para o outro nas mesmas dimensões e posição anteriores
   (`MenuCategory.PanelX/PanelY` guarda onde o painel estava).
+  - Redimensiona por qualquer ponto da borda, não só por um canto: oito tiras
+    invisíveis (`BuildResizeHandles`) cobrem os quatro lados e os quatro
+    cantos do painel, cada uma com seu próprio cursor e sua própria borda
+    oposta como âncora fixa (`OnResizeMouseMove`), do mesmo jeito que uma
+    janela comum do Windows.
+  - Dentro do painel, Ctrl+A seleciona tudo, Ctrl+C/Ctrl+X colocam os
+    arquivos por trás dos ícones selecionados na área de transferência real
+    do Windows (formato `CF_HDROP`, com o `Preferred DropEffect` que o
+    Explorer também usa para diferenciar copiar de recortar), e Ctrl+V aceita
+    de volta qualquer arquivo copiado em qualquer lugar do Windows, fixando-o
+    como um novo ícone — o mesmo caminho que o arrastar-e-soltar já usava.
+    Subpastas do grupo ficam de fora: são um agrupamento do próprio app, não
+    uma pasta real em disco, então não há o que copiar. Um Ctrl+X **não**
+    remove o ícone na hora — ele fica meio-opaco (como o Explorer faz) e só
+    sai do grupo quando algo de fato aceita o "colar": um Ctrl+V em outro
+    grupo deste mesmo app finaliza a remoção na hora; para um paste externo de
+    verdade (Explorer), não existe um sinal do Windows para "terminou" — o
+    grupo faz *polling* a cada 2s (`CheckPendingCutsAgainstDisk`) e só
+    remove quando o arquivo realmente some do caminho original, o que só
+    acontece se algo o moveu de fato.
+  - Ícones no modo painel são organizados por um dos três modos "vivos" de
+    `IconArrangement` (grade automática, por nome, por tipo) ou por posição
+    livre (`None`, o padrão). O modo escolhido é salvo em
+    `MenuCategory.IconArrangement` e reaplicado sozinho (`ReapplyArrangementIfActive`
+    via `FinishStructuralChange`) toda vez que algo muda — soltar um arquivo,
+    colar, apagar, renomear — não só no momento em que o menu foi clicado.
+  - A borda do painel não vem do tema: é derivada da cor de fundo efetiva,
+    10% mais clara (ou 10% mais escura, quando o fundo já é branco ou quase
+    branco) — `ComputeGroupBorderColor`, recalculada toda vez que o fundo
+    muda.
+  - Passar o mouse sobre um ícone dá um leve aumento de escala e um tingimento
+    do fundo, animados (`AttachHoverEffect`), do jeito que um cartão numa
+    página web reage ao hover — sem competir com o destaque mais forte da
+    seleção.
+  - **Ctrl+F**, só no modo painel, abre uma barra de busca sob o título
+    (`BuildSearchBar`) com contador de resultados ao vivo, destaque do trecho
+    buscado dentro do próprio nome do ícone, e uma lista suspensa
+    (`Popup` + `ListBox`) navegável com seta para cima/baixo; Enter num
+    resultado tem o mesmo efeito que dar duplo clique nele e fecha a busca.
+    Esc também fecha. Os dois únicos momentos em que o texto buscado é
+    lembrado para a próxima vez são exatamente esses — Enter num resultado ou
+    Esc — nunca um simples perder o foco.
 - **`AppFolderTile`** — o ladrilho fechado: mosaico 3×3 dos primeiros ícones,
-  selo de contagem, nome do grupo. Puramente desenho, sem estado.
+  selo de contagem, nome do grupo. Puramente desenho, sem estado. Ao ser
+  colocado como o ícone do grupo na área de trabalho (`DesktopGroupWindow`,
+  modo App Folder), é desenhado **40% maior** via `LayoutTransform` — o
+  tamanho de fábrica do `AppFolderTile` é usado sem escala em qualquer outro
+  lugar que venha a reutilizá-lo.
 - **`GroupOverlayWindow`** — a folha que abre ao tocar o ladrilho. Tamanho:
   `min(2× a largura/altura do painel, 60%/50% da área útil do monitor)`,
   centralizada, nunca em tela cheia. Navega para dentro de subpastas sem abrir
@@ -78,12 +124,28 @@ App (ele arrasta o `EasyWinMenu.Core` pela referência de projeto).
   virar o padrão, aplicar o papel de parede). Implementado em `App.xaml.cs`,
   porque só quem possui a configuração inteira pode reescrever os outros
   grupos.
-- **`DesktopContextMenuBuilder`** — o menu de clique direito na área de
-  trabalho vazia (Novo grupo, Recolher tudo, Reunir tudo, Configurações).
-  **Não usa hook nenhum** — ver a nota de segurança abaixo.
+- **`DesktopContextMenuBuilder`** — **atualmente sem uso.** Foi escrito para
+  desenhar um menu de clique direito temático na área de trabalho vazia, mas
+  depois que a seção "Grupos não vivem dentro da área de trabalho" (abaixo)
+  decidiu não reparentar os grupos no `Progman`/`SHELLDLL_DefView`, o app não
+  tem como interceptar o clique direito na área de trabalho real — não sobrou
+  chamador para esta classe. A integração real com o clique direito do
+  Windows é outra, ver `DesktopContextMenuRegistration` logo abaixo.
 
 ### Serviços (`src/EasyWinMenu.App/Services/`)
 
+- **`DesktopContextMenuRegistration`** — registra um submenu de verdade sob
+  `HKCU\...\DesktopBackground\Shell` (o truque clássico de verbos por
+  registro — sem extensão COM, sem hook) com quatro comandos (novo grupo,
+  colapsar/expandir todos, todos em App Folder, todos em painel). Cada verbo
+  só relança o próprio `.exe` com um argumento `--desktop-action=...`; quem
+  decide se isso inicia o app do zero ou entrega o comando ao processo já
+  aberto é o `SingleInstanceCoordinator`. Roda em todo startup (idempotente),
+  então os rótulos acompanham o idioma atual do app.
+- **`SingleInstanceCoordinator`** — um `Mutex` nomeado decide quem é a
+  primeira instância; qualquer instância seguinte manda a ação recebida por
+  um named pipe (`EasyWinMenu.DesktopAction`) e sai imediatamente, sem abrir
+  um segundo ícone de bandeja ou duplicar os grupos.
 - **`IconCacheService`** — ícones vêm da lista de imagens do shell
   (`SHGetImageList`, tamanho jumbo/256px), com fallback em
   `Icon.ExtractAssociatedIcon`. O cache em disco é **PNG**, não `.ico`:
@@ -123,9 +185,12 @@ Uma versão anterior tinha um hook `WH_MOUSE_LL` que fazia
 de hook de baixo nível tem um prazo rígido do Windows (~300ms), e uma chamada
 síncrona entre processos ali trava o mouse do sistema inteiro até o Explorer
 responder, ou faz o Windows remover o hook silenciosamente quando estoura o
-prazo. **Foi removido.** O menu de clique direito na área de trabalho hoje é
-construído sem hook nenhum (`DesktopContextMenuBuilder`), e as duas ações que
-ele oferecia (recolher tudo, reunir tudo) também estão na bandeja.
+prazo. **Foi removido**, e nenhum hook voltou desde então — inclusive o
+menu de contexto real que o app hoje coloca na área de trabalho
+(`DesktopContextMenuRegistration`) é puro registro do Windows: o Explorer lê
+as chaves e decide sozinho quando mostrar o item, sem o app interceptar nada
+do clique. As ações que esse menu antigo oferecia (recolher tudo, reunir
+tudo) também estão na bandeja.
 
 ## Decisões de arquitetura
 
@@ -148,7 +213,7 @@ do modo pasta de app), a decisão foi **não ancorar**: os grupos continuam
 como janelas flutuantes normais, e o problema do "Mostrar área de trabalho"
 foi resolvido de outro jeito (próxima seção).
 
-### Atalho de restaurar grupos (padrão: Ctrl+Alt+D)
+### Atalho de restaurar grupos (padrão: Win+Ctrl+Alt+D)
 
 "Mostrar área de trabalho" (e Win+M) **não minimiza de verdade** uma janela
 sem botão na barra de tarefas — o que os grupos são, de propósito

@@ -24,10 +24,27 @@ public partial class App : Application, IDesktopGroupCommands
     private GlobalHotkeyService? _hotkeyService;
     private DesktopOrganizerService? _desktopOrganizer;
     private SettingsWindow? _settingsWindow;
+    private SingleInstanceCoordinator? _singleInstance;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        _singleInstance = new SingleInstanceCoordinator();
+        if (!_singleInstance.IsFirstInstance)
+        {
+            // This launch exists only to carry a desktop context-menu verb (or a stray
+            // double-click) to the instance that is already running.
+            var forwardedAction = DesktopContextMenuRegistration.ParseAction(e.Args);
+            if (forwardedAction is not null)
+            {
+                SingleInstanceCoordinator.TrySendToRunningInstance(forwardedAction);
+            }
+
+            _singleInstance.Dispose();
+            Shutdown();
+            return;
+        }
 
         _configurationStore = new ConfigurationStore(ApplicationPaths.ConfigFilePath);
         _configuration = _configurationStore.Load();
@@ -90,6 +107,46 @@ public partial class App : Application, IDesktopGroupCommands
                 ShowTrayMenu();
             }
         };
+
+        DesktopContextMenuRegistration.Register();
+        _singleInstance.StartListening(action => Dispatcher.Invoke(() => HandleDesktopAction(action)));
+
+        // This very launch can itself carry a verb — the desktop context menu when the
+        // app was closed relaunches it directly rather than going through the pipe.
+        var startupAction = DesktopContextMenuRegistration.ParseAction(e.Args);
+        if (startupAction is not null)
+        {
+            HandleDesktopAction(startupAction);
+        }
+    }
+
+    private void HandleDesktopAction(string action)
+    {
+        switch (action)
+        {
+            case DesktopContextMenuRegistration.NewGroupAction:
+                CreateDesktopGroup();
+                break;
+            case DesktopContextMenuRegistration.ToggleCollapseAllAction:
+                _desktopOrganizer?.ToggleCollapseAll();
+                break;
+            case DesktopContextMenuRegistration.AllAppFolderAction:
+                SetAllGroupsDisplayMode(DesktopGroupDisplayMode.AppFolder);
+                break;
+            case DesktopContextMenuRegistration.AllPanelAction:
+                SetAllGroupsDisplayMode(DesktopGroupDisplayMode.Panel);
+                break;
+        }
+    }
+
+    private void SetAllGroupsDisplayMode(DesktopGroupDisplayMode mode)
+    {
+        foreach (var group in DesktopOrganizerService.AllDesktopGroups(_configuration!))
+        {
+            group.DisplayMode = mode;
+        }
+
+        SaveAndReloadGroups();
     }
 
     /// <summary>
@@ -286,6 +343,7 @@ public partial class App : Application, IDesktopGroupCommands
         _hotkeyService?.Dispose();
         _desktopOrganizer?.StopWatchingDisplays();
         _desktopOrganizer?.CloseAll();
+        _singleInstance?.Dispose();
         base.OnExit(e);
     }
 }

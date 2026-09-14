@@ -218,7 +218,90 @@ imunidade ao "Mostrar área de trabalho", que já foi resolvida de outro jeito
 no item 9. Documente a decisão e o porquê, para não ser retestada às cegas
 de novo.
 
-## 11. Documentação e versionamento
+## 11. Atalhos de arquivo e redimensionar por qualquer borda
+
+Dentro de um grupo (painel), os atalhos padrão do Windows para copiar,
+recortar, colar e selecionar tudo não funcionavam — só o clique com Ctrl
+alternava a seleção de um ícone por vez, e não havia nenhum jeito por
+teclado de agir sobre a seleção. Implemente:
+
+- **Ctrl+A** seleciona todos os ícones do grupo (subpastas e itens
+  fixados).
+- **Ctrl+C** e **Ctrl+X** colocam os arquivos por trás dos ícones
+  selecionados na área de transferência de verdade do Windows (não uma área
+  de transferência interna do app), para colar em qualquer lugar — inclusive
+  no Explorer. Recortar também marca o `Preferred DropEffect` como "mover"
+  (a mesma convenção que o Explorer usa para desenhar o ícone apagado) e
+  desafixa os itens copiados deste grupo. Subpastas do grupo são ignoradas:
+  são um agrupamento do próprio app, sem uma pasta real em disco por trás
+  para copiar.
+- **Ctrl+V** aceita qualquer arquivo que esteja na área de transferência
+  (copiado do Explorer ou de outro grupo) e o fixa como um novo ícone, pelo
+  mesmo caminho que soltar um arquivo arrastado já usava.
+
+Também só dava para redimensionar o grupo puxando um único ícone no canto
+inferior direito. Troque por oito zonas de arraste invisíveis cobrindo os
+quatro lados e os quatro cantos do painel — puxar qualquer uma redimensiona
+a partir dali, mantendo a borda oposta fixa no lugar, do jeito que qualquer
+janela do Windows já se comporta.
+
+## 12. Um lote de acabamentos e recursos do painel
+
+- **Arranjar automaticamente / ordenar por nome / ordenar por tipo** deixam de
+  ser um comando de "fazer uma vez": a escolha fica salva por grupo
+  (`MenuCategory.IconArrangement`) e é **reaplicada sozinha** toda vez que o
+  conjunto de ícones muda — soltar um arquivo, colar, apagar, renomear —
+  não só no instante em que o item de menu foi clicado. Um grupo em posição
+  livre (o padrão de sempre) continua livre; nada disso se aplica a ele.
+- Troque o atalho global padrão de restaurar grupos de **Ctrl+Alt+D** para
+  **Win+Ctrl+Alt+D** (o usuário já usa Ctrl+Alt+D para outra coisa).
+- No Ctrl+X de um ícone dentro de um grupo: **não remova na hora.** O ícone
+  fica meio-opaco, do jeito que o Explorer marca um recorte pendente, e só
+  sai do grupo quando algo de fato consome o "colar" — um Ctrl+V em outro
+  grupo deste mesmo app finaliza a remoção ali mesmo. Para um paste externo
+  de verdade (arrastar para o Explorer, por exemplo), o Windows não avisa
+  ninguém quando isso termina; a única saída é conferir periodicamente se o
+  arquivo original ainda existe no caminho de onde foi recortado, e remover o
+  ícone quando ele não existir mais — aceite o atraso de alguns segundos como
+  o preço de não precisar de um hook do shell.
+- A borda de um grupo deixa de vir do tema: é **derivada da cor de fundo
+  efetiva**, 10% mais clara — ou 10% mais escura quando o fundo já é branco
+  ou perto disso, onde clarear não mudaria nada visível.
+- Passar o mouse sobre um ícone dentro do painel dá um retorno visual "como
+  a web dá": um leve aumento de escala e um tingimento do fundo, animados,
+  em vez de mudar de estado sem transição nenhuma. Não compete com o
+  destaque, mais forte, de um ícone selecionado.
+- O ladrilho fechado (estilo App Folder) nasce **40% maior** quando é o que
+  fica na área de trabalho — do jeito que ele já existe hoje é pequeno demais
+  perto de ícones reais do Windows ao lado.
+- **Ctrl+F**, só no modo painel (o modo App Folder não tem o que buscar):
+  abre uma barra de busca sob o título do grupo. Enquanto digita: destaca o
+  trecho digitado dentro do nome de cada ícone que bate, mostra um contador
+  de quantos bateram, e alimenta uma lista suspensa dos resultados navegável
+  com seta para cima/para baixo. Enter num resultado da lista tem exatamente
+  o mesmo efeito que dar duplo clique nele, e fecha a busca. Esc também
+  fecha. O texto buscado só é lembrado para a próxima vez que abrir com
+  Ctrl+F nesses dois momentos — Enter num resultado, ou Esc — nunca por
+  simplesmente clicar fora ou perder o foco.
+- No menu de contexto **real do Windows** (clique direito na área de
+  trabalho vazia, fora do app), adicione um submenu com: novo grupo,
+  colapsar/expandir todos os grupos, trocar todos para o estilo App Folder,
+  trocar todos para o estilo painel. Isso não é o menu temático do app — o
+  app não tem como interceptar o clique na área de trabalho real (ver a
+  decisão de não ancorar os grupos, seção 10) — é um registro de verdade sob
+  `HKCU\...\DesktopBackground\Shell`, o mesmo truque que outras ferramentas
+  usam para colocar um verbo estático no menu do Explorer, sem shell
+  extension e sem hook. Cada verbo apenas relança o próprio executável com
+  um argumento; isso precisa que o app saiba se já existe uma instância rodando
+  — sem esse controle, cada clique nesses itens abriria um `EasyWinMenu.App.exe`
+  novo, com um segundo ícone de bandeja e os grupos duplicados por cima dos
+  já abertos. A instância nova, ao perceber que já existe uma rodando, manda
+  o comando para ela (um named pipe é suficiente) e sai imediatamente sem
+  desenhar nada; instâncias abertas fora desse fluxo — um duplo clique comum
+  no `.exe`, por exemplo — não devem ficar presas nessa checagem além do
+  necessário para fechar sozinhas.
+
+## 13. Documentação e versionamento
 
 Mantenha dois documentos sempre sincronizados com o código, atualizados no
 mesmo commit de qualquer mudança:

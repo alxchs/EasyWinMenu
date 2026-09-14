@@ -14,7 +14,7 @@ public sealed class LauncherBehavior
     /// stays minimized after the shell's own restore unless asked for explicitly.
     /// </summary>
     public bool RestoreGroupsHotkeyEnabled { get; set; } = true;
-    public HotkeyModifiers RestoreGroupsHotkeyModifiers { get; set; } = HotkeyModifiers.Control | HotkeyModifiers.Alt;
+    public HotkeyModifiers RestoreGroupsHotkeyModifiers { get; set; } = HotkeyModifiers.Windows | HotkeyModifiers.Control | HotkeyModifiers.Alt;
     public string RestoreGroupsHotkeyKey { get; set; } = "D";
     public AppThemeMode AppTheme { get; set; } = AppThemeMode.System;
     public string? Language { get; set; }
