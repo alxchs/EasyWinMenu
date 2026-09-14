@@ -355,7 +355,23 @@ finais (um parâmetro de escala que multiplica cada medida antes de montar o
 visual). Mais seguro por construção: não existe uma camada de transform
 separada para o hit-test poder discordar do que foi desenhado.
 
-## 16. Documentação e versionamento
+## 16. Busca por digitação e clique único quebrando a seleção
+
+Implemente a busca por digitação de dentro de um grupo do jeito que o
+Windows Explorer já faz dentro de qualquer pasta: sem apertar atalho
+nenhum, só começar a digitar já pula a seleção para o primeiro ícone cujo
+nome comece com o que foi digitado, acumulando letras dentro de cerca de 1
+segundo uma da outra e recomeçando depois de uma pausa. Isso é diferente do
+Ctrl+F que já existe (aquele abre uma caixa com contador e lista) — vale
+tanto no painel livre quanto dentro da folha do estilo App Folder.
+
+No estilo App Folder, um clique único num ícone não pode mais abri-lo na
+hora — isso tira a chance de só selecionar um ícone para fazer outra coisa
+com ele (por exemplo, escolher antes de decidir a ação). Clique único
+seleciona; abrir é duplo clique ou Enter, do mesmo jeito que qualquer
+pasta de ícones do Windows já se comporta.
+
+## 17. Documentação e versionamento
 
 Mantenha dois documentos sempre sincronizados com o código, atualizados no
 mesmo commit de qualquer mudança:

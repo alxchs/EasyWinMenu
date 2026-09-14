@@ -52,6 +52,13 @@ internal sealed class GroupOverlayWindow : Window
     private bool _closing;
     private bool _armed;
 
+    private readonly Dictionary<object, Border> _tilesByEntry = new();
+    private readonly Dictionary<object, Action> _openActionsByEntry = new();
+    private object? _selectedEntry;
+    private string _typeAheadBuffer = string.Empty;
+    private DateTime _typeAheadLastInput;
+    private static readonly TimeSpan TypeAheadTimeout = TimeSpan.FromSeconds(1);
+
     public GroupOverlayWindow(
         MenuCategory category,
         MenuTheme theme,
@@ -80,6 +87,7 @@ internal sealed class GroupOverlayWindow : Window
         PlaceNear(anchor);
 
         PreviewKeyDown += OnPreviewKeyDown;
+        PreviewTextInput += OnPreviewTextInput;
         MouseLeftButtonDown += OnBackdropClick;
         Loaded += (_, _) => PlayOpenAnimation();
 
@@ -152,6 +160,9 @@ internal sealed class GroupOverlayWindow : Window
     {
         _title.Text = Current.Name;
         _grid.Children.Clear();
+        _tilesByEntry.Clear();
+        _openActionsByEntry.Clear();
+        _selectedEntry = null;
 
         if (_trail.Count > 1)
         {
@@ -159,7 +170,8 @@ internal sealed class GroupOverlayWindow : Window
                 LocalizationService.Get("overlay.back"),
                 null,
                 "",
-                NavigateUp));
+                NavigateUp,
+                entry: null));
         }
 
         foreach (var entry in GroupEntries.Enumerate(Current))
@@ -167,7 +179,7 @@ internal sealed class GroupOverlayWindow : Window
             switch (entry)
             {
                 case MenuCategory folder:
-                    _grid.Children.Add(BuildTile(folder.Name, null, "", () => NavigateInto(folder)));
+                    _grid.Children.Add(BuildTile(folder.Name, null, "", () => NavigateInto(folder), folder));
                     break;
                 case LaunchItem item:
                     _grid.Children.Add(BuildTile(
@@ -178,7 +190,8 @@ internal sealed class GroupOverlayWindow : Window
                         {
                             _onExecute(item);
                             BeginClose();
-                        }));
+                        },
+                        item));
                     break;
             }
         }
@@ -195,7 +208,7 @@ internal sealed class GroupOverlayWindow : Window
         }
     }
 
-    private FrameworkElement BuildTile(string caption, ImageSource? icon, string glyphFallback, Action onActivate)
+    private FrameworkElement BuildTile(string caption, ImageSource? icon, string glyphFallback, Action onActivate, object? entry)
     {
         var visual = icon is not null
             ? new Image
@@ -244,16 +257,59 @@ internal sealed class GroupOverlayWindow : Window
             Child = stack
         };
 
-        var hover = ThemeBrushes.CreateBrush(_theme.HighlightColor, 1.0);
-        tile.MouseEnter += (_, _) => tile.Background = hover;
-        tile.MouseLeave += (_, _) => tile.Background = Brushes.Transparent;
+        if (entry is not null)
+        {
+            _tilesByEntry[entry] = tile;
+            _openActionsByEntry[entry] = onActivate;
+        }
+
+        tile.MouseEnter += (_, _) =>
+        {
+            if (!ReferenceEquals(_selectedEntry, entry))
+            {
+                tile.Background = ThemeBrushes.CreateBrush(_theme.HighlightColor, 0.45);
+            }
+        };
+        tile.MouseLeave += (_, _) =>
+        {
+            if (!ReferenceEquals(_selectedEntry, entry))
+            {
+                tile.Background = Brushes.Transparent;
+            }
+        };
         tile.MouseLeftButtonDown += (_, e) =>
         {
             e.Handled = true;
-            onActivate();
+
+            // The back tile has no selection state of its own — a single click always
+            // just navigates up, the way it always did.
+            if (entry is null || e.ClickCount >= 2)
+            {
+                onActivate();
+                return;
+            }
+
+            SelectEntry(entry);
         };
 
         return tile;
+    }
+
+    /// <summary>
+    /// A single click used to open the icon outright, which meant there was never a
+    /// chance to just highlight one before deciding what to do with it. Now it only
+    /// selects — double-click (or Enter) is what actually activates it, the same split
+    /// Explorer's own icon views use.
+    /// </summary>
+    private void SelectEntry(object entry)
+    {
+        _selectedEntry = entry;
+        foreach (var (candidate, tile) in _tilesByEntry)
+        {
+            tile.Background = ReferenceEquals(_selectedEntry, candidate)
+                ? ThemeBrushes.CreateBrush(_theme.HighlightColor, 1.0)
+                : Brushes.Transparent;
+        }
     }
 
     private void NavigateInto(MenuCategory folder)
@@ -351,6 +407,13 @@ internal sealed class GroupOverlayWindow : Window
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Enter && _selectedEntry is not null && _openActionsByEntry.TryGetValue(_selectedEntry, out var activate))
+        {
+            e.Handled = true;
+            activate();
+            return;
+        }
+
         if (e.Key != Key.Escape)
         {
             return;
@@ -364,6 +427,47 @@ internal sealed class GroupOverlayWindow : Window
         }
 
         BeginClose();
+    }
+
+    /// <summary>
+    /// The same Explorer type-to-select as the panel view: typing jumps the selection to
+    /// the first icon in the current folder whose name starts with what has been typed so
+    /// far, resetting after a pause. See <see cref="DesktopGroupWindow"/>'s own copy of
+    /// this for the fuller rationale — kept separate here because this window walks its
+    /// own trail of folders instead of a single category.
+    /// </summary>
+    private void OnPreviewTextInput(object sender, System.Windows.Input.TextCompositionEventArgs e)
+    {
+        if (string.IsNullOrEmpty(e.Text) || char.IsControl(e.Text[0]))
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        if (now - _typeAheadLastInput > TypeAheadTimeout)
+        {
+            _typeAheadBuffer = string.Empty;
+        }
+
+        _typeAheadLastInput = now;
+        _typeAheadBuffer += e.Text;
+
+        var entries = GroupEntries.Enumerate(Current).ToList();
+        var match = entries.FirstOrDefault(entry =>
+            GroupEntries.NameOf(entry).StartsWith(_typeAheadBuffer, StringComparison.CurrentCultureIgnoreCase));
+
+        if (match is null && _typeAheadBuffer.Length > 1)
+        {
+            _typeAheadBuffer = e.Text;
+            match = entries.FirstOrDefault(entry =>
+                GroupEntries.NameOf(entry).StartsWith(_typeAheadBuffer, StringComparison.CurrentCultureIgnoreCase));
+        }
+
+        if (match is not null)
+        {
+            SelectEntry(match);
+            e.Handled = true;
+        }
     }
 
     private void BeginClose()

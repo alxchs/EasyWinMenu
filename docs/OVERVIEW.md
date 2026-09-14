@@ -172,6 +172,18 @@ funciona de fora desta rede, sem custo.
   `min(2× a largura/altura do painel, 60%/50% da área útil do monitor)`,
   centralizada, nunca em tela cheia. Navega para dentro de subpastas sem abrir
   janelas novas; Esc sobe um nível e só fecha quando já está na raiz.
+  - Um clique num ícone **seleciona**, não abre mais na hora — abrir é
+    duplo clique ou Enter (`SelectEntry` / `_openActionsByEntry`). Antes,
+    um único clique já disparava a ação, o que tirava a chance de só marcar
+    um ícone para fazer outra coisa com ele. O ladrilho de "voltar" continua
+    sem estado de seleção — clicar nele sempre sobe um nível na hora.
+  - Digitar sem nenhum atalho faz o mesmo "pular para o item" do Explorer:
+    acumula os caracteres digitados dentro de 1s um do outro e seleciona o
+    primeiro ícone da pasta atual cujo nome comece com o texto acumulado
+    (`OnPreviewTextInput`). O painel (`DesktopGroupWindow`) tem a mesma
+    lógica, independente do Ctrl+F que já existia — o Ctrl+F abre uma caixa
+    de busca com contador e lista; digitar sem Ctrl+F só pula a seleção,
+    sem abrir nada na tela, do jeito que o Explorer sempre fez.
 - **`GroupEntries`** — enumera os itens de um grupo (subpastas + itens fixados)
   na mesma ordem para o ladrilho, a folha e o painel concordarem sobre "o que
   tem dentro".

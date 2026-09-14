@@ -101,6 +101,9 @@ internal sealed class DesktopGroupWindow : Window
     private System.Windows.Controls.ListBox _searchResultsList = null!;
     private readonly List<object> _searchMatches = new();
     private string _lastSearchText = string.Empty;
+    private string _typeAheadBuffer = string.Empty;
+    private DateTime _typeAheadLastInput;
+    private static readonly TimeSpan TypeAheadTimeout = TimeSpan.FromSeconds(1);
 
     private ResizeEdge _resizeEdge = ResizeEdge.None;
     private System.Windows.Point? _placedAt;
@@ -162,6 +165,7 @@ internal sealed class DesktopGroupWindow : Window
 
         PreviewMouseWheel += OnPreviewMouseWheel;
         PreviewKeyDown += OnPreviewKeyDown;
+        PreviewTextInput += OnPreviewTextInput;
         LocationChanged += OnLocationChanged;
         Drop += OnDrop;
         Closed += (_, _) =>
@@ -2260,6 +2264,54 @@ internal sealed class DesktopGroupWindow : Window
 
         ApplyZoomDelta(e.Delta > 0 ? 0.1 : -0.1);
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// Explorer-style type-to-select: with nothing else capturing the keyboard, typing a
+    /// name jumps the selection to the first icon whose name starts with it, accumulating
+    /// characters within <see cref="TypeAheadTimeout"/> of each other and starting over on
+    /// the next keystroke after a pause. This is separate from Ctrl+F — no box appears,
+    /// nothing is highlighted inside the name, it is just "start typing, land on the icon".
+    /// </summary>
+    private void OnPreviewTextInput(object sender, System.Windows.Input.TextCompositionEventArgs e)
+    {
+        if (_searchBar.Visibility == Visibility.Visible)
+        {
+            return;
+        }
+
+        if (string.IsNullOrEmpty(e.Text) || char.IsControl(e.Text[0]))
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        if (now - _typeAheadLastInput > TypeAheadTimeout)
+        {
+            _typeAheadBuffer = string.Empty;
+        }
+
+        _typeAheadLastInput = now;
+        _typeAheadBuffer += e.Text;
+
+        var entries = GroupEntries.Enumerate(_category).ToList();
+        var match = entries.FirstOrDefault(entry =>
+            GroupEntries.NameOf(entry).StartsWith(_typeAheadBuffer, StringComparison.CurrentCultureIgnoreCase));
+
+        if (match is null && _typeAheadBuffer.Length > 1)
+        {
+            // No entry continues the accumulated buffer — start over from just this
+            // keystroke instead, the same recovery Explorer's own type-ahead does.
+            _typeAheadBuffer = e.Text;
+            match = entries.FirstOrDefault(entry =>
+                GroupEntries.NameOf(entry).StartsWith(_typeAheadBuffer, StringComparison.CurrentCultureIgnoreCase));
+        }
+
+        if (match is not null)
+        {
+            SelectEntry(match, additive: false);
+            e.Handled = true;
+        }
     }
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
