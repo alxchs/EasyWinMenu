@@ -411,7 +411,34 @@ Outros acertos no mesmo lote:
   valendo o idioma configurado nas Configurações. Esse menu real ganha
   também uma entrada "Configurações..." (mesmo destino do item 3 acima).
 
-## 18. Documentação e versionamento
+## 18. O ladrilho de App Folder "sumia" ao arrastar
+
+Arrastar o ladrilho fechado do estilo App Folder às vezes fazia a janela do
+grupo desaparecer para sempre — só voltava trocando **todos** os grupos de
+volta para o estilo painel pelo menu de contexto real do Windows (o que
+força uma reconstrução completa da janela, com `Width`/`Height` explícitos
+de novo). Não bastava olhar o código e desconfiar: a suspeita óbvia (as
+zonas de redimensionar, ou o TileTransform da sessão anterior) não batia
+com o sintoma. Só reproduziu na prática montando um teste automatizado com
+UI Automation (`System.Windows.Automation`, não `GetWindowRect` — em uma
+máquina com DPI por monitor, `GetWindowRect` chamado de um processo sem
+DPI-awareness devolve coordenadas "virtualizadas" que não bate com a tela
+real, e isso por pouco não desviou a investigação inteira) simulando um
+arrasto de verdade e comparando a posição da janela antes/depois. A janela
+apareceu exatamente em `Int16.MinValue` num dos eixos — a pista que
+resolveu: era um problema de acúmulo de posição via duas chamadas de
+`PointToScreen` no mesmo evento de `MouseMove`, a segunda já depois da
+primeira ter alterado `Left`/`Top` da própria janela — em DPI por monitor,
+a segunda leitura podia vir escalada por um fator diferente da primeira. A
+correção trocou a lógica à mão por `DragMove()` (a mesma primitiva do WPF
+que já movia a janela pelo cabeçalho, robusta a monitores/DPI por
+delegar o arrasto de verdade para o Windows). Ao investigar um bug de
+posição/tamanho de janela que só aparece "às vezes" ou "em algum lugar
+esquisito", desconfie primeiro de contas de coordenada feitas à mão
+(`PointToScreen`/`Left +=`) em vez de uma primitiva nativa (`DragMove`,
+`DragResize`) — e meça com uma ferramenta que respeita DPI por monitor.
+
+## 19. Documentação e versionamento
 
 Mantenha dois documentos sempre sincronizados com o código, atualizados no
 mesmo commit de qualquer mudança:

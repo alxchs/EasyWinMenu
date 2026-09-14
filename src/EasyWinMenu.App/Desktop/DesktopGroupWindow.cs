@@ -112,8 +112,6 @@ internal sealed class DesktopGroupWindow : Window
     private System.Windows.Point? _placedAt;
     private DateTime _holdPlacementUntil;
     private DispatcherTimer? _persistMoveTimer;
-    private bool _draggingFolderTile;
-    private System.Windows.Point _folderDragOrigin;
     private System.Windows.Point _resizeOrigin;
     private double _resizeStartLeft;
     private double _resizeStartTop;
@@ -339,8 +337,6 @@ internal sealed class DesktopGroupWindow : Window
             Visibility = Visibility.Collapsed
         };
         _folderHost.MouseLeftButtonDown += OnFolderTileMouseDown;
-        _folderHost.MouseMove += OnFolderTileMouseMove;
-        _folderHost.MouseLeftButtonUp += OnFolderTileMouseUp;
         _folderHost.PreviewMouseRightButtonDown += (_, _) => _folderHost.ContextMenu = BuildHeaderContextMenu();
 
         _root = new Grid { Background = Brushes.Transparent };
@@ -508,36 +504,26 @@ internal sealed class DesktopGroupWindow : Window
         _onLayoutChanged(_category);
     }
 
+    /// <summary>
+    /// Drives the whole press-drag-release gesture through WPF's own <see cref="Window.DragMove"/>
+    /// — the same primitive the header already uses — instead of accumulating the move by
+    /// hand from <c>PointToScreen</c> deltas. The hand-rolled version was the actual cause
+    /// of the tile "disappearing": on a per-monitor-DPI-aware system, calling
+    /// <c>PointToScreen</c> a second time in the same handler, right after the window's own
+    /// position had just been changed by the first delta, could read back a value scaled by
+    /// a different DPI factor than the first call — landing the window at a corrupted
+    /// coordinate (observed once at exactly <c>Int16.MinValue</c>) with no monitor anywhere
+    /// near it. <c>DragMove</c> hands the whole drag to Windows itself, immune to that.
+    /// </summary>
     private void OnFolderTileMouseDown(object sender, MouseButtonEventArgs e)
     {
-        _draggingFolderTile = true;
-        _folderDragOrigin = PointToScreen(e.GetPosition(this));
-        _folderHost.CaptureMouse();
+        if (e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        DragMove();
         e.Handled = true;
-    }
-
-    private void OnFolderTileMouseMove(object sender, MouseEventArgs e)
-    {
-        if (!_draggingFolderTile)
-        {
-            return;
-        }
-
-        var current = PointToScreen(e.GetPosition(this));
-        Left += current.X - _folderDragOrigin.X;
-        Top += current.Y - _folderDragOrigin.Y;
-        _folderDragOrigin = PointToScreen(e.GetPosition(this));
-    }
-
-    private void OnFolderTileMouseUp(object sender, MouseButtonEventArgs e)
-    {
-        if (!_draggingFolderTile)
-        {
-            return;
-        }
-
-        _draggingFolderTile = false;
-        _folderHost.ReleaseMouseCapture();
 
         // A press that barely moved is a tap, not a drag: snap back and open the sheet.
         if (Math.Abs(Left - _category.DesktopX) < FolderTapTolerance

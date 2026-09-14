@@ -124,6 +124,19 @@ funciona de fora desta rede, sem custo.
   - A legenda do grupo tem uma dica (tooltip) resumindo suas configurações
     — estilo, organização, tamanho do ícone, opacidade, selo
     (`UpdateHeaderTooltip`), recalculada sempre que algo relevante muda.
+  - Arrastar o ladrilho fechado do App Folder usa `DragMove()` — a mesma
+    primitiva do WPF que já move a janela pelo cabeçalho — em vez de
+    acumular a posição à mão a partir de deltas de `PointToScreen`
+    (`OnFolderTileMouseDown`). A versão à mão foi a causa real de um bug em
+    que o ladrilho "sumia": num sistema com DPI por monitor, chamar
+    `PointToScreen` uma segunda vez no mesmo evento — logo depois de já ter
+    mudado `Left`/`Top` a partir da primeira leitura — podia ler de volta
+    um valor escalado por um fator de DPI diferente do da primeira chamada,
+    jogando a janela para uma coordenada corrompida (observado uma vez
+    bem exatamente em `Int16.MinValue`) sem monitor nenhum por perto.
+    Reproduzido de propósito via UI Automation antes de corrigir — ver
+    `PROMPT.md` para o passo a passo. O cabeçalho nunca teve esse problema
+    porque já usava `DragMove()` desde o início.
   - Redimensiona por qualquer ponto da borda, não só por um canto: oito tiras
     invisíveis (`BuildResizeHandles`) cobrem os quatro lados e os quatro
     cantos do painel, cada uma com seu próprio cursor e sua própria borda
