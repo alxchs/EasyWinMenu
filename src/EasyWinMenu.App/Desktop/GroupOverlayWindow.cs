@@ -13,15 +13,18 @@ using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
 using Color = System.Windows.Media.Color;
 using ColorConverter = System.Windows.Media.ColorConverter;
+using ContextMenu = System.Windows.Controls.ContextMenu;
 using Cursors = System.Windows.Input.Cursors;
 using FontFamily = System.Windows.Media.FontFamily;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Image = System.Windows.Controls.Image;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
+using MenuItem = System.Windows.Controls.MenuItem;
 using MouseButtonEventArgs = System.Windows.Input.MouseButtonEventArgs;
 using Orientation = System.Windows.Controls.Orientation;
 using Panel = System.Windows.Controls.Panel;
 using Point = System.Windows.Point;
+using Separator = System.Windows.Controls.Separator;
 using StackPanel = System.Windows.Controls.StackPanel;
 using TextBlock = System.Windows.Controls.TextBlock;
 
@@ -54,7 +57,7 @@ internal sealed class GroupOverlayWindow : Window
 
     private readonly Dictionary<object, Border> _tilesByEntry = new();
     private readonly Dictionary<object, Action> _openActionsByEntry = new();
-    private object? _selectedEntry;
+    private readonly HashSet<object> _selectedEntries = new();
     private string _typeAheadBuffer = string.Empty;
     private DateTime _typeAheadLastInput;
     private static readonly TimeSpan TypeAheadTimeout = TimeSpan.FromSeconds(1);
@@ -162,7 +165,7 @@ internal sealed class GroupOverlayWindow : Window
         _grid.Children.Clear();
         _tilesByEntry.Clear();
         _openActionsByEntry.Clear();
-        _selectedEntry = null;
+        _selectedEntries.Clear();
 
         if (_trail.Count > 1)
         {
@@ -261,18 +264,19 @@ internal sealed class GroupOverlayWindow : Window
         {
             _tilesByEntry[entry] = tile;
             _openActionsByEntry[entry] = onActivate;
+            tile.ContextMenu = BuildTileContextMenu(entry, onActivate);
         }
 
         tile.MouseEnter += (_, _) =>
         {
-            if (!ReferenceEquals(_selectedEntry, entry))
+            if (!_selectedEntries.Contains(entry!))
             {
                 tile.Background = ThemeBrushes.CreateBrush(_theme.HighlightColor, 0.45);
             }
         };
         tile.MouseLeave += (_, _) =>
         {
-            if (!ReferenceEquals(_selectedEntry, entry))
+            if (!_selectedEntries.Contains(entry!))
             {
                 tile.Background = Brushes.Transparent;
             }
@@ -289,7 +293,7 @@ internal sealed class GroupOverlayWindow : Window
                 return;
             }
 
-            SelectEntry(entry);
+            SelectEntry(entry, Keyboard.Modifiers == ModifierKeys.Control);
         };
 
         return tile;
@@ -299,17 +303,83 @@ internal sealed class GroupOverlayWindow : Window
     /// A single click used to open the icon outright, which meant there was never a
     /// chance to just highlight one before deciding what to do with it. Now it only
     /// selects — double-click (or Enter) is what actually activates it, the same split
-    /// Explorer's own icon views use.
+    /// Explorer's own icon views use. Ctrl+click extends the selection, matching the
+    /// panel view.
     /// </summary>
-    private void SelectEntry(object entry)
+    private void SelectEntry(object entry, bool additive)
     {
-        _selectedEntry = entry;
+        if (additive)
+        {
+            if (!_selectedEntries.Remove(entry))
+            {
+                _selectedEntries.Add(entry);
+            }
+        }
+        else
+        {
+            _selectedEntries.Clear();
+            _selectedEntries.Add(entry);
+        }
+
+        RefreshSelectionVisuals();
+    }
+
+    private void RefreshSelectionVisuals()
+    {
         foreach (var (candidate, tile) in _tilesByEntry)
         {
-            tile.Background = ReferenceEquals(_selectedEntry, candidate)
+            tile.Background = _selectedEntries.Contains(candidate)
                 ? ThemeBrushes.CreateBrush(_theme.HighlightColor, 1.0)
                 : Brushes.Transparent;
         }
+    }
+
+    /// <summary>
+    /// A plain context menu (not the panel's themed one) with the same everyday actions
+    /// the panel view's tiles already offer, so App Folder groups are not missing them
+    /// just because their icons live in this sheet instead of the free canvas.
+    /// </summary>
+    private ContextMenu BuildTileContextMenu(object entry, Action onActivate)
+    {
+        var menu = new ContextMenu();
+
+        static void AddItem(ContextMenu parent, string header, Action action)
+        {
+            var menuItem = new MenuItem { Header = header };
+            menuItem.Click += (_, _) => action();
+            parent.Items.Add(menuItem);
+        }
+
+        AddItem(menu, LocalizationService.Get("item.open"), onActivate);
+
+        if (entry is LaunchItem item)
+        {
+            if (ShellCommands.HasFileTarget(item))
+            {
+                AddItem(menu, LocalizationService.Get("item.runAsAdmin"), () => ShellCommands.RunAsAdministrator(item));
+                AddItem(menu, LocalizationService.Get("item.openFileLocation"), () => ShellCommands.RevealInExplorer(item));
+                menu.Items.Add(new Separator());
+                AddItem(menu, LocalizationService.Get("item.copyPath"), () => ShellCommands.CopyPath(item));
+            }
+
+            AddItem(menu, LocalizationService.Get("item.rename"), () => RenameEntry(item));
+            menu.Items.Add(new Separator());
+            AddItem(menu, LocalizationService.Get("item.removeFromGroup"), () => RemoveEntryOrSelection(item));
+
+            if (ShellCommands.HasFileTarget(item))
+            {
+                menu.Items.Add(new Separator());
+                AddItem(menu, LocalizationService.Get("item.properties"), () => ShellCommands.ShowProperties(item));
+            }
+        }
+        else if (entry is MenuCategory folder)
+        {
+            AddItem(menu, LocalizationService.Get("item.rename"), () => RenameEntry(folder));
+            menu.Items.Add(new Separator());
+            AddItem(menu, LocalizationService.Get("item.removeFromGroup"), () => RemoveEntryOrSelection(folder));
+        }
+
+        return menu;
     }
 
     private void NavigateInto(MenuCategory folder)
@@ -407,11 +477,42 @@ internal sealed class GroupOverlayWindow : Window
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && _selectedEntry is not null && _openActionsByEntry.TryGetValue(_selectedEntry, out var activate))
+        if (e.Key == Key.Enter && _selectedEntries.Count == 1
+            && _openActionsByEntry.TryGetValue(_selectedEntries.First(), out var activate))
         {
             e.Handled = true;
             activate();
             return;
+        }
+
+        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.A)
+        {
+            _selectedEntries.Clear();
+            foreach (var entry in GroupEntries.Enumerate(Current))
+            {
+                _selectedEntries.Add(entry);
+            }
+
+            RefreshSelectionVisuals();
+            e.Handled = true;
+            return;
+        }
+
+        if (Keyboard.Modifiers == ModifierKeys.None)
+        {
+            if (e.Key == Key.Delete)
+            {
+                RemoveSelectedEntries();
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key == Key.F2 && _selectedEntries.Count == 1)
+            {
+                RenameEntry(_selectedEntries.First());
+                e.Handled = true;
+                return;
+            }
         }
 
         if (e.Key != Key.Escape)
@@ -465,8 +566,103 @@ internal sealed class GroupOverlayWindow : Window
 
         if (match is not null)
         {
-            SelectEntry(match);
+            SelectEntry(match, additive: false);
             e.Handled = true;
+        }
+    }
+
+    /// <summary>Right-click's own remove acts on the whole selection when the clicked entry is part of one, matching the panel view.</summary>
+    private void RemoveEntryOrSelection(object entry)
+    {
+        if (!(_selectedEntries.Count > 1 && _selectedEntries.Contains(entry)))
+        {
+            _selectedEntries.Clear();
+            _selectedEntries.Add(entry);
+        }
+
+        RemoveSelectedEntries();
+    }
+
+    private void RemoveSelectedEntries()
+    {
+        if (_selectedEntries.Count == 0)
+        {
+            return;
+        }
+
+        var removable = _selectedEntries
+            .Where(entry => entry is not MenuCategory folder || GroupEntries.Count(folder) == 0)
+            .ToList();
+
+        if (removable.Count == 0)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                LocalizationService.Get("group.removeOnlyEmpty"),
+                LocalizationService.Get("common.appName"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var names = string.Join(", ", removable.Select(GroupEntries.NameOf));
+        var prompt = LocalizationService.Format("item.removeConfirm", names);
+        if (removable.Count < _selectedEntries.Count)
+        {
+            prompt += Environment.NewLine + Environment.NewLine + LocalizationService.Get("group.removeOnlyEmpty");
+        }
+
+        var confirmed = System.Windows.MessageBox.Show(
+            this,
+            prompt,
+            LocalizationService.Get("common.appName"),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (confirmed != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        foreach (var entry in removable)
+        {
+            switch (entry)
+            {
+                case LaunchItem item:
+                    Current.Items.Remove(item);
+                    break;
+                case MenuCategory folder:
+                    Current.Categories.Remove(folder);
+                    break;
+            }
+        }
+
+        Populate();
+        PlayNavigationAnimation();
+    }
+
+    private void RenameEntry(object entry)
+    {
+        switch (entry)
+        {
+            case LaunchItem item:
+                var itemPrompt = new Settings.TextPromptWindow(LocalizationService.Get("item.renamePrompt"), item.Name);
+                if (itemPrompt.ShowDialog() == true)
+                {
+                    item.Name = itemPrompt.Value;
+                    Populate();
+                }
+
+                break;
+            case MenuCategory folder:
+                var folderPrompt = new Settings.TextPromptWindow(LocalizationService.Get("group.folderNamePrompt"), folder.Name);
+                if (folderPrompt.ShowDialog() == true)
+                {
+                    folder.Name = folderPrompt.Value;
+                    Populate();
+                }
+
+                break;
         }
     }
 

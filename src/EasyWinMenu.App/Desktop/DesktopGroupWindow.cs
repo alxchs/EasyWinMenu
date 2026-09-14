@@ -78,6 +78,9 @@ internal sealed class DesktopGroupWindow : Window
     private readonly IDesktopGroupCommands? _commands;
     private readonly ScaleTransform _zoomTransform;
     private readonly Dictionary<MenuCategory, DesktopGroupWindow> _openSubfolders = new();
+
+    /// <summary>Every open desktop group, so one can find another under a drag's drop point.</summary>
+    private static readonly List<DesktopGroupWindow> _allGroupWindows = new();
     private readonly Dictionary<object, FrameworkElement> _tilesByEntry = new();
     private readonly HashSet<object> _selectedEntries = new();
 
@@ -168,11 +171,13 @@ internal sealed class DesktopGroupWindow : Window
         PreviewTextInput += OnPreviewTextInput;
         LocationChanged += OnLocationChanged;
         Drop += OnDrop;
+        _allGroupWindows.Add(this);
         Closed += (_, _) =>
         {
             _overlay?.Close();
             _pendingCuts.RemoveAll(p => ReferenceEquals(p.Owner, this));
             StopPendingCutWatcherIfIdle();
+            _allGroupWindows.Remove(this);
         };
     }
 
@@ -336,6 +341,7 @@ internal sealed class DesktopGroupWindow : Window
         _folderHost.MouseLeftButtonDown += OnFolderTileMouseDown;
         _folderHost.MouseMove += OnFolderTileMouseMove;
         _folderHost.MouseLeftButtonUp += OnFolderTileMouseUp;
+        _folderHost.PreviewMouseRightButtonDown += (_, _) => _folderHost.ContextMenu = BuildHeaderContextMenu();
 
         _root = new Grid { Background = Brushes.Transparent };
         _root.Children.Add(BuildContent());
@@ -439,6 +445,8 @@ internal sealed class DesktopGroupWindow : Window
 
     private void ApplyDisplayMode()
     {
+        UpdateHeaderTooltip();
+
         if (IsAppFolder)
         {
             // A ContextMenu cannot be shared between two owners, so the tile gets its own.
@@ -597,6 +605,11 @@ internal sealed class DesktopGroupWindow : Window
             ContextMenu = BuildHeaderContextMenu()
         };
         _header.MouseLeftButtonDown += OnHeaderMouseLeftButtonDown;
+        // Rebuilt fresh on every right-click rather than trusted to whichever action
+        // last happened to reassign it — checkmarks (arrangement, icon size, badge) need
+        // to reflect the group's actual current state, not whatever it was the last time
+        // something else touched the menu.
+        _header.PreviewMouseRightButtonDown += (_, _) => _header.ContextMenu = BuildHeaderContextMenu();
         DockPanel.SetDock(_header, Dock.Top);
         panel.Children.Add(_header);
 
@@ -609,9 +622,10 @@ internal sealed class DesktopGroupWindow : Window
             Background = Brushes.Transparent,
             RenderTransform = _zoomTransform,
             RenderTransformOrigin = new System.Windows.Point(0, 0),
-            ContextMenu = BuildCanvasContextMenu()
+            ContextMenu = BuildHeaderContextMenu()
         };
         _canvas.MouseLeftButtonDown += (_, _) => ClearSelection();
+        _canvas.PreviewMouseRightButtonDown += (_, _) => _canvas.ContextMenu = BuildHeaderContextMenu();
 
         PopulateTiles();
 
@@ -935,6 +949,7 @@ internal sealed class DesktopGroupWindow : Window
 
     private void ApplyBackground()
     {
+        UpdateHeaderTooltip();
         _border.BorderBrush = new SolidColorBrush(ComputeGroupBorderColor());
 
         if (_category.AreaOpacity <= 0)
@@ -982,6 +997,49 @@ internal sealed class DesktopGroupWindow : Window
     private void ApplyHeaderBackground()
     {
         _header.Background = ThemeBrushes.CreateBrush(_theme.HighlightColor, _category.TitleOpacity);
+    }
+
+    /// <summary>
+    /// A hover tooltip on the caption summarising the group's own settings — style,
+    /// arrangement, icon size, opacity — so they are visible without opening the menu.
+    /// Recomputed rather than tracked, since it is cheap and there is no single choke
+    /// point every setting change already passes through.
+    /// </summary>
+    private void UpdateHeaderTooltip()
+    {
+        var lines = new List<string>
+        {
+            LocalizationService.Get(IsAppFolder ? "group.styleAppFolder" : "group.stylePanel")
+        };
+
+        var arrangementKey = _category.IconArrangement switch
+        {
+            IconArrangement.Grid => "group.arrangeIcons",
+            IconArrangement.ByName => "group.sortByName",
+            IconArrangement.ByType => "group.sortByType",
+            _ => null
+        };
+        if (arrangementKey is not null)
+        {
+            lines.Add(LocalizationService.Get(arrangementKey));
+        }
+
+        var iconSizeKey = _category.DesktopIconScale switch
+        {
+            <= 0.8 => "group.iconSizeSmall",
+            >= 1.4 => "group.iconSizeLarge",
+            _ => "group.iconSizeMedium"
+        };
+        lines.Add($"{LocalizationService.Get("group.iconSize")}: {LocalizationService.Get(iconSizeKey)}");
+
+        lines.Add($"{LocalizationService.Get("group.areaOpacity")}: {_category.AreaOpacity * 100:0}%");
+
+        if (_category.ShowBadge)
+        {
+            lines.Add(LocalizationService.Get("group.showBadge"));
+        }
+
+        _headerText.ToolTip = string.Join(Environment.NewLine, lines);
     }
 
     private void EnsureThemeOverride()
@@ -1074,6 +1132,26 @@ internal sealed class DesktopGroupWindow : Window
         AddMenuItem(menu, LocalizationService.Get("group.rename"), OnRenameClick, "IconRename");
 
         menu.Items.Add(BuildSeparator());
+
+        var newMenu = CreateMenuItem(LocalizationService.Get("group.newMenu"), "IconAdd");
+        AddMenuItem(newMenu, LocalizationService.Get("group.newFolder"), CreateSubfolder, "IconFolder");
+        AddMenuItem(newMenu, LocalizationService.Get("group.newTextFile"), CreateTextFile, "IconFile");
+        menu.Items.Add(newMenu);
+
+        AddCheckItem(menu, LocalizationService.Get("group.arrangeIcons"), _category.IconArrangement == IconArrangement.Grid, ArrangeIconsAutomatically, "IconGrid");
+
+        var sortMenu = CreateMenuItem(LocalizationService.Get("group.sortBy"), "IconSort");
+        AddCheckItem(sortMenu, LocalizationService.Get("group.sortByName"), _category.IconArrangement == IconArrangement.ByName, SortByName);
+        AddCheckItem(sortMenu, LocalizationService.Get("group.sortByType"), _category.IconArrangement == IconArrangement.ByType, SortByType);
+        menu.Items.Add(sortMenu);
+
+        var sizeMenu = CreateMenuItem(LocalizationService.Get("group.iconSize"), "IconIconSize");
+        AddCheckItem(sizeMenu, LocalizationService.Get("group.iconSizeSmall"), IsIconScale(0.75), () => SetIconScale(0.75));
+        AddCheckItem(sizeMenu, LocalizationService.Get("group.iconSizeMedium"), IsIconScale(1.0), () => SetIconScale(1.0));
+        AddCheckItem(sizeMenu, LocalizationService.Get("group.iconSizeLarge"), IsIconScale(1.5), () => SetIconScale(1.5));
+        menu.Items.Add(sizeMenu);
+
+        menu.Items.Add(BuildSeparator());
         AddMenuItem(
             menu,
             LocalizationService.Get(IsAppFolder ? "group.stylePanel" : "group.styleAppFolder"),
@@ -1102,6 +1180,9 @@ internal sealed class DesktopGroupWindow : Window
             AddMenuItem(shareMenu, LocalizationService.Get("group.setAsDefaultVisual"), () => _commands.SetAsDefaultVisual(_category));
             AddMenuItem(shareMenu, LocalizationService.Get("group.wallpaperForAll"), () => _commands.ApplyWallpaper(null));
             menu.Items.Add(shareMenu);
+
+            menu.Items.Add(BuildSeparator());
+            AddMenuItem(menu, LocalizationService.Get("tray.settings"), _commands.OpenSettings, "IconSettings");
         }
 
         menu.Items.Add(BuildSeparator());
@@ -1116,32 +1197,6 @@ internal sealed class DesktopGroupWindow : Window
         }
 
         menu.Items.Add(removeItem);
-
-        return menu;
-    }
-
-    private ContextMenu BuildCanvasContextMenu()
-    {
-        var menu = CreateContextMenuShell();
-
-        var newMenu = CreateMenuItem(LocalizationService.Get("group.newMenu"), "IconAdd");
-        AddMenuItem(newMenu, LocalizationService.Get("group.newFolder"), CreateSubfolder, "IconFolder");
-        AddMenuItem(newMenu, LocalizationService.Get("group.newTextFile"), CreateTextFile, "IconFile");
-        menu.Items.Add(newMenu);
-        menu.Items.Add(BuildSeparator());
-
-        AddMenuItem(menu, LocalizationService.Get("group.arrangeIcons"), ArrangeIconsAutomatically, "IconGrid");
-
-        var sortMenu = CreateMenuItem(LocalizationService.Get("group.sortBy"), "IconSort");
-        AddMenuItem(sortMenu, LocalizationService.Get("group.sortByName"), SortByName);
-        AddMenuItem(sortMenu, LocalizationService.Get("group.sortByType"), SortByType);
-        menu.Items.Add(sortMenu);
-
-        var sizeMenu = CreateMenuItem(LocalizationService.Get("group.iconSize"), "IconIconSize");
-        AddCheckItem(sizeMenu, LocalizationService.Get("group.iconSizeSmall"), IsIconScale(0.75), () => SetIconScale(0.75));
-        AddCheckItem(sizeMenu, LocalizationService.Get("group.iconSizeMedium"), IsIconScale(1.0), () => SetIconScale(1.0));
-        AddCheckItem(sizeMenu, LocalizationService.Get("group.iconSizeLarge"), IsIconScale(1.5), () => SetIconScale(1.5));
-        menu.Items.Add(sizeMenu);
 
         return menu;
     }
@@ -1706,6 +1761,8 @@ internal sealed class DesktopGroupWindow : Window
     /// </summary>
     private void FinishStructuralChange()
     {
+        UpdateHeaderTooltip();
+
         switch (_category.IconArrangement)
         {
             case IconArrangement.Grid:
@@ -1813,7 +1870,7 @@ internal sealed class DesktopGroupWindow : Window
             Canvas.SetTop(tile, tileStart.Y + delta.Y);
         };
 
-        tile.MouseLeftButtonUp += (_, _) =>
+        tile.MouseLeftButtonUp += (_, e) =>
         {
             if (!dragging)
             {
@@ -1823,12 +1880,102 @@ internal sealed class DesktopGroupWindow : Window
             dragging = false;
             tile.ReleaseMouseCapture();
 
+            var screenPoint = PointToScreen(e.GetPosition(this));
+            var targetGroup = FindGroupWindowAt(screenPoint, this);
+            if (targetGroup is not null)
+            {
+                MoveEntryToOtherGroup(entry, targetGroup, screenPoint);
+                return;
+            }
+
             var x = ClampToCanvas(Canvas.GetLeft(tile), tile.ActualWidth, _canvas.ActualWidth, PaddingX);
             var y = ClampToCanvas(Canvas.GetTop(tile), tile.ActualHeight, _canvas.ActualHeight, PaddingY);
             Canvas.SetLeft(tile, x);
             Canvas.SetTop(tile, y);
             onMoved(x, y);
         };
+    }
+
+    /// <summary>Whichever other open group's window occupies this screen point, if any.</summary>
+    private static DesktopGroupWindow? FindGroupWindowAt(System.Windows.Point screenPoint, DesktopGroupWindow excluding)
+    {
+        foreach (var window in _allGroupWindows)
+        {
+            if (ReferenceEquals(window, excluding))
+            {
+                continue;
+            }
+
+            var rect = new Rect(window.Left, window.Top, window.ActualWidth, window.ActualHeight);
+            if (rect.Contains(screenPoint))
+            {
+                return window;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Drops a tile dragged past this group's own edge onto whichever group it landed on.
+    /// The entry actually moves — removed from this category's own list and added to the
+    /// target's — rather than just visually relocating, which is what previously left a
+    /// dragged subfolder nowhere at all, or (depending on what handled the drop) folded
+    /// into the wrong list and mistaken for a standalone desktop group instead of a
+    /// subfolder that belongs to the target.
+    /// </summary>
+    private void MoveEntryToOtherGroup(object entry, DesktopGroupWindow target, System.Windows.Point screenPoint)
+    {
+        switch (entry)
+        {
+            case LaunchItem item:
+                _category.Items.Remove(item);
+                break;
+            case MenuCategory folder:
+                _category.Categories.Remove(folder);
+                if (_openSubfolders.TryGetValue(folder, out var openWindow))
+                {
+                    openWindow.Close();
+                    _openSubfolders.Remove(folder);
+                }
+
+                break;
+            default:
+                return;
+        }
+
+        FinishStructuralChange();
+
+        var dropPoint = target._canvas.PointFromScreen(screenPoint);
+        target.AcceptMovedEntry(entry, dropPoint);
+    }
+
+    /// <summary>The other half of <see cref="MoveEntryToOtherGroup"/> — always adds to this
+    /// group's own <see cref="MenuCategory.Categories"/>/<see cref="MenuCategory.Items"/>,
+    /// never to the top-level configuration, so a moved subfolder stays a subfolder.</summary>
+    private void AcceptMovedEntry(object entry, System.Windows.Point canvasPoint)
+    {
+        var x = Math.Max(PaddingX, canvasPoint.X);
+        var y = Math.Max(PaddingY, canvasPoint.Y);
+
+        switch (entry)
+        {
+            case LaunchItem item:
+                item.DesktopIconX = x;
+                item.DesktopIconY = y;
+                _category.Items.Add(item);
+                break;
+            case MenuCategory folder:
+                folder.IconX = x;
+                folder.IconY = y;
+                _category.Categories.Add(folder);
+                break;
+            default:
+                return;
+        }
+
+        FinishStructuralChange();
+        RestoreIfMinimized();
     }
 
     /// <summary>

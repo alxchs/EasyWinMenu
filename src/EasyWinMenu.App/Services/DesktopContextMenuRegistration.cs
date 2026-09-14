@@ -20,10 +20,14 @@ internal static class DesktopContextMenuRegistration
     public const string ToggleCollapseAllAction = "toggle-collapse-all";
     public const string AllAppFolderAction = "all-appfolder";
     public const string AllPanelAction = "all-panel";
+    public const string OpenSettingsAction = "open-settings";
 
     /// <summary>
-    /// Idempotent — safe to call on every startup so the labels stay in whatever
-    /// language the app is currently showing.
+    /// Idempotent — safe to call on every startup. Labels always follow Windows' own
+    /// display language, never the app's configured one: this menu is read by Explorer
+    /// while the app may not even be running, so the app's internal language setting has
+    /// no bearing on it — the same way every other item already on that menu (Refresh,
+    /// New, Display settings…) follows Windows, not some per-app preference.
     /// </summary>
     public static void Register()
     {
@@ -33,18 +37,22 @@ internal static class DesktopContextMenuRegistration
             return;
         }
 
+        var lang = LocalizationService.DetectLanguage();
+        string L(string key) => LocalizationService.GetForLanguage(lang, key);
+
         using var root = Registry.CurrentUser.CreateSubKey(RootKeyPath);
-        root.SetValue("MUIVerb", LocalizationService.Get("desktop.contextMenuRoot"));
+        root.SetValue("MUIVerb", L("desktop.contextMenuRoot"));
         root.SetValue("Icon", $"\"{executablePath}\",0");
         // An empty SubCommands value is what tells Explorer this verb is a submenu
         // whose items live under its own "shell" subkey, instead of a single command.
         root.SetValue("SubCommands", string.Empty);
 
         using var shell = root.CreateSubKey("shell");
-        WriteVerb(shell, "01NewGroup", LocalizationService.Get("tray.newDesktopGroup"), executablePath, NewGroupAction);
-        WriteVerb(shell, "02ToggleCollapseAll", LocalizationService.Get("desktop.toggleCollapseAll"), executablePath, ToggleCollapseAllAction);
-        WriteVerb(shell, "03AllAppFolder", LocalizationService.Get("desktop.allAppFolder"), executablePath, AllAppFolderAction);
-        WriteVerb(shell, "04AllPanel", LocalizationService.Get("desktop.allPanel"), executablePath, AllPanelAction);
+        WriteVerb(shell, "01NewGroup", L("tray.newDesktopGroup"), executablePath, NewGroupAction);
+        WriteVerb(shell, "02ToggleCollapseAll", L("desktop.toggleCollapseAll"), executablePath, ToggleCollapseAllAction);
+        WriteVerb(shell, "03AllAppFolder", L("desktop.allAppFolder"), executablePath, AllAppFolderAction);
+        WriteVerb(shell, "04AllPanel", L("desktop.allPanel"), executablePath, AllPanelAction);
+        WriteVerb(shell, "05OpenSettings", L("tray.settings"), executablePath, OpenSettingsAction);
     }
 
     public static void Unregister()

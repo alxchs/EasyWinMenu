@@ -105,7 +105,25 @@ funciona de fora desta rede, sem custo.
   exibição (`DesktopGroupDisplayMode.Panel` / `.AppFolder`) na mesma janela,
   alternando por visibilidade em vez de reconstruir; isso é o que permite
   voltar de um modo para o outro nas mesmas dimensões e posição anteriores
-  (`MenuCategory.PanelX/PanelY` guarda onde o painel estava).
+  (`MenuCategory.PanelX/PanelY` guarda onde o painel estava). O menu de
+  contexto é o **mesmo** em qualquer lugar que se clique com o botão direito
+  — cabeçalho, canvas vazio ou o ladrilho fechado do App Folder
+  (`BuildHeaderContextMenu`, único método) — para o App Folder não ficar
+  sem os comandos que só existiam no canvas (organizar, ordenar, novo
+  arquivo/pasta, tamanho do ícone). É reconstruído a cada clique direito
+  (`PreviewMouseRightButtonDown`) para o "visto" de qual organização está
+  ativa nunca ficar desatualizado.
+  - Arrastar um ícone (arquivo ou subpasta) para **fora** do próprio grupo,
+    soltando sobre outro grupo aberto, move o objeto de verdade: sai da
+    lista de origem e entra na lista de destino (`MoveEntryToOtherGroup` /
+    `AcceptMovedEntry`), sempre em `Categories`/`Items` do grupo — nunca na
+    configuração de nível superior, o que faria uma subpasta virar sem
+    querer um grupo independente da área de trabalho. Um registro estático
+    (`_allGroupWindows`) é o que permite a um grupo achar qual outro está
+    embaixo do ponto onde o mouse soltou.
+  - A legenda do grupo tem uma dica (tooltip) resumindo suas configurações
+    — estilo, organização, tamanho do ícone, opacidade, selo
+    (`UpdateHeaderTooltip`), recalculada sempre que algo relevante muda.
   - Redimensiona por qualquer ponto da borda, não só por um canto: oito tiras
     invisíveis (`BuildResizeHandles`) cobrem os quatro lados e os quatro
     cantos do painel, cada uma com seu próprio cursor e sua própria borda
@@ -186,6 +204,13 @@ funciona de fora desta rede, sem custo.
     um único clique já disparava a ação, o que tirava a chance de só marcar
     um ícone para fazer outra coisa com ele. O ladrilho de "voltar" continua
     sem estado de seleção — clicar nele sempre sobe um nível na hora.
+  - Tem a mesma seleção múltipla (Ctrl+clique, Ctrl+A), Delete (com a mesma
+    regra de só remover pasta vazia) e F2 do painel, além de um menu de
+    contexto por ícone (`BuildTileContextMenu`) com os comandos de sempre
+    (executar como admin, abrir local, copiar caminho, propriedades,
+    renomear, remover) — deliberadamente um `ContextMenu` simples, sem o
+    tema completo do painel, já que esta janela já tem sua própria
+    linguagem visual (a folha translúcida).
   - Digitar sem nenhum atalho faz o mesmo "pular para o item" do Explorer:
     acumula os caracteres digitados dentro de 1s um do outro e seleciona o
     primeiro ícone da pasta atual cujo nome comece com o texto acumulado
@@ -203,9 +228,11 @@ funciona de fora desta rede, sem custo.
   independentes de dispositivo que uma `Window` usa.
 - **`IDesktopGroupCommands`** — os comandos que um grupo pode pedir mas não
   pode fazer sozinho (duplicar-se, copiar sua aparência para os outros,
-  virar o padrão, aplicar o papel de parede). Implementado em `App.xaml.cs`,
-  porque só quem possui a configuração inteira pode reescrever os outros
-  grupos.
+  virar o padrão, aplicar o papel de parede, **abrir as Configurações
+  globais**). Implementado em `App.xaml.cs`, porque só quem possui a
+  configuração inteira pode reescrever os outros grupos (ou, no caso das
+  Configurações, é quem já guarda a janela). É por aqui que qualquer grupo
+  — não só a bandeja — chega até a tela de Configurações.
 - **`DesktopContextMenuBuilder`** — **atualmente sem uso.** Foi escrito para
   desenhar um menu de clique direito temático na área de trabalho vazia, mas
   depois que a seção "Grupos não vivem dentro da área de trabalho" (abaixo)
@@ -218,12 +245,19 @@ funciona de fora desta rede, sem custo.
 
 - **`DesktopContextMenuRegistration`** — registra um submenu de verdade sob
   `HKCU\...\DesktopBackground\Shell` (o truque clássico de verbos por
-  registro — sem extensão COM, sem hook) com quatro comandos (novo grupo,
-  colapsar/expandir todos, todos em App Folder, todos em painel). Cada verbo
-  só relança o próprio `.exe` com um argumento `--desktop-action=...`; quem
-  decide se isso inicia o app do zero ou entrega o comando ao processo já
-  aberto é o `SingleInstanceCoordinator`. Roda em todo startup (idempotente),
-  então os rótulos acompanham o idioma atual do app.
+  registro — sem extensão COM, sem hook) com cinco comandos (novo grupo,
+  colapsar/expandir todos, todos em App Folder, todos em painel,
+  Configurações). Cada verbo só relança o próprio `.exe` com um argumento
+  `--desktop-action=...`; quem decide se isso inicia o app do zero ou
+  entrega o comando ao processo já aberto é o `SingleInstanceCoordinator`.
+  Roda em todo startup (idempotente). Os rótulos seguem o **idioma do
+  Windows** (`LocalizationService.GetForLanguage` + `DetectLanguage`, nunca
+  `Get`/`CurrentLanguage`) — de propósito, diferente de todo o resto do
+  app: este menu é lido pelo Explorer, possivelmente com o app fechado, e
+  os outros itens que já estão ao lado dele (Atualizar, Novo, Configurações
+  de exibição) também seguem o idioma do Windows, não uma preferência de
+  um app instalado. Dentro do app, tudo continua no idioma configurado nas
+  Configurações, como sempre.
 - **`SingleInstanceCoordinator`** — um `Mutex` nomeado decide quem é a
   primeira instância; qualquer instância seguinte manda a ação recebida por
   um named pipe (`EasyWinMenu.DesktopAction`) e sai imediatamente, sem abrir

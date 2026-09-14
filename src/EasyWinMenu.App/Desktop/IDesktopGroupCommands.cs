@@ -20,4 +20,7 @@ internal interface IDesktopGroupCommands
 
     /// <summary>Uses the Windows wallpaper as the background of one group, or of all of them.</summary>
     void ApplyWallpaper(MenuCategory? target);
+
+    /// <summary>Opens the app's global settings — reachable from any group, not just the tray.</summary>
+    void OpenSettings();
 }

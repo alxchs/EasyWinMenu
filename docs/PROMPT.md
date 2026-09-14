@@ -371,7 +371,47 @@ com ele (por exemplo, escolher antes de decidir a ação). Clique único
 seleciona; abrir é duplo clique ou Enter, do mesmo jeito que qualquer
 pasta de ícones do Windows já se comporta.
 
-## 17. Documentação e versionamento
+## 17. Mover objetos entre grupos, e paridade completa do App Folder
+
+Mover um ícone de um grupo para outro não funcionava, e uma pasta movida
+assim acabava sendo interpretada como um grupo novo e independente da área
+de trabalho, em vez de uma subpasta pertencente ao grupo de destino.
+Implemente arrastar de verdade: soltar um ícone (arquivo **ou** subpasta)
+fora do próprio grupo, sobre outro grupo aberto, precisa **mover** o objeto
+— tirar da lista do grupo de origem e colocar na lista do grupo de destino
+(itens fixados ou subpastas, conforme o tipo), nunca na configuração de
+nível superior. Uma subpasta movida assim continua subpasta.
+
+Outros acertos no mesmo lote:
+
+- **Configurações globais a partir de qualquer grupo**: o menu de qualquer
+  grupo (painel ou App Folder) precisa ter uma entrada que abra a tela de
+  Configurações do app, não só a bandeja.
+- **Paridade total entre painel e App Folder**: tudo que dá pra fazer no
+  painel (organizar automaticamente, ordenar, novo arquivo/pasta, tamanho
+  do ícone, etc.) precisa estar disponível também no estilo App Folder —
+  seja no menu do próprio ladrilho fechado, seja dentro da folha que abre
+  ao clicar nele (onde vale também seleção múltipla, Delete, F2, Ctrl+A e
+  menu de contexto por ícone, os mesmos que o painel já tinha).
+- **Estado marcado nos menus de ordenação**: seguindo o padrão do Windows,
+  a opção de organização atualmente ativa (grade automática, por nome, por
+  tipo) precisa aparecer com visto/marcada no menu, não só executar a ação.
+  Como o menu é reconstruído a cada clique direito, isso nunca fica
+  desatualizado.
+- **Legenda do grupo com um resumo das configurações**: o título de um
+  grupo ganha uma dica (tooltip) resumindo o essencial — estilo atual,
+  organização, tamanho do ícone, opacidade, selo — sem precisar abrir o
+  menu para saber o que está configurado.
+- **Idioma dos itens no menu de contexto real do Windows**: os rótulos que
+  aparecem no clique direito de verdade da área de trabalho (o registro em
+  `DesktopBackground\Shell`) seguem o **idioma do Windows**, não o idioma
+  configurado dentro do app — esse menu é lido pelo Explorer mesmo com o
+  app fechado, então o idioma escolhido dentro do app não tem influência
+  nenhuma sobre ele. Dentro do app (bandeja, menus dos grupos), continua
+  valendo o idioma configurado nas Configurações. Esse menu real ganha
+  também uma entrada "Configurações..." (mesmo destino do item 3 acima).
+
+## 18. Documentação e versionamento
 
 Mantenha dois documentos sempre sincronizados com o código, atualizados no
 mesmo commit de qualquer mudança:

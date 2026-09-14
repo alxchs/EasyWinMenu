@@ -48,6 +48,25 @@ public static class LocalizationService
         return string.Format(Get(key), args);
     }
 
+    /// <summary>
+    /// Looks a string up in a specific language regardless of which one is currently
+    /// active — for text that has to follow Windows' own display language rather than
+    /// the app's configured one, such as the labels this app writes into the real
+    /// Windows shell context menu (read by Explorer, not by this app, so the app's own
+    /// language choice would be the wrong thing to bake into them).
+    /// </summary>
+    public static string GetForLanguage(string languageCode, string key)
+    {
+        var code = SupportedLanguages.Any(l => l.Code == languageCode) ? languageCode : "en";
+        var strings = code == "en" ? EnglishStrings : LoadEmbedded(code);
+        if (strings.TryGetValue(key, out var value))
+        {
+            return value;
+        }
+
+        return EnglishStrings.TryGetValue(key, out var fallback) ? fallback : key;
+    }
+
     public static string DetectLanguage()
     {
         var twoLetter = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;

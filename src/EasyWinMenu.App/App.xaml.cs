@@ -136,6 +136,9 @@ public partial class App : Application, IDesktopGroupCommands
             case DesktopContextMenuRegistration.AllPanelAction:
                 SetAllGroupsDisplayMode(DesktopGroupDisplayMode.Panel);
                 break;
+            case DesktopContextMenuRegistration.OpenSettingsAction:
+                OpenSettingsWindow();
+                break;
         }
     }
 
@@ -249,6 +252,11 @@ public partial class App : Application, IDesktopGroupCommands
         }
 
         SaveAndReloadGroups();
+    }
+
+    void IDesktopGroupCommands.OpenSettings()
+    {
+        OpenSettingsWindow();
     }
 
     private void OnDesktopGroupDeleteRequested(MenuCategory category)
