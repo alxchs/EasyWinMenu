@@ -59,6 +59,12 @@ mkfile package src/EasyWinMenu.App/EasyWinMenu.App.csproj
 porque é ao lado desse arquivo que o `mkfile` procura
 `tools\build_installer.ps1` — ver "Instalador e distribuição" abaixo.
 
+O `EasyWinMenu.slnx` também ganha, pelo clique direito do Explorer, os
+mesmos itens "Compilar Debug/Release/Publicar" que `.sln`/`.csproj` já
+tinham — registrado por `install-mkfile.ps1` (fora deste repositório, é
+tooling pessoal do Alexandre). No Windows 11 esses itens ficam sob "Mostrar
+mais opções", igual a qualquer outra extensão que o `mkfile` cobre.
+
 ## Instalador e distribuição
 
 ```
