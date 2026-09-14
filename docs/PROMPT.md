@@ -301,7 +301,31 @@ janela do Windows já se comporta.
   no `.exe`, por exemplo — não devem ficar presas nessa checagem além do
   necessário para fechar sozinhas.
 
-## 13. Documentação e versionamento
+## 13. Instalador e um link de download que funcione fora daqui
+
+Preciso de duas coisas: um instalador de verdade (assistente, atalho no menu
+iniciar, entrada em Adicionar/Remover Programas, desinstalador — não só o
+`.exe` solto) e um jeito de baixar isso por URL de fora da minha rede.
+
+- Gere o instalador com **Inno Setup**: publique o app **self-contained,
+  single-file, win-x64** (não framework-dependent — o instalador precisa
+  funcionar numa máquina sem o runtime do .NET instalado, senão não faz
+  sentido ele rodar fora daqui) e depois compile um script `.iss` que
+  instala por usuário (sem pedir elevação), com atalho no menu iniciar,
+  ícone de área de trabalho opcional, e um desinstalador que **não** apaga a
+  configuração do usuário em `%AppData%\EasyWinMenu`.
+- Isso vira o comportamento de `mkfile package` para este projeto — coloque
+  um `tools\build_installer.ps1` ao lado do `.csproj`, do mesmo jeito que o
+  lado Flutter do `mkfile` já usa `tools\build_apk.py`: quando esse script
+  existe, ele é a fonte da verdade para "empacotar", não `dotnet publish` cru.
+  Edite o `mkfile.ps1` para reconhecer essa convenção do lado .NET também,
+  em vez de reimplementar o empacotamento como outro script solto sem relação
+  com o `mkfile`.
+- O link de download é uma **release do GitHub** neste repositório (já é
+  público), com o instalador anexado à tag da versão — estável, sem custo,
+  funciona de fora desta rede sem eu precisar manter servidor nenhum.
+
+## 14. Documentação e versionamento
 
 Mantenha dois documentos sempre sincronizados com o código, atualizados no
 mesmo commit de qualquer mudança:

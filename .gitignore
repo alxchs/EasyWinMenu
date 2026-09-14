@@ -3,6 +3,9 @@ bin/
 obj/
 *.user
 
+## Installer output (built by src/EasyWinMenu.App/tools/build_installer.ps1)
+dist/
+
 ## Visual Studio / Rider
 .vs/
 .idea/
