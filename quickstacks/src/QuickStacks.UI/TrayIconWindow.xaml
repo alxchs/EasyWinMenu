@@ -13,6 +13,11 @@
                 <MenuFlyout>
                     <MenuFlyoutItem Text="Abrir" Command="{x:Bind ShowPopupCommand}" />
                     <MenuFlyoutItem Text="Editar estrutura..." Command="{x:Bind OpenEditorCommand}" />
+                    <MenuFlyoutSubItem Text="Tema">
+                        <RadioMenuFlyoutItem x:Name="ThemeLightItem" Text="Claro" GroupName="Theme" Click="ThemeLight_Click" />
+                        <RadioMenuFlyoutItem x:Name="ThemeDarkItem" Text="Escuro" GroupName="Theme" Click="ThemeDark_Click" />
+                        <RadioMenuFlyoutItem x:Name="ThemeSystemItem" Text="Seguir Windows" GroupName="Theme" Click="ThemeSystem_Click" />
+                    </MenuFlyoutSubItem>
                     <MenuFlyoutSeparator />
                     <MenuFlyoutItem Text="Sair" Command="{x:Bind ExitCommand}" />
                 </MenuFlyout>

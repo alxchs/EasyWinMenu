@@ -223,4 +223,44 @@ public class SqliteMenuRepositoryTests : IDisposable
         Assert.Equal(muitoUsado.Id, maisUsados[0].Id);
         Assert.Equal(3, maisUsados[0].LaunchCount);
     }
+
+    [Fact]
+    public async Task FolderBackgroundColor_DefaultsToNull_ThenCanBeSetAndCleared()
+    {
+        var pasta = MenuItem.CreateFolder("Pasta", null, 0);
+        await _repository.AddAsync(pasta);
+
+        Assert.Null(await _repository.GetFolderBackgroundColorAsync(pasta.Id));
+
+        await _repository.SetFolderBackgroundColorAsync(pasta.Id, "#224466");
+        Assert.Equal("#224466", await _repository.GetFolderBackgroundColorAsync(pasta.Id));
+
+        await _repository.SetFolderBackgroundColorAsync(pasta.Id, "#112233");
+        Assert.Equal("#112233", await _repository.GetFolderBackgroundColorAsync(pasta.Id));
+
+        await _repository.SetFolderBackgroundColorAsync(pasta.Id, null);
+        Assert.Null(await _repository.GetFolderBackgroundColorAsync(pasta.Id));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_OnFolder_AlsoCascadesFolderAppearance()
+    {
+        var pasta = MenuItem.CreateFolder("Pasta", null, 0);
+        await _repository.AddAsync(pasta);
+        await _repository.SetFolderBackgroundColorAsync(pasta.Id, "#224466");
+
+        await _repository.DeleteAsync(pasta.Id);
+
+        // Nao deve sobrar uma linha orfa em FolderAppearance referenciando uma pasta que nao existe mais.
+        Assert.Null(await _repository.GetFolderBackgroundColorAsync(pasta.Id));
+    }
+
+    [Fact]
+    public async Task SetFolderBackgroundColorAsync_RejectsMalformedHex()
+    {
+        var pasta = MenuItem.CreateFolder("Pasta", null, 0);
+        await _repository.AddAsync(pasta);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => _repository.SetFolderBackgroundColorAsync(pasta.Id, "nao-e-uma-cor"));
+    }
 }

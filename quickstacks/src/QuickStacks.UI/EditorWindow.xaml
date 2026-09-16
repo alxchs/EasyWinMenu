@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:app="using:QuickStacks.Application">
 
-    <Grid Background="{ThemeResource LayerFillColorDefaultBrush}">
+    <Grid x:Name="RootGrid" Background="{ThemeResource LayerFillColorDefaultBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />

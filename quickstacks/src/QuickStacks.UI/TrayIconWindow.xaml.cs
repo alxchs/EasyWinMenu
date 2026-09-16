@@ -26,6 +26,16 @@ public sealed partial class TrayIconWindow : Window
         {
             TrayIcon.Icon = new System.Drawing.Icon(iconPath);
         }
+
+        // O item marcado no submenu Tema precisa refletir o que ja' foi carregado de
+        // Settings em App.OnLaunched - RadioMenuFlyoutItem.IsChecked nao tem como fazer isso
+        // via x:Bind aqui pelo mesmo motivo do PopupWindow (Window nao e' FrameworkElement).
+        (ThemeService.CurrentTheme switch
+        {
+            ElementTheme.Light => ThemeLightItem,
+            ElementTheme.Dark => ThemeDarkItem,
+            _ => ThemeSystemItem,
+        }).IsChecked = true;
     }
 
     public IRelayCommand ShowPopupCommand { get; }
@@ -57,5 +67,17 @@ public sealed partial class TrayIconWindow : Window
         }
 
         _editor.Activate();
+    }
+
+    private void ThemeLight_Click(object sender, RoutedEventArgs e) => SetTheme(ElementTheme.Light);
+
+    private void ThemeDark_Click(object sender, RoutedEventArgs e) => SetTheme(ElementTheme.Dark);
+
+    private void ThemeSystem_Click(object sender, RoutedEventArgs e) => SetTheme(ElementTheme.Default);
+
+    private void SetTheme(ElementTheme theme)
+    {
+        var app = (App)Microsoft.UI.Xaml.Application.Current;
+        ThemeService.SetTheme(app.Settings, theme);
     }
 }

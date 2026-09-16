@@ -17,6 +17,7 @@ public sealed partial class EditorWindow : Window
         InitializeComponent();
 
         ViewModel = new EditorViewModel(repository, exportService);
+        ThemeService.Register(RootGrid);
         _ = ViewModel.LoadAsync();
     }
 

@@ -33,6 +33,13 @@ public static class SqliteSchema
             Key   TEXT PRIMARY KEY,
             Value TEXT NOT NULL
         );
+
+        -- Fase 4 (Temas): override de cor de fundo por pasta - so' existe uma linha aqui
+        -- quando a pasta tem uma cor propria; sem linha = usa o tema global.
+        CREATE TABLE IF NOT EXISTS FolderAppearance (
+            FolderId          TEXT PRIMARY KEY REFERENCES MenuItems(Id) ON DELETE CASCADE,
+            BackgroundColorHex TEXT NOT NULL
+        );
         """;
 
     public static void EnsureCreated(SqliteConnection connection)

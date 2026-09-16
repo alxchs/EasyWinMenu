@@ -4,6 +4,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using QuickStacks.Application;
 using QuickStacks.Domain;
 using QuickStacks.Infrastructure;
@@ -11,6 +12,7 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
 using Windows.Storage;
 using Windows.System;
+using Windows.UI;
 
 namespace QuickStacks.UI;
 
@@ -36,15 +38,22 @@ public sealed partial class PopupWindow : Window
         ViewModel = new FolderNavigationViewModel(repository);
         Repository = repository;
 
+        ThemeService.Register(RootGrid);
+
         // Microsoft.UI.Xaml.Window nao e' um FrameworkElement, entao x:Bind com Mode=OneWay
         // no conteudo raiz de uma Window nao compila (o codigo gerado precisa de um
         // FrameworkElement para o hook de Loaded/atualizacao) - por isso a visibilidade da
         // trilha e' atualizada aqui a mao, reagindo a troca de Mode.
-        ViewModel.PropertyChanged += (_, args) =>
+        ViewModel.PropertyChanged += async (_, args) =>
         {
             if (args.PropertyName == nameof(FolderNavigationViewModel.Mode))
             {
                 Breadcrumb.Visibility = ModeToVisibility(ViewModel.Mode);
+            }
+
+            if (args.PropertyName is nameof(FolderNavigationViewModel.Mode) or nameof(FolderNavigationViewModel.CurrentFolderId))
+            {
+                await ApplyFolderBackgroundAsync();
             }
         };
 
@@ -62,6 +71,7 @@ public sealed partial class PopupWindow : Window
     {
         await ViewModel.LoadAsync();
         ApplyRememberedSizeForCurrentFolder();
+        await ApplyFolderBackgroundAsync();
     }
 
     public void ActivateNearCursor()
@@ -184,6 +194,74 @@ public sealed partial class PopupWindow : Window
         {
             await ViewModel.ToggleFavoriteAsync(entry);
         }
+    }
+
+    // ---- Tema (Fase 4): cor de fundo por pasta ----
+
+    private async void SetFolderColor_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: MenuEntryViewModel { IsFolder: true } folder })
+        {
+            return;
+        }
+
+        var current = await Repository.GetFolderBackgroundColorAsync(folder.Id);
+        var textBox = new TextBox { Header = "Cor em hex (ex: #1E3A5F) - vazio remove a cor customizada", Text = current ?? string.Empty };
+        var dialog = new ContentDialog
+        {
+            Title = $"Cor de fundo - {folder.Name}",
+            Content = textBox,
+            PrimaryButtonText = "OK",
+            CloseButtonText = "Cancelar",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot,
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var hex = string.IsNullOrWhiteSpace(textBox.Text) ? null : textBox.Text.Trim();
+        if (hex is not null && !HexColor.IsValid(hex))
+        {
+            return; // cor invalida - ignora silenciosamente por enquanto (Fase 4 e' o MVP disto).
+        }
+
+        await Repository.SetFolderBackgroundColorAsync(folder.Id, hex);
+
+        if (folder.Id == ViewModel.CurrentFolderId)
+        {
+            await ApplyFolderBackgroundAsync();
+        }
+    }
+
+    private async Task ApplyFolderBackgroundAsync()
+    {
+        string? hex = null;
+        if (ViewModel.Mode == BrowseMode.Folder && ViewModel.CurrentFolderId is not null)
+        {
+            hex = await Repository.GetFolderBackgroundColorAsync(ViewModel.CurrentFolderId);
+        }
+
+        RootGrid.Background = hex is not null && TryParseHexColor(hex, out var color)
+            ? new SolidColorBrush(color)
+            : (Brush)Microsoft.UI.Xaml.Application.Current.Resources["LayerFillColorDefaultBrush"];
+    }
+
+    private static bool TryParseHexColor(string hex, out Color color)
+    {
+        color = default;
+        var value = hex.TrimStart('#');
+        if (value.Length != 6 || !byte.TryParse(value[..2], System.Globalization.NumberStyles.HexNumber, null, out var r)
+            || !byte.TryParse(value[2..4], System.Globalization.NumberStyles.HexNumber, null, out var g)
+            || !byte.TryParse(value[4..6], System.Globalization.NumberStyles.HexNumber, null, out var b))
+        {
+            return false;
+        }
+
+        color = Color.FromArgb(255, r, g, b);
+        return true;
     }
 
     private async Task ActivateSelectedAsync()

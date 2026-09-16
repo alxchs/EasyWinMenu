@@ -61,4 +61,10 @@ public interface IMenuRepository
     Task<IReadOnlyList<MenuItem>> GetMostUsedAsync(int limit, CancellationToken ct = default);
 
     Task SetFavoriteAsync(string itemId, bool isFavorite, CancellationToken ct = default);
+
+    /// <summary>Cor de fundo customizada da pasta (Fase 4), em hex ("#RRGGBB"); null = usa o tema global.</summary>
+    Task<string?> GetFolderBackgroundColorAsync(string folderId, CancellationToken ct = default);
+
+    /// <summary><paramref name="hex"/> nulo remove o override e volta a usar o tema global.</summary>
+    Task SetFolderBackgroundColorAsync(string folderId, string? hex, CancellationToken ct = default);
 }

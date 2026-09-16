@@ -247,6 +247,33 @@ de pasta para uma lista de resultados que pode vir de qualquer nível da árvore
   cada execução) — a Fase 3 só adicionou a UI que consome `LaunchCount`/`LastUsedUtc`, sem
   mudar como são gravados.
 
+**Detalhe de plataforma descoberto nesta fase** (`Microsoft.UI.Xaml.Window` não é um
+`FrameworkElement` — `x:Bind` com `Mode=OneWay`/`Converter=` no conteúdo raiz de uma `Window`
+não compila): ver a explicação completa e as duas saídas usadas ao final da seção 6.6, que
+esbarrou no mesmo problema de novo (checkmark do submenu Tema).
+
+## 6.6 Fase 4 — Temas
+
+- **Claro/Escuro/Seguir Windows**: submenu "Tema" no menu da bandeja, com
+  `RadioMenuFlyoutItem`s (checkmark estilo Windows, mutuamente exclusivos por
+  `GroupName`). `ThemeService` (`QuickStacks.UI`) guarda o `ElementTheme` atual, persiste em
+  `Settings` (`"theme.mode"`) e reaplica em toda janela registrada (`ThemeService.Register`,
+  chamado no construtor de `PopupWindow`/`EditorWindow`) quando o usuário troca de tema —
+  sem precisar reiniciar o app. "Seguir Windows" é `ElementTheme.Default`, que o WinUI 3 já
+  resolve sozinho a partir do tema do sistema.
+- **Cor de fundo por pasta**: tabela nova `FolderAppearance` (`FolderId` PK com
+  `ON DELETE CASCADE`, `BackgroundColorHex`) + `IMenuRepository.GetFolderBackgroundColorAsync`/
+  `SetFolderBackgroundColorAsync`. No popup, clique direito num ladrilho de pasta → "Cor de
+  fundo desta pasta..." abre um diálogo com um campo de hex (`#RRGGBB`); ao entrar naquela
+  pasta, o fundo da janela usa essa cor em vez do tema padrão (campo vazio remove o override).
+  Validação do formato (`HexColor.IsValid`, em `QuickStacks.Domain` — sem depender de nenhum
+  tipo de UI) roda tanto na UI quanto no repositório (defesa em profundidade: o repositório
+  lança `ArgumentException` para uma cor mal formada, mesmo se algo além da UI tentar gravar).
+- **Escopo desta fase**: não inclui cores customizáveis de outros elementos (texto, destaque,
+  bordas) nem um seletor de cor visual — só um campo de texto hex, equivalente ao "MVP" desse
+  recurso. O `MenuTheme` completo do EasyWinMenu (sombra, opacidade, fontes, etc.) não foi
+  portado; se algum desses detalhes for pedido depois, entra como incremento desta mesma fase.
+
 **Detalhe de plataforma descoberto nesta fase**: `Microsoft.UI.Xaml.Window` **não é** um
 `FrameworkElement`. Um `x:Bind` com `Mode=OneWay` (chamada de função) ou com `Converter=`
 declarado diretamente no conteúdo raiz de uma `Window` não compila (`SetConverterLookupRoot`/
@@ -256,13 +283,12 @@ compilador do WinUI 3 já faz essa coerção de tipo automaticamente; (2) para v
 depende de um valor que muda em runtime (a `BreadcrumbBar` conforme o `Mode`), assinar
 `ViewModel.PropertyChanged` no code-behind e setar a propriedade à mão, em vez de `x:Bind`.
 Vale a pena ter isso em mente em qualquer novo `Window` do QuickStacks — dentro de um `Page`/
-`UserControl` normal (que É `FrameworkElement`) esse problema não existe.
+`UserControl` normal (que É `FrameworkElement`) esse problema não existe. Pelo mesmo motivo,
+`RadioMenuFlyoutItem.IsChecked` do submenu Tema é setado à mão em `TrayIconWindow` (não por
+bind) ao construir a janela.
 
 ## 7. O que ainda não existe (roteiro, em ordem)
 
-- **Fase 4 — Temas** (seção "Temas" do spec original): claro/escuro/seguir Windows via
-  `ElementTheme` nativo + Mica/Acrylic; depois cores customizáveis por pasta
-  (`ItemThemeOverrides`, tabela nova).
 - **Fase 5 — i18n completo**: `.resw` para pt-BR/en-US/es-ES/de-DE, troca dinâmica sem
   reiniciar — **atenção à ressalva da seção 4** sobre a ferramenta MRT/PRI antes de começar.
 - **Fase 6 — Importação de `.lnk`** (RF08): resolver `.lnk` via `IShellLinkW` (COM) para
@@ -276,12 +302,14 @@ Vale a pena ter isso em mente em qualquer novo `Window` do QuickStacks — dentr
 Diferente do EasyWinMenu (que documenta explicitamente não ter nenhum teste automatizado —
 só verificação manual), o QuickStacks já nasce com:
 
-- `QuickStacks.UnitTests`: regras do `MenuItem` (fábricas, `RegisterLaunch`).
+- `QuickStacks.UnitTests`: regras do `MenuItem` (fábricas, `RegisterLaunch`) e de `HexColor`
+  (formato `#RRGGBB`). 15/15 passando.
 - `QuickStacks.IntegrationTests`: `SqliteMenuRepository`/`ConfigExportService` contra um
   arquivo SQLite real e descartável por teste — proteção contra ciclo (mover uma pasta para
-  dentro de si mesma/de um descendente), cascata de exclusão, reordenar irmãos,
-  importar/exportar (inclusive com o pai fora de ordem na lista de entrada), busca global
-  (incluindo escape de coringas do `LIKE`), favoritos, recentes e mais usados. 13/13 passando.
+  dentro de si mesma/de um descendente), cascata de exclusão (incluindo `FolderAppearance`),
+  reordenar irmãos, importar/exportar (inclusive com o pai fora de ordem na lista de
+  entrada), busca global (incluindo escape de coringas do `LIKE`), favoritos, recentes, mais
+  usados e cor de fundo por pasta (incluindo rejeição de hex mal formado). 16/16 passando.
 
 Nenhum teste de UI/WinUI 3 ainda (a interação de drag-and-drop e o comportamento do ícone de
 bandeja só têm a cobertura de "compila e o tipo confere", não de comportamento real — ver

@@ -245,6 +245,43 @@ public sealed class SqliteMenuRepository : IMenuRepository
 
     private static string EscapeLike(string value) => value.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
 
+    public async Task<string?> GetFolderBackgroundColorAsync(string folderId, CancellationToken ct = default)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT BackgroundColorHex FROM FolderAppearance WHERE FolderId = @folderId;";
+        command.Parameters.AddWithValue("@folderId", folderId);
+        return (await command.ExecuteScalarAsync(ct)) as string;
+    }
+
+    public async Task SetFolderBackgroundColorAsync(string folderId, string? hex, CancellationToken ct = default)
+    {
+        if (hex is not null && !HexColor.IsValid(hex))
+        {
+            throw new ArgumentException($"'{hex}' nao e' uma cor valida (esperado #RRGGBB).", nameof(hex));
+        }
+
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+
+        if (hex is null)
+        {
+            command.CommandText = "DELETE FROM FolderAppearance WHERE FolderId = @folderId;";
+            command.Parameters.AddWithValue("@folderId", folderId);
+        }
+        else
+        {
+            command.CommandText = """
+                INSERT INTO FolderAppearance (FolderId, BackgroundColorHex) VALUES (@folderId, @hex)
+                ON CONFLICT(FolderId) DO UPDATE SET BackgroundColorHex = excluded.BackgroundColorHex;
+                """;
+            command.Parameters.AddWithValue("@folderId", folderId);
+            command.Parameters.AddWithValue("@hex", hex);
+        }
+
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
     private static void Bind(SqliteCommand command, MenuItem item)
     {
         command.Parameters.AddWithValue("@Id", item.Id);
