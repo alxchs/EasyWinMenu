@@ -1,0 +1,51 @@
+<Window
+    x:Class="QuickStacks.UI.EditorWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:app="using:QuickStacks.Application">
+
+    <Grid Background="{ThemeResource LayerFillColorDefaultBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <CommandBar Grid.Row="0" DefaultLabelPosition="Right" Background="Transparent">
+            <AppBarButton Icon="NewFolder" Label="Nova pasta" Click="AddFolder_Click" />
+            <AppBarButton Icon="Add" Label="Novo item" Click="AddItem_Click" />
+            <AppBarButton Icon="Rename" Label="Renomear" Click="Rename_Click" />
+            <AppBarButton Icon="Edit" Label="Editar" Click="Edit_Click" />
+            <AppBarButton Icon="Delete" Label="Excluir" Click="Delete_Click" />
+            <AppBarSeparator />
+            <AppBarButton Icon="Save" Label="Exportar" Click="Export_Click" />
+            <AppBarButton Icon="OpenFile" Label="Importar" Click="Import_Click" />
+        </CommandBar>
+
+        <!-- Padrao oficial do WinUI 3 para dados hierarquicos: um TreeViewItem aninhado no
+             proprio DataTemplate, com ItemsSource apontando para os filhos do no. -->
+        <TreeView
+            x:Name="Tree"
+            Grid.Row="1"
+            Margin="8"
+            CanDragItems="True"
+            AllowDrop="True"
+            SelectionChanged="Tree_SelectionChanged"
+            DragItemsStarting="Tree_DragItemsStarting"
+            ItemsSource="{x:Bind ViewModel.RootNodes}">
+            <TreeView.ItemTemplate>
+                <DataTemplate x:DataType="app:MenuTreeNodeViewModel">
+                    <TreeViewItem
+                        ItemsSource="{x:Bind Children}"
+                        AllowDrop="True"
+                        DragOver="TreeItem_DragOver"
+                        Drop="TreeItem_Drop">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="{x:Bind Glyph}" FontSize="16" />
+                            <TextBlock Text="{x:Bind Name}" />
+                        </StackPanel>
+                    </TreeViewItem>
+                </DataTemplate>
+            </TreeView.ItemTemplate>
+        </TreeView>
+    </Grid>
+</Window>

@@ -23,9 +23,12 @@ public partial class App : Microsoft.UI.Xaml.Application
     /// </summary>
     public IMenuRepository MenuRepository { get; private set; } = null!;
 
+    public IConfigExportService ExportService { get; private set; } = null!;
+
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         MenuRepository = new SqliteMenuRepository();
+        ExportService = new ConfigExportService(MenuRepository);
         _ = SeedData.EnsureSeededAsync(MenuRepository);
 
         // Nao existe uma "janela principal" visivel: o unico ponto de entrada e' o icone

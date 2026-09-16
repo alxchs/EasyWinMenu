@@ -11,10 +11,12 @@ namespace QuickStacks.UI;
 public sealed partial class TrayIconWindow : Window
 {
     private PopupWindow? _popup;
+    private EditorWindow? _editor;
 
     public TrayIconWindow()
     {
         ShowPopupCommand = new RelayCommand(ShowPopup);
+        OpenEditorCommand = new RelayCommand(OpenEditor);
         ExitCommand = new RelayCommand(() => Microsoft.UI.Xaml.Application.Current.Exit());
 
         InitializeComponent();
@@ -27,6 +29,8 @@ public sealed partial class TrayIconWindow : Window
     }
 
     public IRelayCommand ShowPopupCommand { get; }
+
+    public IRelayCommand OpenEditorCommand { get; }
 
     public IRelayCommand ExitCommand { get; }
 
@@ -41,5 +45,17 @@ public sealed partial class TrayIconWindow : Window
         }
 
         _popup.ActivateNearCursor();
+    }
+
+    private void OpenEditor()
+    {
+        if (_editor is null)
+        {
+            var app = (App)Microsoft.UI.Xaml.Application.Current;
+            _editor = new EditorWindow(app.MenuRepository, app.ExportService);
+            _editor.Closed += (_, _) => _editor = null;
+        }
+
+        _editor.Activate();
     }
 }

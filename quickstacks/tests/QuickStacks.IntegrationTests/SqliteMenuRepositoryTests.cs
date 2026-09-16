@@ -82,4 +82,64 @@ public class SqliteMenuRepositoryTests : IDisposable
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => _repository.MoveAsync(pasta.Id, pasta.Id));
     }
+
+    [Fact]
+    public async Task DeleteAsync_OnFolder_CascadesToChildren()
+    {
+        var pasta = MenuItem.CreateFolder("Pasta", null, 0);
+        var filho = MenuItem.CreateShortcut("Notepad", pasta.Id, MenuItemType.Executable, "notepad.exe", 0);
+        await _repository.AddAsync(pasta);
+        await _repository.AddAsync(filho);
+
+        await _repository.DeleteAsync(pasta.Id);
+
+        Assert.Null(await _repository.GetByIdAsync(pasta.Id));
+        Assert.Null(await _repository.GetByIdAsync(filho.Id));
+    }
+
+    [Fact]
+    public async Task ReorderChildrenAsync_UpdatesSortOrder()
+    {
+        var a = MenuItem.CreateFolder("A", null, 0);
+        var b = MenuItem.CreateFolder("B", null, 1);
+        await _repository.AddAsync(a);
+        await _repository.AddAsync(b);
+
+        await _repository.ReorderChildrenAsync(null, [b.Id, a.Id]);
+
+        var raiz = await _repository.GetChildrenAsync(null);
+        Assert.Equal("B", raiz[0].Name);
+        Assert.Equal("A", raiz[1].Name);
+    }
+
+    [Fact]
+    public async Task ReplaceAllAsync_RebuildsTreeEvenWithChildBeforeParentInList()
+    {
+        var pai = MenuItem.CreateFolder("Pai", null, 0);
+        var filho = MenuItem.CreateShortcut("Filho", pai.Id, MenuItemType.Executable, "calc.exe", 0);
+
+        // Proposital: filho antes do pai na lista, para provar que o import nao depende
+        // da ordem (FK fica desligada so durante a carga - ver SqliteMenuRepository.ReplaceAllAsync).
+        await _repository.ReplaceAllAsync([filho, pai]);
+
+        var raiz = await _repository.GetChildrenAsync(null);
+        var doPai = await _repository.GetChildrenAsync(pai.Id);
+        Assert.Single(raiz);
+        Assert.Equal("Pai", raiz[0].Name);
+        Assert.Single(doPai);
+        Assert.Equal("Filho", doPai[0].Name);
+    }
+
+    [Fact]
+    public async Task ReplaceAllAsync_ThenDelete_StillCascades()
+    {
+        // Garante que a FK volta a ficar ligada depois do import (nao fica OFF para sempre).
+        var pai = MenuItem.CreateFolder("Pai", null, 0);
+        var filho = MenuItem.CreateShortcut("Filho", pai.Id, MenuItemType.Executable, "calc.exe", 0);
+        await _repository.ReplaceAllAsync([pai, filho]);
+
+        await _repository.DeleteAsync(pai.Id);
+
+        Assert.Null(await _repository.GetByIdAsync(filho.Id));
+    }
 }

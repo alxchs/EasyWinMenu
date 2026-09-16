@@ -189,12 +189,40 @@ pasta (`Settings` — chave `window.size.<folderId>`, ou `window.size.root` na r
 persistido a cada mudança de tamanho (`AppWindow.Changed`) e restaurado ao navegar para
 aquele nível.
 
+## 6.4 Fase 2 — Editor visual (RF14/UC04/UC05)
+
+`EditorWindow` (aberta pelo item "Editar estrutura..." do menu da bandeja): uma `TreeView`
+nativa do WinUI 3 com a árvore inteira (`EditorViewModel.RootNodes`, montada por
+`MenuTreeNodeViewModel.BuildTree` a partir de `IMenuRepository.GetAllAsync` — uma consulta só,
+não uma por nível). Usa o padrão oficial de dados hierárquicos do WinUI 3: um `TreeViewItem`
+aninhado dentro do próprio `DataTemplate`, com `ItemsSource` apontando para os filhos do nó.
+
+- **CRUD**: Nova pasta / Novo item (diálogo com Nome/Tipo/Caminho/Argumentos/Diretório) /
+  Renomear / Editar / Excluir (com confirmação; exclusão de pasta é cascata no banco — ver
+  correção de bug abaixo), todos direcionados ao nó selecionado na árvore (raiz se nada
+  selecionado).
+- **Mover por arraste**: mesmo padrão de formato de dados customizado (`"QuickStacksItemId"`)
+  já usado no popup da Fase 1, agora nos nós da `TreeView` — soltar um item sobre outra pasta
+  reparenta via `IMenuRepository.MoveAsync` (mesma proteção contra ciclo).
+- **Exportar/Importar** (RF17–RF20): arquivo JSON único com a árvore inteira
+  (`IConfigExportService`/`ConfigExportService`), via `FileSavePicker`/`FileOpenPicker`
+  nativos. Importar **substitui toda a estrutura atual** — o diálogo de confirmação deixa
+  isso explícito antes de agir.
+- **Reordenar dentro do mesmo nível**: `IMenuRepository.ReorderChildrenAsync` já existe e tem
+  teste de integração, mas ainda **não está ligado a nenhum gesto de arraste na `TreeView`**
+  desta fase (arrastar entre pastas diferentes funciona; arrastar só para trocar a ordem entre
+  irmãos ainda não). Fica como pendência para uma próxima iteração da UI do editor.
+
+**Bug de Fase 1 corrigido nesta fase**: `SqliteMenuRepository.Open()` nunca executava `PRAGMA
+foreign_keys = ON` nas conexões normais (só a conexão descartável do `EnsureCreated`, no
+construtor, tinha isso ligado) — ou seja, **`ON DELETE CASCADE` nunca era aplicado de
+verdade** em nenhuma operação real de exclusão desde a Fase 1, só não tinha sido percebido
+porque nenhum teste exercitava exclusão de uma pasta com filhos. Corrigido (o pragma agora
+roda em toda conexão aberta) e coberto por um novo teste
+(`DeleteAsync_OnFolder_CascadesToChildren`).
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
-- **Fase 2 — Editor visual** (RF14/UC04/UC05): árvore de estrutura com CRUD completo,
-  reordenar por drag dentro do mesmo nível (com persistência de `SortOrder`), importar/
-  exportar configuração. Referência funcional: o `SettingsWindow` do EasyWinMenu já resolve
-  esse conjunto de problemas em WPF — a lógica (não o código) é o que vale portar.
 - **Fase 3 — Busca, favoritos, recentes** (RF08–RF13): busca em duas camadas (type-ahead +
   find-com-lista), inspirada no par que já existe no EasyWinMenu, mas com busca global (não
   só no nível atual). `IsFavorite`, `LaunchCount`, `LastUsedUtc` já existem no schema desde a
@@ -216,9 +244,10 @@ Diferente do EasyWinMenu (que documenta explicitamente não ter nenhum teste aut
 só verificação manual), o QuickStacks já nasce com:
 
 - `QuickStacks.UnitTests`: regras do `MenuItem` (fábricas, `RegisterLaunch`).
-- `QuickStacks.IntegrationTests`: `SqliteMenuRepository` contra um arquivo SQLite real e
-  descartável por teste — inclui os dois casos de proteção contra ciclo (mover uma pasta para
-  dentro de si mesma, e para dentro de um descendente).
+- `QuickStacks.IntegrationTests`: `SqliteMenuRepository`/`ConfigExportService` contra um
+  arquivo SQLite real e descartável por teste — proteção contra ciclo (mover uma pasta para
+  dentro de si mesma/de um descendente), cascata de exclusão, reordenar irmãos e
+  importar/exportar (inclusive com o pai fora de ordem na lista de entrada).
 
 Nenhum teste de UI/WinUI 3 ainda (a interação de drag-and-drop e o comportamento do ícone de
 bandeja só têm a cobertura de "compila e o tipo confere", não de comportamento real — ver

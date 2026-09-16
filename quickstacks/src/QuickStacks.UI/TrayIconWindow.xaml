@@ -12,6 +12,7 @@
             <tb:TaskbarIcon.ContextFlyout>
                 <MenuFlyout>
                     <MenuFlyoutItem Text="Abrir" Command="{x:Bind ShowPopupCommand}" />
+                    <MenuFlyoutItem Text="Editar estrutura..." Command="{x:Bind OpenEditorCommand}" />
                     <MenuFlyoutSeparator />
                     <MenuFlyoutItem Text="Sair" Command="{x:Bind ExitCommand}" />
                 </MenuFlyout>

@@ -31,4 +31,17 @@ public interface IMenuRepository
     Task<bool> IsDescendantAsync(string candidateAncestorId, string itemId, CancellationToken ct = default);
 
     Task RegisterLaunchAsync(string itemId, CancellationToken ct = default);
+
+    /// <summary>Toda a arvore, sem filtro de nivel - usado pelo editor (Fase 2) e por Exportar.</summary>
+    Task<IReadOnlyList<MenuItem>> GetAllAsync(CancellationToken ct = default);
+
+    /// <summary>Reordena os irmaos de <paramref name="parentId"/> na ordem exata de <paramref name="orderedIds"/>.</summary>
+    Task ReorderChildrenAsync(string? parentId, IReadOnlyList<string> orderedIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// Apaga a arvore inteira e recria a partir de <paramref name="items"/> (usado por Importar -
+    /// RF18). Os Ids sao preservados como vieram no arquivo, entao as referencias ParentId
+    /// continuam validas.
+    /// </summary>
+    Task ReplaceAllAsync(IReadOnlyList<MenuItem> items, CancellationToken ct = default);
 }

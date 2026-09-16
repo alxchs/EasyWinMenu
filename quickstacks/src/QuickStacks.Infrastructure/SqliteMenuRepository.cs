@@ -15,12 +15,22 @@ public sealed class SqliteMenuRepository : IMenuRepository
         SqliteSchema.EnsureCreated(connection);
     }
 
-    private SqliteConnection Open()
+    private static SqliteConnection Open(string connectionString)
     {
-        var connection = new SqliteConnection(_connectionString);
+        var connection = new SqliteConnection(connectionString);
         connection.Open();
+
+        // 'foreign_keys' e' uma configuracao por conexao, nao persistida no arquivo - sem
+        // isto aqui, ON DELETE CASCADE nunca seria aplicado de verdade em nenhuma operacao
+        // normal (so a conexao descartavel do EnsureCreated no construtor tinha isto ligado).
+        using var pragma = connection.CreateCommand();
+        pragma.CommandText = "PRAGMA foreign_keys = ON;";
+        pragma.ExecuteNonQuery();
+
         return connection;
     }
+
+    private SqliteConnection Open() => Open(_connectionString);
 
     public async Task<IReadOnlyList<MenuItem>> GetChildrenAsync(string? parentId, CancellationToken ct = default)
     {
@@ -214,5 +224,89 @@ public sealed class SqliteMenuRepository : IMenuRepository
             CreatedAt = DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("CreatedAt"))),
             UpdatedAt = DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("UpdatedAt"))),
         };
+    }
+
+    public async Task<IReadOnlyList<MenuItem>> GetAllAsync(CancellationToken ct = default)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT * FROM MenuItems ORDER BY ParentId, SortOrder;";
+
+        var results = new List<MenuItem>();
+        using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            results.Add(Map(reader));
+        }
+
+        return results;
+    }
+
+    public async Task ReorderChildrenAsync(string? parentId, IReadOnlyList<string> orderedIds, CancellationToken ct = default)
+    {
+        using var connection = Open();
+        using var transaction = connection.BeginTransaction();
+
+        for (var i = 0; i < orderedIds.Count; i++)
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = "UPDATE MenuItems SET SortOrder = @sortOrder, UpdatedAt = @updatedAt WHERE Id = @id AND (ParentId = @parentId OR (@parentId IS NULL AND ParentId IS NULL));";
+            command.Parameters.AddWithValue("@sortOrder", i);
+            command.Parameters.AddWithValue("@updatedAt", DateTimeOffset.UtcNow.ToString("O"));
+            command.Parameters.AddWithValue("@id", orderedIds[i]);
+            command.Parameters.AddWithValue("@parentId", (object?)parentId ?? DBNull.Value);
+            await command.ExecuteNonQueryAsync(ct);
+        }
+
+        transaction.Commit();
+    }
+
+    public async Task ReplaceAllAsync(IReadOnlyList<MenuItem> items, CancellationToken ct = default)
+    {
+        using var connection = Open();
+
+        // 'PRAGMA foreign_keys' e' no-op dentro de uma transacao ja aberta - por isso isto
+        // roda ANTES do BeginTransaction. Import substitui a arvore inteira e a ordem de
+        // 'items' nao garante que o pai sempre venha antes do filho, entao a FK fica
+        // desligada so durante a carga.
+        using (var pragmaOff = connection.CreateCommand())
+        {
+            pragmaOff.CommandText = "PRAGMA foreign_keys = OFF;";
+            pragmaOff.ExecuteNonQuery();
+        }
+
+        using var transaction = connection.BeginTransaction();
+
+        using (var clear = connection.CreateCommand())
+        {
+            clear.Transaction = transaction;
+            clear.CommandText = "DELETE FROM MenuItems;";
+            await clear.ExecuteNonQueryAsync(ct);
+        }
+
+        foreach (var item in items)
+        {
+            using var insert = connection.CreateCommand();
+            insert.Transaction = transaction;
+            insert.CommandText = """
+                INSERT INTO MenuItems
+                    (Id, ParentId, Name, Description, Type, Path, Arguments, WorkingDirectory, Icon,
+                     SortOrder, IsFavorite, LaunchCount, LastUsedUtc, CreatedAt, UpdatedAt)
+                VALUES
+                    (@Id, @ParentId, @Name, @Description, @Type, @Path, @Arguments, @WorkingDirectory, @Icon,
+                     @SortOrder, @IsFavorite, @LaunchCount, @LastUsedUtc, @CreatedAt, @UpdatedAt);
+                """;
+            Bind(insert, item);
+            await insert.ExecuteNonQueryAsync(ct);
+        }
+
+        transaction.Commit();
+
+        using (var pragmaOn = connection.CreateCommand())
+        {
+            pragmaOn.CommandText = "PRAGMA foreign_keys = ON;";
+            pragmaOn.ExecuteNonQuery();
+        }
     }
 }
