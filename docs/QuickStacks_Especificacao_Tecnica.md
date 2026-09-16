@@ -221,12 +221,45 @@ porque nenhum teste exercitava exclusão de uma pasta com filhos. Corrigido (o p
 roda em toda conexão aberta) e coberto por um novo teste
 (`DeleteAsync_OnFolder_CascadesToChildren`).
 
+## 6.5 Fase 3 — Busca, favoritos, recentes, mais usados (RF08–RF13)
+
+`FolderNavigationViewModel` ganhou um `BrowseMode` (`Folder | Favorites | Recent | MostUsed |
+Search`): `Items` passa a vir de `IMenuRepository.GetFavoritesAsync`/`GetRecentAsync`/
+`GetMostUsedAsync`/`SearchAsync` em vez de `GetChildrenAsync` conforme o modo. No popup, uma
+caixa de busca e três botões (★ Favoritos, 🕐 Recentes, 🔥 Mais usados) no topo trocam de
+modo; a `BreadcrumbBar` some quando o modo não é `Folder` (não faz sentido mostrar uma trilha
+de pasta para uma lista de resultados que pode vir de qualquer nível da árvore).
+
+- **Busca (RF10) é global**, não escopada ao nível atual — diferente do EasyWinMenu, que só
+  buscava dentro do grupo aberto. Abrir uma pasta encontrada por busca/favoritos/recentes
+  reconstrói a trilha real até ela (`IMenuRepository.GetAncestorsAsync`) em vez de empilhar em
+  cima da trilha antiga, que não teria relação com o caminho real do resultado.
+- **Type-ahead (RF08)** continua sendo uma camada separada da busca — mesma distinção de duas
+  camadas que o EasyWinMenu já usava: digitar sem abrir a caixa de busca pula a seleção para o
+  primeiro item cujo nome começa com o texto digitado, mas só entre os itens do **nível atual**
+  (`PopupWindow.ItemsGrid_KeyDown`, buffer reiniciado após ~1s sem digitar). Limitação
+  conhecida: só reconhece A-Z/0-9/espaço (`VirtualKeyToChar`) — sem suporte a acentos ou
+  layouts de teclado não latinos por enquanto.
+- **Favoritar**: menu de contexto (clique direito) num ícone com "Favoritar/Desfavoritar",
+  chamando `IMenuRepository.SetFavoriteAsync`; um ícone favoritado ganha uma estrela dourada
+  sobreposta no canto.
+- **RegisterLaunchAsync já existia desde a Fase 1** (`LaunchService.LaunchAsync` chama isso a
+  cada execução) — a Fase 3 só adicionou a UI que consome `LaunchCount`/`LastUsedUtc`, sem
+  mudar como são gravados.
+
+**Detalhe de plataforma descoberto nesta fase**: `Microsoft.UI.Xaml.Window` **não é** um
+`FrameworkElement`. Um `x:Bind` com `Mode=OneWay` (chamada de função) ou com `Converter=`
+declarado diretamente no conteúdo raiz de uma `Window` não compila (`SetConverterLookupRoot`/
+o hook de atualização via `Loaded` exigem um `FrameworkElement`, e `this` ali é a `Window`).
+Duas saídas usadas: (1) para `bool → Visibility`, usar o `x:Bind` direto sem `Converter=` — o
+compilador do WinUI 3 já faz essa coerção de tipo automaticamente; (2) para visibilidade que
+depende de um valor que muda em runtime (a `BreadcrumbBar` conforme o `Mode`), assinar
+`ViewModel.PropertyChanged` no code-behind e setar a propriedade à mão, em vez de `x:Bind`.
+Vale a pena ter isso em mente em qualquer novo `Window` do QuickStacks — dentro de um `Page`/
+`UserControl` normal (que É `FrameworkElement`) esse problema não existe.
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
-- **Fase 3 — Busca, favoritos, recentes** (RF08–RF13): busca em duas camadas (type-ahead +
-  find-com-lista), inspirada no par que já existe no EasyWinMenu, mas com busca global (não
-  só no nível atual). `IsFavorite`, `LaunchCount`, `LastUsedUtc` já existem no schema desde a
-  Fase 1 — falta só a UI.
 - **Fase 4 — Temas** (seção "Temas" do spec original): claro/escuro/seguir Windows via
   `ElementTheme` nativo + Mica/Acrylic; depois cores customizáveis por pasta
   (`ItemThemeOverrides`, tabela nova).
@@ -246,8 +279,9 @@ só verificação manual), o QuickStacks já nasce com:
 - `QuickStacks.UnitTests`: regras do `MenuItem` (fábricas, `RegisterLaunch`).
 - `QuickStacks.IntegrationTests`: `SqliteMenuRepository`/`ConfigExportService` contra um
   arquivo SQLite real e descartável por teste — proteção contra ciclo (mover uma pasta para
-  dentro de si mesma/de um descendente), cascata de exclusão, reordenar irmãos e
-  importar/exportar (inclusive com o pai fora de ordem na lista de entrada).
+  dentro de si mesma/de um descendente), cascata de exclusão, reordenar irmãos,
+  importar/exportar (inclusive com o pai fora de ordem na lista de entrada), busca global
+  (incluindo escape de coringas do `LIKE`), favoritos, recentes e mais usados. 13/13 passando.
 
 Nenhum teste de UI/WinUI 3 ainda (a interação de drag-and-drop e o comportamento do ícone de
 bandeja só têm a cobertura de "compila e o tipo confere", não de comportamento real — ver

@@ -7,14 +7,35 @@
     <Grid Background="{ThemeResource LayerFillColorDefaultBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
+        <!-- Fase 3: busca global (RF10) + atalhos para as listas globais (RF09/RF11/RF13). -->
+        <Grid Grid.Row="0" Margin="12,10,12,0" ColumnSpacing="6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox
+                x:Name="SearchBox"
+                Grid.Column="0"
+                PlaceholderText="Pesquisar em tudo..."
+                TextChanged="SearchBox_TextChanged" />
+            <Button Grid.Column="1" Content="★" ToolTipService.ToolTip="Favoritos" Click="ShowFavorites_Click" />
+            <Button Grid.Column="2" Content="🕐" ToolTipService.ToolTip="Recentes" Click="ShowRecent_Click" />
+            <Button Grid.Column="3" Content="🔥" ToolTipService.ToolTip="Mais usados" Click="ShowMostUsed_Click" />
+        </Grid>
+
         <!-- Requisito 1: navegacao dentro do grupo como pasta do Windows (trilha in-place,
-             nunca uma janela nova por subpasta). -->
+             nunca uma janela nova por subpasta). So' faz sentido no modo Folder - nas vistas
+             globais (favoritos/recentes/busca) a trilha some, ja' que os resultados podem vir
+             de qualquer nivel da arvore. -->
         <BreadcrumbBar
             x:Name="Breadcrumb"
-            Grid.Row="0"
+            Grid.Row="1"
             Margin="12,10"
             ItemsSource="{x:Bind ViewModel.Breadcrumb}"
             ItemClicked="Breadcrumb_ItemClicked">
@@ -30,7 +51,7 @@
              matematica de coluna manual). -->
         <GridView
             x:Name="ItemsGrid"
-            Grid.Row="1"
+            Grid.Row="2"
             Margin="4"
             SelectionMode="Extended"
             IsItemClickEnabled="False"
@@ -49,7 +70,21 @@
                         AllowDrop="True"
                         DragOver="ItemContainer_DragOver"
                         Drop="ItemContainer_Drop">
-                        <FontIcon Glyph="{x:Bind Glyph}" FontSize="32" HorizontalAlignment="Center" />
+                        <StackPanel.ContextFlyout>
+                            <MenuFlyout>
+                                <MenuFlyoutItem Text="Favoritar/Desfavoritar" Click="ToggleFavorite_Click" />
+                            </MenuFlyout>
+                        </StackPanel.ContextFlyout>
+                        <Grid HorizontalAlignment="Center">
+                            <FontIcon Glyph="{x:Bind Glyph}" FontSize="32" />
+                            <TextBlock
+                                Text="★"
+                                FontSize="12"
+                                Foreground="Gold"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Top"
+                                Visibility="{x:Bind IsFavorite}" />
+                        </Grid>
                         <TextBlock
                             Text="{x:Bind Name}"
                             HorizontalAlignment="Center"

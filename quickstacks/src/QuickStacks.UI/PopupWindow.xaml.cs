@@ -26,6 +26,8 @@ public sealed partial class PopupWindow : Window
     private const int DefaultHeight = 340;
 
     private readonly SettingsStore _settings = new();
+    private string _typeAheadBuffer = string.Empty;
+    private DateTime _typeAheadLastKeyUtc = DateTime.MinValue;
 
     public PopupWindow(IMenuRepository repository)
     {
@@ -33,6 +35,18 @@ public sealed partial class PopupWindow : Window
 
         ViewModel = new FolderNavigationViewModel(repository);
         Repository = repository;
+
+        // Microsoft.UI.Xaml.Window nao e' um FrameworkElement, entao x:Bind com Mode=OneWay
+        // no conteudo raiz de uma Window nao compila (o codigo gerado precisa de um
+        // FrameworkElement para o hook de Loaded/atualizacao) - por isso a visibilidade da
+        // trilha e' atualizada aqui a mao, reagindo a troca de Mode.
+        ViewModel.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(FolderNavigationViewModel.Mode))
+            {
+                Breadcrumb.Visibility = ModeToVisibility(ViewModel.Mode);
+            }
+        };
 
         AppWindow.Resize(new SizeInt32(DefaultWidth, DefaultHeight));
         AppWindow.Changed += AppWindow_Changed;
@@ -69,6 +83,9 @@ public sealed partial class PopupWindow : Window
         ApplyRememberedSizeForCurrentFolder();
     }
 
+    /// <summary>So' a BreadcrumbBar depende do nivel atual - nas vistas globais da Fase 3 (favoritos/recentes/busca) ela nao faz sentido.</summary>
+    private Visibility ModeToVisibility(BrowseMode mode) => mode == BrowseMode.Folder ? Visibility.Visible : Visibility.Collapsed;
+
     private async void ItemsGrid_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
         await ActivateSelectedAsync();
@@ -81,7 +98,7 @@ public sealed partial class PopupWindow : Window
             case VirtualKey.Enter:
                 await ActivateSelectedAsync();
                 e.Handled = true;
-                break;
+                return;
             case VirtualKey.Back:
                 if (ViewModel.NavigateUpCommand.CanExecute(null))
                 {
@@ -90,7 +107,82 @@ public sealed partial class PopupWindow : Window
                 }
 
                 e.Handled = true;
-                break;
+                return;
+        }
+
+        // Type-ahead estilo Explorer (RF08): digitar sem abrir nenhuma caixa de busca pula a
+        // selecao para o primeiro item cujo nome comeca com o texto digitado, so' no nivel
+        // atual - diferente da busca global da caixa de pesquisa (RF10), que varre a arvore
+        // inteira. Buffer reiniciado apos ~1s sem digitar, igual ao Explorer real.
+        var character = VirtualKeyToChar(e.Key);
+        if (character is null)
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        _typeAheadBuffer = (now - _typeAheadLastKeyUtc).TotalSeconds > 1 ? string.Empty : _typeAheadBuffer;
+        _typeAheadBuffer += character;
+        _typeAheadLastKeyUtc = now;
+
+        var match = ViewModel.Items.FirstOrDefault(i => i.Name.StartsWith(_typeAheadBuffer, StringComparison.OrdinalIgnoreCase));
+        if (match is not null)
+        {
+            ItemsGrid.SelectedItem = match;
+            ItemsGrid.ScrollIntoView(match);
+        }
+
+        e.Handled = true;
+    }
+
+    private static char? VirtualKeyToChar(VirtualKey key)
+    {
+        return key switch
+        {
+            >= VirtualKey.A and <= VirtualKey.Z => (char)('A' + (key - VirtualKey.A)),
+            >= VirtualKey.Number0 and <= VirtualKey.Number9 => (char)('0' + (key - VirtualKey.Number0)),
+            VirtualKey.Space => ' ',
+            _ => null,
+        };
+    }
+
+    // ---- Busca global e vistas (Fase 3: RF09-RF13) ----
+
+    private async void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(SearchBox.Text))
+        {
+            await ViewModel.ShowFolderCommand.ExecuteAsync(null);
+        }
+        else
+        {
+            await ViewModel.SearchAsync(SearchBox.Text);
+        }
+    }
+
+    private async void ShowFavorites_Click(object sender, RoutedEventArgs e)
+    {
+        SearchBox.Text = string.Empty;
+        await ViewModel.ShowFavoritesCommand.ExecuteAsync(null);
+    }
+
+    private async void ShowRecent_Click(object sender, RoutedEventArgs e)
+    {
+        SearchBox.Text = string.Empty;
+        await ViewModel.ShowRecentCommand.ExecuteAsync(null);
+    }
+
+    private async void ShowMostUsed_Click(object sender, RoutedEventArgs e)
+    {
+        SearchBox.Text = string.Empty;
+        await ViewModel.ShowMostUsedCommand.ExecuteAsync(null);
+    }
+
+    private async void ToggleFavorite_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: MenuEntryViewModel entry })
+        {
+            await ViewModel.ToggleFavoriteAsync(entry);
         }
     }
 

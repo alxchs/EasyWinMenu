@@ -44,4 +44,21 @@ public interface IMenuRepository
     /// continuam validas.
     /// </summary>
     Task ReplaceAllAsync(IReadOnlyList<MenuItem> items, CancellationToken ct = default);
+
+    /// <summary>
+    /// Busca global (RF10) por substring no nome, em qualquer nivel da arvore - diferente do
+    /// EasyWinMenu, cuja busca so olhava o nivel do grupo aberto no momento.
+    /// </summary>
+    Task<IReadOnlyList<MenuItem>> SearchAsync(string query, CancellationToken ct = default);
+
+    /// <summary>Itens marcados como favoritos (RF09/RF11), em qualquer nivel.</summary>
+    Task<IReadOnlyList<MenuItem>> GetFavoritesAsync(CancellationToken ct = default);
+
+    /// <summary>Os <paramref name="limit"/> itens executados mais recentemente (RF12).</summary>
+    Task<IReadOnlyList<MenuItem>> GetRecentAsync(int limit, CancellationToken ct = default);
+
+    /// <summary>Os <paramref name="limit"/> itens mais executados, por contagem (RF13).</summary>
+    Task<IReadOnlyList<MenuItem>> GetMostUsedAsync(int limit, CancellationToken ct = default);
+
+    Task SetFavoriteAsync(string itemId, bool isFavorite, CancellationToken ct = default);
 }

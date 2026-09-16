@@ -185,6 +185,66 @@ public sealed class SqliteMenuRepository : IMenuRepository
         await UpdateAsync(item, ct);
     }
 
+    public async Task<IReadOnlyList<MenuItem>> SearchAsync(string query, CancellationToken ct = default)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT * FROM MenuItems WHERE Name LIKE @pattern ESCAPE '\\' ORDER BY Name;";
+        command.Parameters.AddWithValue("@pattern", "%" + EscapeLike(query) + "%");
+        return await ReadAllAsync(command, ct);
+    }
+
+    public async Task<IReadOnlyList<MenuItem>> GetFavoritesAsync(CancellationToken ct = default)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT * FROM MenuItems WHERE IsFavorite = 1 ORDER BY Name;";
+        return await ReadAllAsync(command, ct);
+    }
+
+    public async Task<IReadOnlyList<MenuItem>> GetRecentAsync(int limit, CancellationToken ct = default)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT * FROM MenuItems WHERE LastUsedUtc IS NOT NULL ORDER BY LastUsedUtc DESC LIMIT @limit;";
+        command.Parameters.AddWithValue("@limit", limit);
+        return await ReadAllAsync(command, ct);
+    }
+
+    public async Task<IReadOnlyList<MenuItem>> GetMostUsedAsync(int limit, CancellationToken ct = default)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT * FROM MenuItems WHERE LaunchCount > 0 ORDER BY LaunchCount DESC LIMIT @limit;";
+        command.Parameters.AddWithValue("@limit", limit);
+        return await ReadAllAsync(command, ct);
+    }
+
+    public async Task SetFavoriteAsync(string itemId, bool isFavorite, CancellationToken ct = default)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE MenuItems SET IsFavorite = @isFavorite, UpdatedAt = @updatedAt WHERE Id = @id;";
+        command.Parameters.AddWithValue("@isFavorite", isFavorite ? 1 : 0);
+        command.Parameters.AddWithValue("@updatedAt", DateTimeOffset.UtcNow.ToString("O"));
+        command.Parameters.AddWithValue("@id", itemId);
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
+    private static async Task<IReadOnlyList<MenuItem>> ReadAllAsync(SqliteCommand command, CancellationToken ct)
+    {
+        var results = new List<MenuItem>();
+        using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            results.Add(Map(reader));
+        }
+
+        return results;
+    }
+
+    private static string EscapeLike(string value) => value.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+
     private static void Bind(SqliteCommand command, MenuItem item)
     {
         command.Parameters.AddWithValue("@Id", item.Id);

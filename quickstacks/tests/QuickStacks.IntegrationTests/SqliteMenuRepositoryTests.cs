@@ -142,4 +142,85 @@ public class SqliteMenuRepositoryTests : IDisposable
 
         Assert.Null(await _repository.GetByIdAsync(filho.Id));
     }
+
+    [Fact]
+    public async Task SearchAsync_IsCaseInsensitiveAndGlobal_NotScopedToOneLevel()
+    {
+        var pasta = MenuItem.CreateFolder("Ferramentas Web", null, 0);
+        var netoDentroDaPasta = MenuItem.CreateShortcut("Anthropic Console", pasta.Id, MenuItemType.Url, "https://console.anthropic.com", 0);
+        var outroNaRaiz = MenuItem.CreateShortcut("Calculadora", null, MenuItemType.Executable, "calc.exe", 1);
+        await _repository.AddAsync(pasta);
+        await _repository.AddAsync(netoDentroDaPasta);
+        await _repository.AddAsync(outroNaRaiz);
+
+        var resultado = await _repository.SearchAsync("anthropic");
+
+        var encontrado = Assert.Single(resultado);
+        Assert.Equal(netoDentroDaPasta.Id, encontrado.Id);
+    }
+
+    [Fact]
+    public async Task SearchAsync_EscapesLikeWildcards()
+    {
+        var item = MenuItem.CreateShortcut("100% Pronto", null, MenuItemType.Executable, "notepad.exe", 0);
+        var outro = MenuItem.CreateShortcut("100X Pronto", null, MenuItemType.Executable, "notepad.exe", 1);
+        await _repository.AddAsync(item);
+        await _repository.AddAsync(outro);
+
+        // Sem escapar o '%', esta busca combinaria com "100X Pronto" tambem (LIKE trata '%'
+        // como coringa) - com o escape, so o item que tem o '%' literal deve aparecer.
+        var resultado = await _repository.SearchAsync("100%");
+
+        var encontrado = Assert.Single(resultado);
+        Assert.Equal(item.Id, encontrado.Id);
+    }
+
+    [Fact]
+    public async Task GetFavoritesAsync_ReturnsOnlyFlaggedItems()
+    {
+        var favorito = MenuItem.CreateShortcut("Favorito", null, MenuItemType.Executable, "a.exe", 0);
+        var comum = MenuItem.CreateShortcut("Comum", null, MenuItemType.Executable, "b.exe", 1);
+        await _repository.AddAsync(favorito);
+        await _repository.AddAsync(comum);
+
+        await _repository.SetFavoriteAsync(favorito.Id, true);
+
+        var favoritos = await _repository.GetFavoritesAsync();
+        var encontrado = Assert.Single(favoritos);
+        Assert.Equal(favorito.Id, encontrado.Id);
+    }
+
+    [Fact]
+    public async Task GetRecentAsync_OrdersByLastUsedDescending()
+    {
+        var antigo = MenuItem.CreateShortcut("Antigo", null, MenuItemType.Executable, "a.exe", 0);
+        var recente = MenuItem.CreateShortcut("Recente", null, MenuItemType.Executable, "b.exe", 1);
+        await _repository.AddAsync(antigo);
+        await _repository.AddAsync(recente);
+
+        await _repository.RegisterLaunchAsync(antigo.Id);
+        await _repository.RegisterLaunchAsync(recente.Id);
+
+        var recentes = await _repository.GetRecentAsync(10);
+        Assert.Equal(recente.Id, recentes[0].Id);
+        Assert.Equal(antigo.Id, recentes[1].Id);
+    }
+
+    [Fact]
+    public async Task GetMostUsedAsync_OrdersByLaunchCountDescending()
+    {
+        var poucoUsado = MenuItem.CreateShortcut("Pouco usado", null, MenuItemType.Executable, "a.exe", 0);
+        var muitoUsado = MenuItem.CreateShortcut("Muito usado", null, MenuItemType.Executable, "b.exe", 1);
+        await _repository.AddAsync(poucoUsado);
+        await _repository.AddAsync(muitoUsado);
+
+        await _repository.RegisterLaunchAsync(poucoUsado.Id);
+        await _repository.RegisterLaunchAsync(muitoUsado.Id);
+        await _repository.RegisterLaunchAsync(muitoUsado.Id);
+        await _repository.RegisterLaunchAsync(muitoUsado.Id);
+
+        var maisUsados = await _repository.GetMostUsedAsync(10);
+        Assert.Equal(muitoUsado.Id, maisUsados[0].Id);
+        Assert.Equal(3, maisUsados[0].LaunchCount);
+    }
 }

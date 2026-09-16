@@ -5,15 +5,29 @@ using QuickStacks.Domain;
 
 namespace QuickStacks.Application;
 
+/// <summary>Fonte dos itens exibidos no popup - navegacao normal ou uma das vistas globais da Fase 3.</summary>
+public enum BrowseMode
+{
+    Folder,
+    Favorites,
+    Recent,
+    MostUsed,
+    Search,
+}
+
 /// <summary>
 /// Estado de navegacao "como pasta do Windows" dentro do popup: uma unica janela, uma
 /// trilha (breadcrumb) e os filhos do nivel atual - substitui o padrao inconsistente do
 /// EasyWinMenu (janela nova por subpasta no modo Panel vs. trilha in-place no App Folder).
 /// Aqui a navegacao e' SEMPRE in-place.
+///
+/// Fase 3: alem de navegar pasta a pasta, tambem alimenta os Items a partir de uma busca
+/// global ou de uma das listas globais (favoritos/recentes/mais usados - RF09/RF11/RF12/RF13).
 /// </summary>
 public sealed partial class FolderNavigationViewModel : ObservableObject
 {
     private const string RootLabel = "QuickStacks";
+    private const int GlobalListLimit = 20;
 
     private readonly IMenuRepository _repository;
 
@@ -30,17 +44,79 @@ public sealed partial class FolderNavigationViewModel : ObservableObject
     [ObservableProperty]
     private string? _currentFolderId;
 
-    public bool CanNavigateUp => CurrentFolderId is not null;
+    [ObservableProperty]
+    private BrowseMode _mode = BrowseMode.Folder;
+
+    [ObservableProperty]
+    private string _searchQuery = string.Empty;
+
+    public bool CanNavigateUp => Mode == BrowseMode.Folder && CurrentFolderId is not null;
 
     public async Task LoadAsync(CancellationToken ct = default)
     {
-        var children = await _repository.GetChildrenAsync(CurrentFolderId, ct);
+        IReadOnlyList<MenuItem> source = Mode switch
+        {
+            BrowseMode.Favorites => await _repository.GetFavoritesAsync(ct),
+            BrowseMode.Recent => await _repository.GetRecentAsync(GlobalListLimit, ct),
+            BrowseMode.MostUsed => await _repository.GetMostUsedAsync(GlobalListLimit, ct),
+            BrowseMode.Search => string.IsNullOrWhiteSpace(SearchQuery)
+                ? Array.Empty<MenuItem>()
+                : await _repository.SearchAsync(SearchQuery, ct),
+            _ => (await _repository.GetChildrenAsync(CurrentFolderId, ct)).OrderBy(c => c.SortOrder).ToList(),
+        };
 
         Items.Clear();
-        foreach (var child in children.OrderBy(c => c.SortOrder))
+        foreach (var entry in source)
         {
-            Items.Add(new MenuEntryViewModel(child));
+            Items.Add(new MenuEntryViewModel(entry));
         }
+    }
+
+    [RelayCommand]
+    public async Task ShowFolderAsync()
+    {
+        Mode = BrowseMode.Folder;
+        await LoadAsync();
+    }
+
+    [RelayCommand]
+    public async Task ShowFavoritesAsync()
+    {
+        Mode = BrowseMode.Favorites;
+        await LoadAsync();
+    }
+
+    [RelayCommand]
+    public async Task ShowRecentAsync()
+    {
+        Mode = BrowseMode.Recent;
+        await LoadAsync();
+    }
+
+    [RelayCommand]
+    public async Task ShowMostUsedAsync()
+    {
+        Mode = BrowseMode.MostUsed;
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Busca global (RF10) - diferente do EasyWinMenu, nao se limita ao nivel atualmente
+    /// aberto. O type-ahead (jump-to-match ao digitar sem abrir a busca) continua sendo um
+    /// recurso separado, resolvido na UI (PopupWindow), so' no nivel corrente - mesma
+    /// distincao de duas camadas que o EasyWinMenu ja usava.
+    /// </summary>
+    public async Task SearchAsync(string query)
+    {
+        SearchQuery = query;
+        Mode = BrowseMode.Search;
+        await LoadAsync();
+    }
+
+    public async Task ToggleFavoriteAsync(MenuEntryViewModel entry)
+    {
+        await _repository.SetFavoriteAsync(entry.Id, !entry.IsFavorite);
+        await LoadAsync();
     }
 
     /// <summary>Duplo clique/Enter numa pasta: empurra a trilha e recarrega in-place.</summary>
@@ -50,6 +126,22 @@ public sealed partial class FolderNavigationViewModel : ObservableObject
         if (!folder.IsFolder)
         {
             return;
+        }
+
+        if (Mode != BrowseMode.Folder)
+        {
+            // Veio de favoritos/recentes/busca: reconstroi a trilha real ate essa pasta em
+            // vez de simplesmente empilhar em cima da trilha antiga (que nao tem relacao
+            // com o caminho real do resultado).
+            var ancestors = await _repository.GetAncestorsAsync(folder.Id);
+            Breadcrumb.Clear();
+            Breadcrumb.Add(new BreadcrumbNodeViewModel(null, RootLabel));
+            foreach (var ancestor in ancestors)
+            {
+                Breadcrumb.Add(new BreadcrumbNodeViewModel(ancestor.Id, ancestor.Name));
+            }
+
+            Mode = BrowseMode.Folder;
         }
 
         Breadcrumb.Add(new BreadcrumbNodeViewModel(folder.Id, folder.Name));
@@ -133,4 +225,6 @@ public sealed partial class FolderNavigationViewModel : ObservableObject
     }
 
     partial void OnCurrentFolderIdChanged(string? value) => NavigateUpCommand.NotifyCanExecuteChanged();
+
+    partial void OnModeChanged(BrowseMode value) => NavigateUpCommand.NotifyCanExecuteChanged();
 }
