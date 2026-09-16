@@ -1,0 +1,21 @@
+<Window
+    x:Class="QuickStacks.UI.TrayIconWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:tb="using:H.NotifyIcon">
+
+    <Grid>
+        <tb:TaskbarIcon
+            x:Name="TrayIcon"
+            ToolTipText="QuickStacks"
+            LeftClickCommand="{x:Bind ShowPopupCommand}">
+            <tb:TaskbarIcon.ContextFlyout>
+                <MenuFlyout>
+                    <MenuFlyoutItem Text="Abrir" Command="{x:Bind ShowPopupCommand}" />
+                    <MenuFlyoutSeparator />
+                    <MenuFlyoutItem Text="Sair" Command="{x:Bind ExitCommand}" />
+                </MenuFlyout>
+            </tb:TaskbarIcon.ContextFlyout>
+        </tb:TaskbarIcon>
+    </Grid>
+</Window>

@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>QuickStacks.UI</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x86;x64;arm64</Platforms>
+    <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+    <UseWinUI>true</UseWinUI>
+    <!-- App nao empacotada (sem MSIX) por enquanto - mais simples de depurar; empacotamento
+         entra na fase de distribuicao corporativa do plano. -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <!-- Maquina de dev so tem o dotnet SDK (sem Visual Studio) - MrtCore.PriGen.targets
+         precisa de Microsoft.Build.Packaging.Pri.Tasks.dll, que so vem com o componente
+         "AppxPackage" do MSBuild da VS e nao existe aqui. Sem .resw/MRT assets nesta fase,
+         resources.pri nao faz falta; reavaliar se a fase de i18n (.resw) precisar dele -
+         nesse caso, builda numa maquina com Visual Studio + workload de Windows App SDK. -->
+    <EnableCoreMrtTooling>false</EnableCoreMrtTooling>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250228001" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
+    <PackageReference Include="H.NotifyIcon.WinUI" Version="2.1.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\QuickStacks.Application\QuickStacks.Application.csproj" />
+    <ProjectReference Include="..\QuickStacks.Infrastructure\QuickStacks.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\quickstacks-placeholder.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>
