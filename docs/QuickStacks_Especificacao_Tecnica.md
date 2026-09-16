@@ -364,10 +364,72 @@ Fase 1).
   `LnkResolver` lê de volta o alvo/argumentos/diretório corretos — essa é a parte
   tecnicamente arriscada desta fase (interop COM), e passou.
 
+## 6.9 Fase 7 — Distribuição (manual de implantação e atualização)
+
+Duas rotas foram consideradas para a "distribuição corporativa" pedida no spec original
+(seção "Distribuição Corporativa": gratuita, uso comercial, sem licenças restritivas, com
+documentação de implantação/atualização). Só uma delas foi de fato testada nesta máquina.
+
+### Rota verificada: publicação autocontida ("xcopy deployment")
+
+`quickstacks/publish.ps1` roda:
+
+```
+dotnet publish src/QuickStacks.UI -c Release -p:Platform=x64 -r win-x64 --self-contained true -o publish/win-x64
+```
+
+e produz uma pasta autocontida (~160 MB — inclui o runtime inteiro do Windows App SDK, já
+que é self-contained; RNF02 fala de **memória em repouso**, não de tamanho em disco, então
+isso não viola o requisito) com `QuickStacks.UI.exe` pronto pra rodar. **Testado nesta
+máquina de ponta a ponta**: o script roda, o publish termina sem erro e o executável e todas
+as dependências (incluindo `Assets/quickstacks-placeholder.ico` e os 4 JSONs de idioma
+embutidos dentro de `QuickStacks.Localization.dll`) aparecem na pasta de saída.
+
+**Como implantar**: copiar a pasta `publish/win-x64` inteira para a máquina de destino (rede,
+pendrive, compartilhamento) e rodar `QuickStacks.UI.exe` — sem instalador, sem precisar ser
+administrador (RNF06), sem exigir o Windows App SDK pré-instalado na máquina de destino (por
+ser self-contained).
+
+**Como atualizar**: **não existe (ainda) um mecanismo de atualização automática** — atualizar
+hoje significa gerar uma nova publicação e substituir a pasta inteira na máquina de destino.
+O banco SQLite (`%LocalAppData%\QuickStacks\quickstacks.db`) fica fora da pasta do app, então
+substituir os arquivos do programa não apaga a configuração do usuário.
+
+### Rota documentada, mas não verificada: pacote MSIX
+
+O spec original também cita MSIX implicitamente (Store, atualização automática, superfície de
+confiança do Windows). Isto **não foi tentado nesta máquina** porque o empacotamento MSIX
+depende da mesma ferramenta de PRI/MRT (`Microsoft.Build.Packaging.Pri.Tasks.dll`) cuja
+ausência já obrigou a desligar `EnableCoreMrtTooling` desde a Fase 1 (seção 4) — sem Visual
+Studio instalado, `WindowsPackageType=Packaged`/`MSIX` provavelmente falharia do mesmo jeito
+que a build normal falhava antes daquele ajuste. Para tentar essa rota:
+
+1. Numa máquina com Visual Studio 2022 + workload "Desenvolvimento para plataforma
+   universal do Windows" (ou "Windows App SDK"), reverter `EnableCoreMrtTooling=false` no
+   `QuickStacks.UI.csproj` (ou condicioná-lo à plataforma de build).
+2. Adicionar um `Package.appxmanifest` e mudar `WindowsPackageType` de `None` para `MSIX`.
+3. `dotnet publish -p:Platform=x64 -p:WindowsPackageType=MSIX -p:GenerateAppxPackageOnBuild=true`.
+4. Assinar o pacote (certificado próprio para distribuição interna, ou Partner Center para a
+   Store).
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
-- **Fase 7 — Distribuição corporativa**: empacotamento MSIX (precisa da máquina com Visual
-  Studio por causa da seção 4), documentação de implantação/atualização.
+Todas as fases do roteiro original (Fase 1 a Fase 7) foram implementadas. Trabalho futuro
+identificado ao longo do caminho, sem fase própria ainda:
+
+- Reordenar itens dentro do mesmo nível por arraste, com persistência de `SortOrder` em lote
+  (pendência anotada na Fase 2 — `IMenuRepository.ReorderChildrenAsync` já existe e tem
+  teste, só falta o gesto de arraste na `TreeView`/`GridView`).
+- Extração real de ícone dos executáveis/`.lnk` para os ladrilhos (hoje `MenuItem.Icon` só
+  guarda uma string de caminho; não há nenhum código que efetivamente carregue/renderize um
+  ícone extraído de um `.exe`/`.lnk` — os glifos do Segoe Fluent Icons são o que aparece hoje).
+- Cores customizáveis além do fundo (texto, destaque, bordas) e um seletor de cor visual em
+  vez de um campo hex (anotado como fora de escopo na Fase 4).
+- Empacotamento MSIX de verdade (acima) — precisa de uma máquina com Visual Studio.
+- Verificação manual de ponta a ponta do app rodando numa sessão gráfica real do Windows
+  (bandeja, popup, drag para o Explorer, redimensionamento visual) — nunca foi possível neste
+  ambiente de desenvolvimento (sem sessão gráfica interativa), só a publicação self-contained
+  foi confirmada.
 
 ## 8. Testes automatizados
 
