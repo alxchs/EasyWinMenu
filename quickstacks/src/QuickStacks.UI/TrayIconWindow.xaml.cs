@@ -87,7 +87,7 @@ public sealed partial class TrayIconWindow : Window
         if (_editor is null)
         {
             var app = (App)Microsoft.UI.Xaml.Application.Current;
-            _editor = new EditorWindow(app.MenuRepository, app.ExportService);
+            _editor = new EditorWindow(app.MenuRepository, app.ExportService, app.LnkImportService);
             _editor.Closed += (_, _) => _editor = null;
         }
 

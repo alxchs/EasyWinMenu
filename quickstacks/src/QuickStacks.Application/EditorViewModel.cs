@@ -15,11 +15,13 @@ public sealed partial class EditorViewModel : ObservableObject
 {
     private readonly IMenuRepository _repository;
     private readonly IConfigExportService _exportService;
+    private readonly ILnkImportService _lnkImportService;
 
-    public EditorViewModel(IMenuRepository repository, IConfigExportService exportService)
+    public EditorViewModel(IMenuRepository repository, IConfigExportService exportService, ILnkImportService lnkImportService)
     {
         _repository = repository;
         _exportService = exportService;
+        _lnkImportService = lnkImportService;
     }
 
     public ObservableCollection<MenuTreeNodeViewModel> RootNodes { get; private set; } = [];
@@ -36,8 +38,9 @@ public sealed partial class EditorViewModel : ObservableObject
 
     public async Task<MenuItem> AddFolderAsync(string name, MenuTreeNodeViewModel? parent, CancellationToken ct = default)
     {
-        var siblingCount = parent is null ? RootNodes.Count : parent.Children.Count;
-        var folder = MenuItem.CreateFolder(name, parent?.Id, siblingCount);
+        var parentId = ResolveTargetParentId(parent);
+        var siblingCount = (await _repository.GetChildrenAsync(parentId, ct)).Count;
+        var folder = MenuItem.CreateFolder(name, parentId, siblingCount);
         await _repository.AddAsync(folder, ct);
         await LoadAsync(ct);
         return folder;
@@ -52,14 +55,23 @@ public sealed partial class EditorViewModel : ObservableObject
         MenuTreeNodeViewModel? parent,
         CancellationToken ct = default)
     {
-        var siblingCount = parent is null ? RootNodes.Count : parent.Children.Count;
-        var item = MenuItem.CreateShortcut(name, parent?.Id, type, path, siblingCount);
+        var parentId = ResolveTargetParentId(parent);
+        var siblingCount = (await _repository.GetChildrenAsync(parentId, ct)).Count;
+        var item = MenuItem.CreateShortcut(name, parentId, type, path, siblingCount);
         item.Arguments = arguments;
         item.WorkingDirectory = workingDirectory;
         await _repository.AddAsync(item, ct);
         await LoadAsync(ct);
         return item;
     }
+
+    /// <summary>
+    /// Uma pasta selecionada recebe o novo item dentro dela; um item-folha selecionado (que
+    /// nao pode ter filhos) recebe o novo item ao lado dele, no mesmo pai - como o Explorer
+    /// faz quando "Novo" e' acionado com um arquivo (nao uma pasta) selecionado.
+    /// </summary>
+    private static string? ResolveTargetParentId(MenuTreeNodeViewModel? selected) =>
+        selected is null ? null : selected.IsFolder ? selected.Id : selected.Item.ParentId;
 
     public async Task RenameAsync(MenuTreeNodeViewModel node, string newName, CancellationToken ct = default)
     {
@@ -116,5 +128,26 @@ public sealed partial class EditorViewModel : ObservableObject
     {
         await _exportService.ImportAsync(filePath, ct);
         await LoadAsync(ct);
+    }
+
+    /// <summary>Importa .lnk como itens novos dentro do no selecionado (raiz se nada selecionado) - RF08.</summary>
+    public async Task<IReadOnlyList<MenuItem>> ImportLnkFilesAsync(IReadOnlyList<string> lnkFilePaths, CancellationToken ct = default)
+    {
+        var created = await _lnkImportService.ImportAsync(lnkFilePaths, ResolveTargetParentId(SelectedNode), ct);
+        await LoadAsync(ct);
+        return created;
+    }
+
+    /// <summary>Nome real de para onde a importacao vai (para o texto de confirmacao) - resolve o mesmo alvo que <see cref="ImportLnkFilesAsync"/> usaria.</summary>
+    public async Task<string> GetEffectiveImportTargetNameAsync(string rootLabel, CancellationToken ct = default)
+    {
+        var parentId = ResolveTargetParentId(SelectedNode);
+        if (parentId is null)
+        {
+            return rootLabel;
+        }
+
+        var parent = await _repository.GetByIdAsync(parentId, ct);
+        return parent?.Name ?? rootLabel;
     }
 }

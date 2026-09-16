@@ -26,12 +26,15 @@ public partial class App : Microsoft.UI.Xaml.Application
 
     public IConfigExportService ExportService { get; private set; } = null!;
 
+    public ILnkImportService LnkImportService { get; private set; } = null!;
+
     public SettingsStore Settings { get; private set; } = null!;
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         MenuRepository = new SqliteMenuRepository();
         ExportService = new ConfigExportService(MenuRepository);
+        LnkImportService = new LnkImportService(new LnkResolver(), MenuRepository);
         Settings = new SettingsStore();
         ThemeService.Initialize(Settings);
         LocalizationService.SetLanguage(Settings.Get(SettingsStore.LanguageKey) ?? LocalizationService.DetectLanguage());

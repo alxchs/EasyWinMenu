@@ -19,6 +19,7 @@
             <AppBarSeparator />
             <AppBarButton x:Name="ExportButton" Icon="Save" Click="Export_Click" />
             <AppBarButton x:Name="ImportButton" Icon="OpenFile" Click="Import_Click" />
+            <AppBarButton x:Name="ImportLnkButton" Icon="Link" Click="ImportLnk_Click" />
         </CommandBar>
 
         <!-- Padrao oficial do WinUI 3 para dados hierarquicos: um TreeViewItem aninhado no

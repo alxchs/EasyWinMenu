@@ -335,11 +335,37 @@ a única armadilha real foi o `MenuFlyoutItem` dentro de um `DataTemplate` de it
 (GridView), que não tem uma instância única — daí o uso do evento `Opening` em vez de nomear
 os itens.
 
+## 6.8 Fase 6 — Importação de atalhos `.lnk` (RF08)
+
+`ILnkResolver`/`LnkResolver` (`QuickStacks.Infrastructure`): resolve um `.lnk` via COM
+(`IShellLinkW` + `IPersistFile.Load`) — a mesma API que o próprio Explorer usa para ler um
+atalho, sem nenhum pacote NuGet (o interop COM clássico já funciona direto em
+`net8.0-windows`). Extrai alvo, argumentos, diretório de trabalho e localização do ícone
+reais — o EasyWinMenu **nunca fez isso**: ele só classificava `.lnk` pela extensão e guardava
+o próprio arquivo `.lnk` como `Target`, sem nunca abri-lo (confirmado na investigação da
+Fase 1).
+
+- `ILnkImportService`/`LnkImportService`: recebe uma lista de caminhos `.lnk`, resolve cada
+  um e cria um `MenuItem` (`MenuItemType.Executable` — o alvo resolvido é sempre lançado via
+  `ShellExecute`, igual a qualquer outro item desde a Fase 1) dentro do nó selecionado no
+  editor (ou na raiz, se nada estiver selecionado).
+- **Alvo de importação segue a mesma regra "como o Explorer" do restante do editor**: se o nó
+  selecionado for uma pasta, os atalhos entram dentro dela; se for um item-folha (que não pode
+  ter filhos), entram ao lado dele, no mesmo pai — essa regra (`ResolveTargetParentId`) foi
+  extraída e também passou a valer para "Nova pasta"/"Novo item" da Fase 2, que antes
+  aninhavam incorretamente sob um item-folha selecionado (bug latente da Fase 2, corrigido
+  aqui de passagem).
+- Botão "Importar atalhos (.lnk)..." no editor, com seleção múltipla de arquivos
+  (`FileOpenPicker.PickMultipleFilesAsync`) e diálogo de confirmação mostrando quantos atalhos
+  e para onde vão.
+- **Verificação real, não só "compila"**: os testes de integração criam um `.lnk` de verdade
+  via COM (`IPersistFile.Save`, um caminho de interop escrito separadamente do `LnkResolver`
+  em teste, para não testar contra as próprias suposições do código) e conferem que o
+  `LnkResolver` lê de volta o alvo/argumentos/diretório corretos — essa é a parte
+  tecnicamente arriscada desta fase (interop COM), e passou.
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
-- **Fase 6 — Importação de `.lnk`** (RF08): resolver `.lnk` via `IShellLinkW` (COM) para
-  extrair alvo/argumentos/diretório/ícone reais. O EasyWinMenu nunca fez isso (confirmado –
-  hoje ele só classifica `.lnk` pela extensão, sem nunca abrir o arquivo).
 - **Fase 7 — Distribuição corporativa**: empacotamento MSIX (precisa da máquina com Visual
   Studio por causa da seção 4), documentação de implantação/atualização.
 
@@ -357,7 +383,9 @@ só verificação manual), o QuickStacks já nasce com:
   dentro de si mesma/de um descendente), cascata de exclusão (incluindo `FolderAppearance`),
   reordenar irmãos, importar/exportar (inclusive com o pai fora de ordem na lista de
   entrada), busca global (incluindo escape de coringas do `LIKE`), favoritos, recentes, mais
-  usados e cor de fundo por pasta (incluindo rejeição de hex mal formado). 16/16 passando.
+  usados, cor de fundo por pasta (incluindo rejeição de hex mal formado) e importação de
+  `.lnk` reais criados via COM no próprio teste (`LnkResolver`/`LnkImportService`, incluindo
+  ordenação e não sobrescrita de irmãos existentes). 20/20 passando.
 
 Nenhum teste de UI/WinUI 3 ainda (a interação de drag-and-drop e o comportamento do ícone de
 bandeja só têm a cobertura de "compila e o tipo confere", não de comportamento real — ver

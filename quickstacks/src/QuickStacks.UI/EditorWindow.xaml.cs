@@ -13,11 +13,11 @@ public sealed partial class EditorWindow : Window
 {
     private const string DraggedItemFormat = "QuickStacksItemId";
 
-    public EditorWindow(IMenuRepository repository, IConfigExportService exportService)
+    public EditorWindow(IMenuRepository repository, IConfigExportService exportService, ILnkImportService lnkImportService)
     {
         InitializeComponent();
 
-        ViewModel = new EditorViewModel(repository, exportService);
+        ViewModel = new EditorViewModel(repository, exportService, lnkImportService);
         ThemeService.Register(RootGrid);
 
         RefreshTexts();
@@ -38,6 +38,7 @@ public sealed partial class EditorWindow : Window
         DeleteButton.Label = LocalizationService.Get("editor.delete");
         ExportButton.Label = LocalizationService.Get("editor.export");
         ImportButton.Label = LocalizationService.Get("editor.import");
+        ImportLnkButton.Label = LocalizationService.Get("editor.importLnk");
     }
 
     private void Tree_SelectionChanged(TreeView sender, TreeViewSelectionChangedEventArgs args)
@@ -164,6 +165,36 @@ public sealed partial class EditorWindow : Window
         if (await confirm.ShowAsync() == ContentDialogResult.Primary)
         {
             await ViewModel.ImportAsync(file.Path);
+        }
+    }
+
+    private async void ImportLnk_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new FileOpenPicker();
+        picker.FileTypeFilter.Add(".lnk");
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
+
+        var files = await picker.PickMultipleFilesAsync();
+        if (files is not { Count: > 0 })
+        {
+            return;
+        }
+
+        var targetName = await ViewModel.GetEffectiveImportTargetNameAsync(LocalizationService.Get("editor.rootLabel"));
+
+        var confirm = new ContentDialog
+        {
+            Title = LocalizationService.Get("editor.importLnkDialogTitle"),
+            Content = LocalizationService.Format("editor.importLnkConfirmTextFormat", files.Count, targetName),
+            PrimaryButtonText = LocalizationService.Get("editor.importLnk"),
+            CloseButtonText = LocalizationService.Get("common.cancel"),
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot,
+        };
+
+        if (await confirm.ShowAsync() == ContentDialogResult.Primary)
+        {
+            await ViewModel.ImportLnkFilesAsync(files.Select(f => f.Path).ToList());
         }
     }
 
