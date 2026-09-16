@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\QuickStacks.Domain\QuickStacks.Domain.csproj" />
+    <ProjectReference Include="..\..\src\QuickStacks.Localization\QuickStacks.Localization.csproj" />
   </ItemGroup>
 
 </Project>

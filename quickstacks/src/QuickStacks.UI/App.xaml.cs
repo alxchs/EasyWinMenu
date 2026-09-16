@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using QuickStacks.Domain;
 using QuickStacks.Infrastructure;
+using QuickStacks.Localization;
 
 namespace QuickStacks.UI;
 
@@ -33,6 +34,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         ExportService = new ConfigExportService(MenuRepository);
         Settings = new SettingsStore();
         ThemeService.Initialize(Settings);
+        LocalizationService.SetLanguage(Settings.Get(SettingsStore.LanguageKey) ?? LocalizationService.DetectLanguage());
         _ = SeedData.EnsureSeededAsync(MenuRepository);
 
         // Nao existe uma "janela principal" visivel: o unico ponto de entrada e' o icone

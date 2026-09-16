@@ -22,11 +22,10 @@
             <TextBox
                 x:Name="SearchBox"
                 Grid.Column="0"
-                PlaceholderText="Pesquisar em tudo..."
                 TextChanged="SearchBox_TextChanged" />
-            <Button Grid.Column="1" Content="★" ToolTipService.ToolTip="Favoritos" Click="ShowFavorites_Click" />
-            <Button Grid.Column="2" Content="🕐" ToolTipService.ToolTip="Recentes" Click="ShowRecent_Click" />
-            <Button Grid.Column="3" Content="🔥" ToolTipService.ToolTip="Mais usados" Click="ShowMostUsed_Click" />
+            <Button x:Name="FavoritesButton" Grid.Column="1" Content="★" Click="ShowFavorites_Click" />
+            <Button x:Name="RecentButton" Grid.Column="2" Content="🕐" Click="ShowRecent_Click" />
+            <Button x:Name="MostUsedButton" Grid.Column="3" Content="🔥" Click="ShowMostUsed_Click" />
         </Grid>
 
         <!-- Requisito 1: navegacao dentro do grupo como pasta do Windows (trilha in-place,
@@ -71,9 +70,9 @@
                         DragOver="ItemContainer_DragOver"
                         Drop="ItemContainer_Drop">
                         <StackPanel.ContextFlyout>
-                            <MenuFlyout>
-                                <MenuFlyoutItem Text="Favoritar/Desfavoritar" Click="ToggleFavorite_Click" />
-                                <MenuFlyoutItem Text="Cor de fundo desta pasta..." Click="SetFolderColor_Click" Visibility="{x:Bind IsFolder}" />
+                            <MenuFlyout Opening="ItemContextFlyout_Opening">
+                                <MenuFlyoutItem Click="ToggleFavorite_Click" />
+                                <MenuFlyoutItem Click="SetFolderColor_Click" Visibility="{x:Bind IsFolder}" />
                             </MenuFlyout>
                         </StackPanel.ContextFlyout>
                         <Grid HorizontalAlignment="Center">

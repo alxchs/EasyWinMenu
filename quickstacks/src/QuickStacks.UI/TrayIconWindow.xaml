@@ -5,21 +5,31 @@
     xmlns:tb="using:H.NotifyIcon">
 
     <Grid>
+        <!-- Os textos sao preenchidos em codigo (RefreshTexts) porque XAML puro nao tem como
+             ler o dicionario de idioma do LocalizationService (isso e' o que x:Uid faria via
+             .resw/MRT, ferramenta que nao existe nesta maquina - ver secao 4 do doc tecnico).
+             RefreshTexts roda uma vez no construtor e de novo a cada LocalizationService.LanguageChanged. -->
         <tb:TaskbarIcon
             x:Name="TrayIcon"
             ToolTipText="QuickStacks"
             LeftClickCommand="{x:Bind ShowPopupCommand}">
             <tb:TaskbarIcon.ContextFlyout>
                 <MenuFlyout>
-                    <MenuFlyoutItem Text="Abrir" Command="{x:Bind ShowPopupCommand}" />
-                    <MenuFlyoutItem Text="Editar estrutura..." Command="{x:Bind OpenEditorCommand}" />
-                    <MenuFlyoutSubItem Text="Tema">
-                        <RadioMenuFlyoutItem x:Name="ThemeLightItem" Text="Claro" GroupName="Theme" Click="ThemeLight_Click" />
-                        <RadioMenuFlyoutItem x:Name="ThemeDarkItem" Text="Escuro" GroupName="Theme" Click="ThemeDark_Click" />
-                        <RadioMenuFlyoutItem x:Name="ThemeSystemItem" Text="Seguir Windows" GroupName="Theme" Click="ThemeSystem_Click" />
+                    <MenuFlyoutItem x:Name="OpenItem" Command="{x:Bind ShowPopupCommand}" />
+                    <MenuFlyoutItem x:Name="EditStructureItem" Command="{x:Bind OpenEditorCommand}" />
+                    <MenuFlyoutSubItem x:Name="ThemeSubItem">
+                        <RadioMenuFlyoutItem x:Name="ThemeLightItem" GroupName="Theme" Click="ThemeLight_Click" />
+                        <RadioMenuFlyoutItem x:Name="ThemeDarkItem" GroupName="Theme" Click="ThemeDark_Click" />
+                        <RadioMenuFlyoutItem x:Name="ThemeSystemItem" GroupName="Theme" Click="ThemeSystem_Click" />
+                    </MenuFlyoutSubItem>
+                    <MenuFlyoutSubItem x:Name="LanguageSubItem">
+                        <RadioMenuFlyoutItem x:Name="LanguagePtBrItem" Text="Português (Brasil)" GroupName="Language" Click="LanguagePtBr_Click" />
+                        <RadioMenuFlyoutItem x:Name="LanguageEnUsItem" Text="English (US)" GroupName="Language" Click="LanguageEnUs_Click" />
+                        <RadioMenuFlyoutItem x:Name="LanguageEsEsItem" Text="Español (España)" GroupName="Language" Click="LanguageEsEs_Click" />
+                        <RadioMenuFlyoutItem x:Name="LanguageDeDeItem" Text="Deutsch (Deutschland)" GroupName="Language" Click="LanguageDeDe_Click" />
                     </MenuFlyoutSubItem>
                     <MenuFlyoutSeparator />
-                    <MenuFlyoutItem Text="Sair" Command="{x:Bind ExitCommand}" />
+                    <MenuFlyoutItem x:Name="ExitItem" Command="{x:Bind ExitCommand}" />
                 </MenuFlyout>
             </tb:TaskbarIcon.ContextFlyout>
         </tb:TaskbarIcon>

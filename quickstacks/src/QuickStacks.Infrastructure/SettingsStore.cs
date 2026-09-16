@@ -45,4 +45,8 @@ public sealed class SettingsStore
     }
 
     public static string WindowSizeKey(string? folderId) => $"window.size.{folderId ?? "root"}";
+
+    public const string LanguageKey = "language.code";
+
+    public const string ThemeModeKey = "theme.mode";
 }

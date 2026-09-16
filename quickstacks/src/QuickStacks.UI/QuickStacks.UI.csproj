@@ -30,6 +30,7 @@
   <ItemGroup>
     <ProjectReference Include="..\QuickStacks.Application\QuickStacks.Application.csproj" />
     <ProjectReference Include="..\QuickStacks.Infrastructure\QuickStacks.Infrastructure.csproj" />
+    <ProjectReference Include="..\QuickStacks.Localization\QuickStacks.Localization.csproj" />
   </ItemGroup>
 
   <ItemGroup>

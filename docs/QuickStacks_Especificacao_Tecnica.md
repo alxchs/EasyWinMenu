@@ -36,9 +36,10 @@ EasyWinMenu/                        (raiz do repositório git)
             QuickStacks.Domain/           net8.0 — entidades puras, sem UI/SQLite
             QuickStacks.Application/      net8.0-windows — ViewModels (CommunityToolkit.Mvvm)
             QuickStacks.Infrastructure/   net8.0-windows — SQLite, settings
+            QuickStacks.Localization/     net8.0 — JSON embutido (pt-BR/en-US/es-ES/de-DE)
             QuickStacks.UI/               net8.0-windows10.0.19041.0 — app WinUI 3
         tests/
-            QuickStacks.UnitTests/         xUnit — regras do Domain
+            QuickStacks.UnitTests/         xUnit — regras do Domain, HexColor, Localization
             QuickStacks.IntegrationTests/  xUnit — SqliteMenuRepository contra banco real
 ```
 
@@ -81,10 +82,12 @@ instalação do dotnet SDK** (confirmado por busca no disco). Como o app não é
 <EnableCoreMrtTooling>false</EnableCoreMrtTooling>
 ```
 
-para pular essa etapa inteira. **Isto precisa ser revisto na Fase 5 (i18n com `.resw`)** — se
-nesse ponto o build ainda rodar só nesta máquina (sem Visual Studio), a geração de recursos
-localizados pode exigir outra abordagem (ex.: build numa máquina/CI com Visual Studio, ou um
-mecanismo de recursos que não dependa do MRT).
+para pular essa etapa inteira. **Decisão tomada na Fase 5**: em vez de contornar isso para
+poder usar `.resw`, a internacionalização foi implementada com **JSON puro embutido como
+recurso do assembly** (`QuickStacks.Localization`, sem nenhuma dependência de MRT/PRI) — ver
+seção 6.7. `EnableCoreMrtTooling=false` continua valendo e não precisa mais ser revisto por
+causa de i18n; só voltaria à mesa se algum recurso futuro exigir MRT de verdade (ex.:
+empacotamento MSIX na Fase 7, que aí sim precisa rodar numa máquina com Visual Studio).
 
 **Como compilar cada projeto** (a solução `.slnx` inteira falha com plataforma "Any CPU"
 default — o projeto de UI só aceita x86/x64/arm64):
@@ -98,8 +101,9 @@ dotnet test  quickstacks/tests/QuickStacks.UnitTests
 dotnet test  quickstacks/tests/QuickStacks.IntegrationTests
 ```
 
-Todos os seis projetos foram compilados com sucesso nesta máquina nessas condições; os dois
-projetos de teste rodaram (4/4 e 4/4 testes passando). **O que não foi verificado**: execução
+Todos os projetos foram compilados com sucesso nesta máquina nessas condições; os dois
+projetos de teste rodaram (22/22 unitários e 16/16 de integração passando — números crescem a
+cada fase; ver seção 8 para o total atual). **O que não foi verificado**: execução
 real do app (ícone na bandeja aparecendo, popup abrindo, arraste de verdade para o Explorer,
 redimensionamento visual) — este ambiente de desenvolvimento não tem uma sessão gráfica do
 Windows interativa disponível para rodar o app. Isso fica como verificação manual pendente na
@@ -287,10 +291,52 @@ Vale a pena ter isso em mente em qualquer novo `Window` do QuickStacks — dentr
 `RadioMenuFlyoutItem.IsChecked` do submenu Tema é setado à mão em `TrayIconWindow` (não por
 bind) ao construir a janela.
 
+## 6.7 Fase 5 — Internacionalização completa (RF15)
+
+`QuickStacks.Localization`: projeto novo, `pt-BR`/`en-US`/`es-ES`/`de-DE`, cada um num JSON
+(`Strings.<código>.json`) **embutido como recurso do assembly** (`EmbeddedResource`, lido via
+`Assembly.GetManifestResourceStream`) — deliberadamente **não** `.resw`, para não depender da
+ferramenta MRT/PRI que esta máquina não tem (seção 4). Mesma ideia do `LocalizationService` do
+EasyWinMenu (JSON com fallback), adaptada de recurso WPF para recurso de assembly puro, já que
+`QuickStacks.Localization` é uma classlib sem UI.
+
+- `LocalizationService.Get(key)` sempre resolve — chave ausente no idioma atual cai para
+  `pt-BR` (idioma nativo do documento-fonte); chave ausente em `pt-BR` também devolve a
+  própria chave em vez de lançar exceção ou mostrar `null`.
+- **Troca dinâmica sem reiniciar**: `SetLanguage` dispara `LanguageChanged`; cada `Window`
+  (`TrayIconWindow`/`PopupWindow`/`EditorWindow`) assina esse evento e re-executa um
+  `RefreshTexts()` que resseta os textos que já desenhou — mesmo padrão de "reconstruir a UI
+  ao trocar idioma" que o EasyWinMenu já usava, só que aqui não há `LocExtension`/binding
+  XAML nenhum: **todo texto localizado é setado imperativamente no code-behind**, porque XAML
+  puro não tem como ler o dicionário de idioma (isso é o que `x:Uid` faria via `.resw`/MRT,
+  que foi deliberadamente evitado). Idioma persiste em `Settings` (`"language.code"`);
+  detecção inicial via `CultureInfo.CurrentUICulture`, com fallback para `pt-BR`.
+- **Menu de contexto por item** (favoritar/cor de fundo, no popup) usa o evento `Opening` do
+  `MenuFlyout` para reaplicar os textos a cada abertura, já que cada ladrilho instancia sua
+  própria cópia do `MenuFlyoutItem` a partir do `DataTemplate` — não há uma instância única
+  para re-textualizar de fora.
+- **Nomes dos idiomas no submenu "Idioma"** ficam escritos no próprio idioma de cada um
+  ("Português (Brasil)", "English (US)", etc.) — não são traduzidos, seguindo a convenção
+  usual de seletores de idioma (o nome de um idioma não muda por causa do idioma da UI).
+- **Teste de paridade**: `LocalizationServiceTests.EveryLanguage_HasEveryKeyThatDefaultLanguageHas`
+  compara os dicionários crus dos 4 arquivos (via um acesso `internal` exposto só para teste)
+  para garantir que nenhuma chave existe em `pt-BR` mas falta numa tradução — sem esse teste,
+  uma chave faltando ficaria escondida pelo próprio fallback do `Get()`.
+- **Escopo desta fase**: cobre as strings de UI já existentes (bandeja, popup, editor). Não
+  cobre mensagens de erro de baixo nível (exceptions/stack traces) nem textos que ainda vão
+  nascer nas próximas fases (`.lnk`, distribuição) — essas entram traduzidas desde o início
+  quando forem implementadas, seguindo o mesmo padrão de chaves.
+
+**Detalhe de plataforma descoberto nesta fase**: `MenuFlyoutSubItem`/`RadioMenuFlyoutItem`
+dentro de um `MenuFlyout` anexado como `ContextFlyout`/`TaskbarIcon.ContextFlyout` **são**
+`FrameworkElement`s próprios (diferente da `Window` — ver seção 6.6), então setar `.Text`/
+`.IsChecked` neles a partir do code-behind da janela funciona sem nenhuma restrição especial;
+a única armadilha real foi o `MenuFlyoutItem` dentro de um `DataTemplate` de item de lista
+(GridView), que não tem uma instância única — daí o uso do evento `Opening` em vez de nomear
+os itens.
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
-- **Fase 5 — i18n completo**: `.resw` para pt-BR/en-US/es-ES/de-DE, troca dinâmica sem
-  reiniciar — **atenção à ressalva da seção 4** sobre a ferramenta MRT/PRI antes de começar.
 - **Fase 6 — Importação de `.lnk`** (RF08): resolver `.lnk` via `IShellLinkW` (COM) para
   extrair alvo/argumentos/diretório/ícone reais. O EasyWinMenu nunca fez isso (confirmado –
   hoje ele só classifica `.lnk` pela extensão, sem nunca abrir o arquivo).
@@ -302,8 +348,10 @@ bind) ao construir a janela.
 Diferente do EasyWinMenu (que documenta explicitamente não ter nenhum teste automatizado —
 só verificação manual), o QuickStacks já nasce com:
 
-- `QuickStacks.UnitTests`: regras do `MenuItem` (fábricas, `RegisterLaunch`) e de `HexColor`
-  (formato `#RRGGBB`). 15/15 passando.
+- `QuickStacks.UnitTests`: regras do `MenuItem` (fábricas, `RegisterLaunch`), de `HexColor`
+  (formato `#RRGGBB`) e do `LocalizationService` (paridade de chaves entre os 4 idiomas,
+  fallback para `pt-BR`, `SetLanguage`/`LanguageChanged`, `DetectLanguage` nunca devolve um
+  código não suportado). 22/22 passando.
 - `QuickStacks.IntegrationTests`: `SqliteMenuRepository`/`ConfigExportService` contra um
   arquivo SQLite real e descartável por teste — proteção contra ciclo (mover uma pasta para
   dentro de si mesma/de um descendente), cascata de exclusão (incluindo `FolderAppearance`),

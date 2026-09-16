@@ -11,14 +11,14 @@
         </Grid.RowDefinitions>
 
         <CommandBar Grid.Row="0" DefaultLabelPosition="Right" Background="Transparent">
-            <AppBarButton Icon="NewFolder" Label="Nova pasta" Click="AddFolder_Click" />
-            <AppBarButton Icon="Add" Label="Novo item" Click="AddItem_Click" />
-            <AppBarButton Icon="Rename" Label="Renomear" Click="Rename_Click" />
-            <AppBarButton Icon="Edit" Label="Editar" Click="Edit_Click" />
-            <AppBarButton Icon="Delete" Label="Excluir" Click="Delete_Click" />
+            <AppBarButton x:Name="AddFolderButton" Icon="NewFolder" Click="AddFolder_Click" />
+            <AppBarButton x:Name="AddItemButton" Icon="Add" Click="AddItem_Click" />
+            <AppBarButton x:Name="RenameButton" Icon="Rename" Click="Rename_Click" />
+            <AppBarButton x:Name="EditButton" Icon="Edit" Click="Edit_Click" />
+            <AppBarButton x:Name="DeleteButton" Icon="Delete" Click="Delete_Click" />
             <AppBarSeparator />
-            <AppBarButton Icon="Save" Label="Exportar" Click="Export_Click" />
-            <AppBarButton Icon="OpenFile" Label="Importar" Click="Import_Click" />
+            <AppBarButton x:Name="ExportButton" Icon="Save" Click="Export_Click" />
+            <AppBarButton x:Name="ImportButton" Icon="OpenFile" Click="Import_Click" />
         </CommandBar>
 
         <!-- Padrao oficial do WinUI 3 para dados hierarquicos: um TreeViewItem aninhado no

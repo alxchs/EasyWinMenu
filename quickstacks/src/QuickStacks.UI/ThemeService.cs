@@ -11,15 +11,13 @@ namespace QuickStacks.UI;
 /// </summary>
 public static class ThemeService
 {
-    private const string SettingsKey = "theme.mode";
-
     private static readonly List<WeakReference<FrameworkElement>> TrackedRoots = [];
 
     public static ElementTheme CurrentTheme { get; private set; } = ElementTheme.Default;
 
     public static void Initialize(SettingsStore settings)
     {
-        var raw = settings.Get(SettingsKey);
+        var raw = settings.Get(SettingsStore.ThemeModeKey);
         CurrentTheme = Enum.TryParse<ElementTheme>(raw, out var parsed) ? parsed : ElementTheme.Default;
     }
 
@@ -33,7 +31,7 @@ public static class ThemeService
     public static void SetTheme(SettingsStore settings, ElementTheme theme)
     {
         CurrentTheme = theme;
-        settings.Set(SettingsKey, theme.ToString());
+        settings.Set(SettingsStore.ThemeModeKey, theme.ToString());
 
         foreach (var weak in TrackedRoots)
         {

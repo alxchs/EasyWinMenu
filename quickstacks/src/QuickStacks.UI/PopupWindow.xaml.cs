@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Media;
 using QuickStacks.Application;
 using QuickStacks.Domain;
 using QuickStacks.Infrastructure;
+using QuickStacks.Localization;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
 using Windows.Storage;
@@ -60,7 +61,30 @@ public sealed partial class PopupWindow : Window
         AppWindow.Resize(new SizeInt32(DefaultWidth, DefaultHeight));
         AppWindow.Changed += AppWindow_Changed;
 
+        RefreshTexts();
+        LocalizationService.LanguageChanged += RefreshTexts;
+        Closed += (_, _) => LocalizationService.LanguageChanged -= RefreshTexts;
+
         _ = InitializeAsync();
+    }
+
+    private void RefreshTexts()
+    {
+        SearchBox.PlaceholderText = LocalizationService.Get("popup.searchPlaceholder");
+        ToolTipService.SetToolTip(FavoritesButton, LocalizationService.Get("popup.favorites"));
+        ToolTipService.SetToolTip(RecentButton, LocalizationService.Get("popup.recent"));
+        ToolTipService.SetToolTip(MostUsedButton, LocalizationService.Get("popup.mostUsed"));
+    }
+
+    private void ItemContextFlyout_Opening(object sender, object e)
+    {
+        if (sender is not MenuFlyout flyout)
+        {
+            return;
+        }
+
+        ((MenuFlyoutItem)flyout.Items[0]).Text = LocalizationService.Get("popup.toggleFavorite");
+        ((MenuFlyoutItem)flyout.Items[1]).Text = LocalizationService.Get("popup.setFolderColor");
     }
 
     public FolderNavigationViewModel ViewModel { get; }
@@ -206,13 +230,13 @@ public sealed partial class PopupWindow : Window
         }
 
         var current = await Repository.GetFolderBackgroundColorAsync(folder.Id);
-        var textBox = new TextBox { Header = "Cor em hex (ex: #1E3A5F) - vazio remove a cor customizada", Text = current ?? string.Empty };
+        var textBox = new TextBox { Header = LocalizationService.Get("popup.folderColorFieldLabel"), Text = current ?? string.Empty };
         var dialog = new ContentDialog
         {
-            Title = $"Cor de fundo - {folder.Name}",
+            Title = LocalizationService.Format("popup.folderColorDialogTitleFormat", folder.Name),
             Content = textBox,
-            PrimaryButtonText = "OK",
-            CloseButtonText = "Cancelar",
+            PrimaryButtonText = LocalizationService.Get("common.ok"),
+            CloseButtonText = LocalizationService.Get("common.cancel"),
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = Content.XamlRoot,
         };

@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using QuickStacks.Application;
 using QuickStacks.Domain;
+using QuickStacks.Localization;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 
@@ -18,10 +19,26 @@ public sealed partial class EditorWindow : Window
 
         ViewModel = new EditorViewModel(repository, exportService);
         ThemeService.Register(RootGrid);
+
+        RefreshTexts();
+        LocalizationService.LanguageChanged += RefreshTexts;
+        Closed += (_, _) => LocalizationService.LanguageChanged -= RefreshTexts;
+
         _ = ViewModel.LoadAsync();
     }
 
     public EditorViewModel ViewModel { get; }
+
+    private void RefreshTexts()
+    {
+        AddFolderButton.Label = LocalizationService.Get("editor.addFolder");
+        AddItemButton.Label = LocalizationService.Get("editor.addItem");
+        RenameButton.Label = LocalizationService.Get("editor.rename");
+        EditButton.Label = LocalizationService.Get("editor.edit");
+        DeleteButton.Label = LocalizationService.Get("editor.delete");
+        ExportButton.Label = LocalizationService.Get("editor.export");
+        ImportButton.Label = LocalizationService.Get("editor.import");
+    }
 
     private void Tree_SelectionChanged(TreeView sender, TreeViewSelectionChangedEventArgs args)
     {
@@ -32,7 +49,10 @@ public sealed partial class EditorWindow : Window
 
     private async void AddFolder_Click(object sender, RoutedEventArgs e)
     {
-        var name = await PromptTextAsync("Nova pasta", "Nome da pasta", "Nova pasta");
+        var name = await PromptTextAsync(
+            LocalizationService.Get("editor.newFolderDialogTitle"),
+            LocalizationService.Get("editor.folderNameLabel"),
+            LocalizationService.Get("editor.defaultFolderName"));
         if (!string.IsNullOrWhiteSpace(name))
         {
             await ViewModel.AddFolderAsync(name, ViewModel.SelectedNode);
@@ -41,7 +61,7 @@ public sealed partial class EditorWindow : Window
 
     private async void AddItem_Click(object sender, RoutedEventArgs e)
     {
-        var result = await PromptItemAsync("Novo item", null);
+        var result = await PromptItemAsync(LocalizationService.Get("editor.newItemDialogTitle"), null);
         if (result is { } item)
         {
             await ViewModel.AddItemAsync(item.Name, item.Type, item.Path, item.Arguments, item.WorkingDirectory, ViewModel.SelectedNode);
@@ -55,7 +75,7 @@ public sealed partial class EditorWindow : Window
             return;
         }
 
-        var name = await PromptTextAsync("Renomear", "Novo nome", node.Name);
+        var name = await PromptTextAsync(LocalizationService.Get("editor.renameDialogTitle"), LocalizationService.Get("editor.newNameLabel"), node.Name);
         if (!string.IsNullOrWhiteSpace(name))
         {
             await ViewModel.RenameAsync(node, name);
@@ -69,7 +89,7 @@ public sealed partial class EditorWindow : Window
             return;
         }
 
-        var result = await PromptItemAsync("Editar item", node.Item);
+        var result = await PromptItemAsync(LocalizationService.Get("editor.editItemDialogTitle"), node.Item);
         if (result is { } item)
         {
             await ViewModel.UpdateItemAsync(node, item.Name, item.Path, item.Arguments, item.WorkingDirectory);
@@ -85,10 +105,12 @@ public sealed partial class EditorWindow : Window
 
         var confirm = new ContentDialog
         {
-            Title = "Excluir",
-            Content = $"Excluir \"{node.Name}\"" + (node.IsFolder ? " e todo o seu conteudo?" : "?"),
-            PrimaryButtonText = "Excluir",
-            CloseButtonText = "Cancelar",
+            Title = LocalizationService.Get("editor.deleteDialogTitle"),
+            Content = LocalizationService.Format(
+                node.IsFolder ? "editor.deleteConfirmWithChildrenFormat" : "editor.deleteConfirmFormat",
+                node.Name),
+            PrimaryButtonText = LocalizationService.Get("editor.delete"),
+            CloseButtonText = LocalizationService.Get("common.cancel"),
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = Content.XamlRoot,
         };
@@ -131,10 +153,10 @@ public sealed partial class EditorWindow : Window
 
         var confirm = new ContentDialog
         {
-            Title = "Importar",
-            Content = "Importar vai substituir TODA a estrutura atual por este arquivo. Continuar?",
-            PrimaryButtonText = "Importar",
-            CloseButtonText = "Cancelar",
+            Title = LocalizationService.Get("editor.importDialogTitle"),
+            Content = LocalizationService.Get("editor.importConfirmText"),
+            PrimaryButtonText = LocalizationService.Get("editor.import"),
+            CloseButtonText = LocalizationService.Get("common.cancel"),
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = Content.XamlRoot,
         };
@@ -191,8 +213,8 @@ public sealed partial class EditorWindow : Window
         {
             Title = title,
             Content = textBox,
-            PrimaryButtonText = "OK",
-            CloseButtonText = "Cancelar",
+            PrimaryButtonText = LocalizationService.Get("common.ok"),
+            CloseButtonText = LocalizationService.Get("common.cancel"),
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = Content.XamlRoot,
         };
@@ -202,17 +224,17 @@ public sealed partial class EditorWindow : Window
 
     private async Task<(string Name, MenuItemType Type, string Path, string? Arguments, string? WorkingDirectory)?> PromptItemAsync(string title, MenuItem? existing)
     {
-        var nameBox = new TextBox { Header = "Nome", Text = existing?.Name ?? string.Empty };
+        var nameBox = new TextBox { Header = LocalizationService.Get("editor.field.name"), Text = existing?.Name ?? string.Empty };
         var typeCombo = new ComboBox
         {
-            Header = "Tipo",
+            Header = LocalizationService.Get("editor.field.type"),
             ItemsSource = new[] { MenuItemType.Executable, MenuItemType.Shortcut, MenuItemType.Url },
             SelectedItem = existing?.Type ?? MenuItemType.Executable,
             IsEnabled = existing is null, // tipo nao muda depois de criado - so nome/caminho/argumentos
         };
-        var pathBox = new TextBox { Header = "Caminho / URL", Text = existing?.Path ?? string.Empty };
-        var argsBox = new TextBox { Header = "Argumentos (opcional)", Text = existing?.Arguments ?? string.Empty };
-        var workDirBox = new TextBox { Header = "Diretorio de trabalho (opcional)", Text = existing?.WorkingDirectory ?? string.Empty };
+        var pathBox = new TextBox { Header = LocalizationService.Get("editor.field.path"), Text = existing?.Path ?? string.Empty };
+        var argsBox = new TextBox { Header = LocalizationService.Get("editor.field.arguments"), Text = existing?.Arguments ?? string.Empty };
+        var workDirBox = new TextBox { Header = LocalizationService.Get("editor.field.workingDirectory"), Text = existing?.WorkingDirectory ?? string.Empty };
 
         var panel = new StackPanel { Spacing = 8 };
         panel.Children.Add(nameBox);
@@ -225,8 +247,8 @@ public sealed partial class EditorWindow : Window
         {
             Title = title,
             Content = panel,
-            PrimaryButtonText = "OK",
-            CloseButtonText = "Cancelar",
+            PrimaryButtonText = LocalizationService.Get("common.ok"),
+            CloseButtonText = LocalizationService.Get("common.cancel"),
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = Content.XamlRoot,
         };

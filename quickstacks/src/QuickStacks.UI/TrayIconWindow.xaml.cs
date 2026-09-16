@@ -1,5 +1,7 @@
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml;
+using QuickStacks.Infrastructure;
+using QuickStacks.Localization;
 
 namespace QuickStacks.UI;
 
@@ -27,7 +29,7 @@ public sealed partial class TrayIconWindow : Window
             TrayIcon.Icon = new System.Drawing.Icon(iconPath);
         }
 
-        // O item marcado no submenu Tema precisa refletir o que ja' foi carregado de
+        // O item marcado nos submenus Tema/Idioma precisa refletir o que ja' foi carregado de
         // Settings em App.OnLaunched - RadioMenuFlyoutItem.IsChecked nao tem como fazer isso
         // via x:Bind aqui pelo mesmo motivo do PopupWindow (Window nao e' FrameworkElement).
         (ThemeService.CurrentTheme switch
@@ -36,6 +38,17 @@ public sealed partial class TrayIconWindow : Window
             ElementTheme.Dark => ThemeDarkItem,
             _ => ThemeSystemItem,
         }).IsChecked = true;
+
+        (LocalizationService.CurrentLanguage switch
+        {
+            "en-US" => LanguageEnUsItem,
+            "es-ES" => LanguageEsEsItem,
+            "de-DE" => LanguageDeDeItem,
+            _ => LanguagePtBrItem,
+        }).IsChecked = true;
+
+        RefreshTexts();
+        LocalizationService.LanguageChanged += RefreshTexts;
     }
 
     public IRelayCommand ShowPopupCommand { get; }
@@ -43,6 +56,18 @@ public sealed partial class TrayIconWindow : Window
     public IRelayCommand OpenEditorCommand { get; }
 
     public IRelayCommand ExitCommand { get; }
+
+    private void RefreshTexts()
+    {
+        OpenItem.Text = LocalizationService.Get("tray.open");
+        EditStructureItem.Text = LocalizationService.Get("tray.editStructure");
+        ThemeSubItem.Text = LocalizationService.Get("tray.theme");
+        ThemeLightItem.Text = LocalizationService.Get("tray.theme.light");
+        ThemeDarkItem.Text = LocalizationService.Get("tray.theme.dark");
+        ThemeSystemItem.Text = LocalizationService.Get("tray.theme.system");
+        LanguageSubItem.Text = LocalizationService.Get("tray.language");
+        ExitItem.Text = LocalizationService.Get("tray.exit");
+    }
 
     private void ShowPopup()
     {
@@ -79,5 +104,20 @@ public sealed partial class TrayIconWindow : Window
     {
         var app = (App)Microsoft.UI.Xaml.Application.Current;
         ThemeService.SetTheme(app.Settings, theme);
+    }
+
+    private void LanguagePtBr_Click(object sender, RoutedEventArgs e) => SetLanguage("pt-BR");
+
+    private void LanguageEnUs_Click(object sender, RoutedEventArgs e) => SetLanguage("en-US");
+
+    private void LanguageEsEs_Click(object sender, RoutedEventArgs e) => SetLanguage("es-ES");
+
+    private void LanguageDeDe_Click(object sender, RoutedEventArgs e) => SetLanguage("de-DE");
+
+    private void SetLanguage(string languageCode)
+    {
+        var app = (App)Microsoft.UI.Xaml.Application.Current;
+        app.Settings.Set(SettingsStore.LanguageKey, languageCode);
+        LocalizationService.SetLanguage(languageCode);
     }
 }
