@@ -16,6 +16,7 @@ public sealed partial class TrayIconWindow : Window
     private PopupWindow? _popup;
     private EditorWindow? _editor;
     private readonly List<DesktopGroupWindow> _desktopGroupWindows = [];
+    private GlobalHotkeyService? _hotkeyService;
 
     public TrayIconWindow()
     {
@@ -51,9 +52,55 @@ public sealed partial class TrayIconWindow : Window
 
         SetCheckedExclusive(FeatureTier.IsFull ? TierFullItem : TierLiteItem, TierLiteItem, TierFullItem);
 
+        var app = (App)Microsoft.UI.Xaml.Application.Current;
+        GlobalHotkeyItem.IsChecked = app.Settings.Get(SettingsStore.GlobalHotkeyEnabledKey) != "false";
+        StartWithWindowsItem.IsChecked = StartupRegistration.IsEnabled();
+
+        _hotkeyService = new GlobalHotkeyService(this);
+        _hotkeyService.OpenPopupRequested += ShowPopup;
+        _hotkeyService.RestoreGroupsRequested += RestoreDesktopGroups;
+        ApplyHotkeyState();
+
         RefreshTexts();
         LocalizationService.LanguageChanged += RefreshTexts;
     }
+
+    /// <summary>Fase 13: Ctrl+Alt+Q sempre disponivel enquanto o atalho estiver ligado; Win+Ctrl+Alt+D (restaurar grupos) so' faz sentido com o modo Full ligado.</summary>
+    private void ApplyHotkeyState()
+    {
+        var enabled = GlobalHotkeyItem.IsChecked;
+        _hotkeyService?.SetOpenPopupHotkeyEnabled(enabled);
+        _hotkeyService?.SetRestoreGroupsHotkeyEnabled(enabled && FeatureTier.IsFull);
+    }
+
+    /// <summary>Reativa as janelas de grupo ja' abertas (traz de volta pra frente) ou reabre do zero se nenhuma estiver rastreada - equivalente ao atalho "restaurar grupos" do EasyWinMenu.</summary>
+    private void RestoreDesktopGroups()
+    {
+        if (!FeatureTier.IsFull)
+        {
+            return;
+        }
+
+        if (_desktopGroupWindows.Count == 0)
+        {
+            _ = OpenAllDesktopGroupsAsync();
+            return;
+        }
+
+        foreach (var window in _desktopGroupWindows)
+        {
+            window.Activate();
+        }
+    }
+
+    private void GlobalHotkey_Click(object sender, RoutedEventArgs e)
+    {
+        var app = (App)Microsoft.UI.Xaml.Application.Current;
+        app.Settings.Set(SettingsStore.GlobalHotkeyEnabledKey, GlobalHotkeyItem.IsChecked ? "true" : "false");
+        ApplyHotkeyState();
+    }
+
+    private void StartWithWindows_Click(object sender, RoutedEventArgs e) => StartupRegistration.SetEnabled(StartWithWindowsItem.IsChecked);
 
     /// <summary>
     /// So' pode ser chamado depois desta janela ja' ter sido ativada (App.OnLaunched, apos
@@ -97,6 +144,8 @@ public sealed partial class TrayIconWindow : Window
         TierSubItem.Text = LocalizationService.Get("tray.tier");
         TierLiteItem.Text = LocalizationService.Get("tray.tier.lite");
         TierFullItem.Text = LocalizationService.Get("tray.tier.full");
+        GlobalHotkeyItem.Text = LocalizationService.Get("tray.globalHotkey");
+        StartWithWindowsItem.Text = LocalizationService.Get("tray.startWithWindows");
         ExitItem.Text = LocalizationService.Get("tray.exit");
     }
 
@@ -177,6 +226,7 @@ public sealed partial class TrayIconWindow : Window
         FeatureTier.SetTier(app.Settings, tier);
 
         SetCheckedExclusive(FeatureTier.IsFull ? TierFullItem : TierLiteItem, TierLiteItem, TierFullItem);
+        ApplyHotkeyState();
 
         if (FeatureTier.IsFull)
         {

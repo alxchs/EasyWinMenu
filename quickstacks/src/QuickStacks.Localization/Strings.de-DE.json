@@ -9,6 +9,8 @@
   "tray.tier": "Modus",
   "tray.tier.lite": "Lite",
   "tray.tier.full": "Full",
+  "tray.globalHotkey": "Globaler Shortcut (Strg+Alt+Q)",
+  "tray.startWithWindows": "Mit Windows starten",
   "tray.exit": "Beenden",
 
   "desktopGroup.switchToAppFolder": "Als App Folder schließen",

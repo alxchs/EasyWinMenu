@@ -661,6 +661,40 @@ geometria correta nos dois modos depois da correção (`Rect=80;80;198;140` em A
 confirmado via UI Automation — antes da correção do item 1, a mesma situação abria a janela em
 `Rect≈380;452;2880;1541`, essencialmente do tamanho da tela).
 
+## 6.16 Fase 13 — Atalho global + iniciar com o Windows + restaurar grupos, e um crash fatal corrigido
+
+`GlobalHotkeyService` (`QuickStacks.UI`, modelo `GlobalHotkeyService.cs` do EasyWinMenu):
+Ctrl+Alt+Q abre o popup; Win+Ctrl+Alt+D restaura os grupos soltos (só registrado quando o modo
+Full está ligado). WinUI 3 não tem `HwndSource` (WPF) para encaixar um `WndProc` customizado —
+aqui o HWND real por baixo do `TrayIconWindow` (sempre viva, mesmo escondida) é obtido via
+`WindowNative.GetWindowHandle` e "subclassado" com `SetWindowSubclass` (comctl32, compõe com
+outros subclasses em vez de substituir o WNDPROC inteiro) só para interceptar `WM_HOTKEY`.
+`StartupRegistration` (porta direta do arquivo homônimo do EasyWinMenu): liga/desliga
+`HKCU\...\Run` sem precisar de administrador. Ambos alternáveis por `ToggleMenuFlyoutItem` no
+menu da bandeja, persistidos em `Settings`.
+
+**Crash fatal encontrado e corrigido durante a verificação**: uma exceção gerenciada lançada
+dentro do callback `WM_HOTKEY` (por exemplo, se `ShowPopup`/`RestoreDesktopGroups` lançasse
+algo) atravessava a fronteira do callback nativo do `SetWindowSubclass` sem conseguir ser
+desenrolada normalmente, resultando em `STATUS_STOWED_EXCEPTION` (`0xC000027B`) — o processo
+inteiro derrubado, sem log nenhum, exatamente o mesmo código de falha nativa já visto (e não
+relacionado) na investigação da seção 6.12. Reproduzido com uma instrumentação temporária.
+Corrigido envolvendo o corpo do callback (`SubclassProc`) num `try/catch` que nunca deixa nada
+atravessar de volta para o código nativo do Windows — regra geral para qualquer callback nativo
+chamado via P/Invoke neste projeto, não só este.
+
+Testes: 32/32 unitários, 30/30 de integração (sem mudança — funcionalidade de runtime, não de
+dados). Verificação de execução: publicação limpa, app publicado sobe sem exceção em modo
+Lite (onde o hotkey já está ativo por padrão) e `RegisterHotKey` confirmado retornando sucesso
+(`registrado=True`, `GetLastWin32Error=0`) via instrumentação temporária.
+
+**Ainda não verificado interativamente**: a entrega de fato da combinação de teclas pelo
+sistema operacional até o callback — `SendKeys` (usado para simular o atalho automaticamente)
+não conseguiu disparar o hotkey de forma confiável neste ambiente (sem crash, sem exceção, mas
+também sem o popup abrir), uma limitação de simulação de teclado já conhecida deste ambiente,
+não do código; `RegisterHotKey` bem-sucedido é a evidência disponível de que o atalho está
+corretamente registrado no sistema.
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
 Todas as fases do roteiro original (Fase 1 a Fase 7) foram implementadas, e o crash de

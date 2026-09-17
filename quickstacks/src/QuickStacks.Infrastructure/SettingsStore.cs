@@ -51,4 +51,8 @@ public sealed class SettingsStore
     public const string ThemeModeKey = "theme.mode";
 
     public const string ProductTierKey = "product.tier";
+
+    public const string GlobalHotkeyEnabledKey = "hotkey.global.enabled";
+
+    public const string StartWithWindowsKey = "startup.enabled";
 }
