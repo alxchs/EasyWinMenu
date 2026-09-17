@@ -331,4 +331,82 @@ public class SqliteMenuRepositoryTests : IDisposable
 
         Assert.Equal(FolderTheme.Empty, await _repository.GetFolderThemeAsync(pasta.Id));
     }
+
+    [Fact]
+    public async Task SetIsDesktopGroupAsync_True_CreatesDefaultPlacement()
+    {
+        var pasta = MenuItem.CreateFolder("Grupo", null, 0);
+        await _repository.AddAsync(pasta);
+
+        await _repository.SetIsDesktopGroupAsync(pasta.Id, true);
+
+        var atualizada = await _repository.GetByIdAsync(pasta.Id);
+        Assert.True(atualizada!.IsDesktopGroup);
+        var placement = await _repository.GetDesktopGroupPlacementAsync(pasta.Id);
+        Assert.NotNull(placement);
+        Assert.Equal(DesktopGroupDisplayMode.Panel, placement!.DisplayMode);
+    }
+
+    [Fact]
+    public async Task SetIsDesktopGroupAsync_TwiceTrue_DoesNotResetExistingPlacement()
+    {
+        var pasta = MenuItem.CreateFolder("Grupo", null, 0);
+        await _repository.AddAsync(pasta);
+        await _repository.SetIsDesktopGroupAsync(pasta.Id, true);
+        var original = await _repository.GetDesktopGroupPlacementAsync(pasta.Id);
+        await _repository.SetDesktopGroupPlacementAsync(original! with { X = 500, Y = 500 });
+
+        await _repository.SetIsDesktopGroupAsync(pasta.Id, true);
+
+        var placement = await _repository.GetDesktopGroupPlacementAsync(pasta.Id);
+        Assert.Equal(500, placement!.X);
+    }
+
+    [Fact]
+    public async Task GetDesktopGroupsAsync_ReturnsOnlyRootFoldersFlagged()
+    {
+        var grupo = MenuItem.CreateFolder("Grupo", null, 0);
+        var comum = MenuItem.CreateFolder("Comum", null, 1);
+        await _repository.AddAsync(grupo);
+        await _repository.AddAsync(comum);
+        await _repository.SetIsDesktopGroupAsync(grupo.Id, true);
+
+        var grupos = await _repository.GetDesktopGroupsAsync();
+
+        var encontrado = Assert.Single(grupos);
+        Assert.Equal(grupo.Id, encontrado.Id);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_OnDesktopGroup_CascadesPlacementAndIconPositions()
+    {
+        var grupo = MenuItem.CreateFolder("Grupo", null, 0);
+        await _repository.AddAsync(grupo);
+        await _repository.SetIsDesktopGroupAsync(grupo.Id, true);
+        var item = MenuItem.CreateShortcut("Calculadora", grupo.Id, MenuItemType.Executable, "calc.exe", 0);
+        await _repository.AddAsync(item);
+        await _repository.SetDesktopIconPositionAsync(new DesktopIconPosition(item.Id, 30, 40));
+
+        await _repository.DeleteAsync(grupo.Id);
+
+        Assert.Null(await _repository.GetDesktopGroupPlacementAsync(grupo.Id));
+        Assert.Empty(await _repository.GetDesktopIconPositionsAsync(grupo.Id));
+    }
+
+    [Fact]
+    public async Task DesktopIconPosition_RoundTrips()
+    {
+        var grupo = MenuItem.CreateFolder("Grupo", null, 0);
+        await _repository.AddAsync(grupo);
+        var item = MenuItem.CreateShortcut("Calculadora", grupo.Id, MenuItemType.Executable, "calc.exe", 0);
+        await _repository.AddAsync(item);
+
+        await _repository.SetDesktopIconPositionAsync(new DesktopIconPosition(item.Id, 30, 40));
+        await _repository.SetDesktopIconPositionAsync(new DesktopIconPosition(item.Id, 55, 60));
+
+        var posicoes = await _repository.GetDesktopIconPositionsAsync(grupo.Id);
+        var posicao = Assert.Single(posicoes.Values);
+        Assert.Equal(55, posicao.X);
+        Assert.Equal(60, posicao.Y);
+    }
 }

@@ -15,6 +15,7 @@ public sealed partial class TrayIconWindow : Window
 {
     private PopupWindow? _popup;
     private EditorWindow? _editor;
+    private readonly List<DesktopGroupWindow> _desktopGroupWindows = [];
 
     public TrayIconWindow()
     {
@@ -52,6 +53,21 @@ public sealed partial class TrayIconWindow : Window
 
         RefreshTexts();
         LocalizationService.LanguageChanged += RefreshTexts;
+    }
+
+    /// <summary>
+    /// So' pode ser chamado depois desta janela ja' ter sido ativada (App.OnLaunched, apos
+    /// Activate()) - construir uma outra Window (DesktopGroupWindow) de dentro do construtor
+    /// desta, antes dela mesma ter sido ativada, falha com XamlParseException "Cannot find a
+    /// Resource... LayerFillColorDefaultBrush": os dicionarios de tema Fluent padrao so' ficam
+    /// disponiveis depois que a primeira janela do processo e' ativada.
+    /// </summary>
+    public void OpenDesktopGroupsIfFull()
+    {
+        if (FeatureTier.IsFull)
+        {
+            _ = OpenAllDesktopGroupsAsync();
+        }
     }
 
     public IRelayCommand ShowPopupCommand { get; }
@@ -161,5 +177,43 @@ public sealed partial class TrayIconWindow : Window
         FeatureTier.SetTier(app.Settings, tier);
 
         SetCheckedExclusive(FeatureTier.IsFull ? TierFullItem : TierLiteItem, TierLiteItem, TierFullItem);
+
+        if (FeatureTier.IsFull)
+        {
+            _ = OpenAllDesktopGroupsAsync();
+        }
+        else
+        {
+            CloseAllDesktopGroups();
+        }
+    }
+
+    /// <summary>
+    /// Abre uma DesktopGroupWindow para cada pasta ja' marcada IsDesktopGroup=true - ligar o
+    /// modo Full nao apaga nem recria nada, so' mostra as janelas soltas que ja' existiam.
+    /// </summary>
+    private async Task OpenAllDesktopGroupsAsync()
+    {
+        CloseAllDesktopGroups();
+
+        var app = (App)Microsoft.UI.Xaml.Application.Current;
+        var groups = await app.MenuRepository.GetDesktopGroupsAsync();
+        foreach (var group in groups)
+        {
+            var window = new DesktopGroupWindow(app.MenuRepository, group);
+            _desktopGroupWindows.Add(window);
+            window.Activate();
+        }
+    }
+
+    /// <summary>Desligar o modo Full so' fecha as janelas - os dados (IsDesktopGroup, posicoes, geometria) continuam no banco.</summary>
+    private void CloseAllDesktopGroups()
+    {
+        foreach (var window in _desktopGroupWindows)
+        {
+            window.Close();
+        }
+
+        _desktopGroupWindows.Clear();
     }
 }

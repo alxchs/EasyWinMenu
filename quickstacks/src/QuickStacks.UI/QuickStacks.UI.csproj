@@ -39,4 +39,22 @@
     </Content>
   </ItemGroup>
 
+  <!-- EnableCoreMrtTooling=false (acima) tambem desliga o passo que copiaria os .xbf (XAML
+       compilado) pro output publicado - ficam parados so' no obj/, e o app publicado falha
+       com XamlParseException("XAML parsing failed.") ao tentar montar QUALQUER janela, ja' na
+       primeira (TrayIconWindow), porque LoadComponent nao acha o .xbf correspondente. `dotnet
+       build` (Debug) nao sofre disso porque copia o obj/ inteiro pro bin/ por outro caminho;
+       so' `dotnet publish` filtra por @(ResolvedFileToPublish). Fix: incluir os .xbf gerados
+       nessa lista a mao. -->
+  <Target Name="IncludeXbfInPublishOutput" BeforeTargets="AssignTargetPaths;ComputeFilesToPublish">
+    <ItemGroup>
+      <_GeneratedXbf Include="$(IntermediateOutputPath)**\*.xbf" />
+      <None Include="@(_GeneratedXbf)">
+        <Link>%(Filename)%(Extension)</Link>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </None>
+    </ItemGroup>
+  </Target>
+
 </Project>

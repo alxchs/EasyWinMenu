@@ -13,12 +13,18 @@ public sealed partial class EditorWindow : Window
 {
     private const string DraggedItemFormat = "QuickStacksItemId";
 
+    private readonly IMenuRepository _repository;
+
     public EditorWindow(IMenuRepository repository, IConfigExportService exportService, ILnkImportService lnkImportService)
     {
         InitializeComponent();
 
+        _repository = repository;
         ViewModel = new EditorViewModel(repository, exportService, lnkImportService);
         ThemeService.Register(RootGrid);
+
+        DesktopGroupSeparator.Visibility = FeatureTier.IsFull ? Visibility.Visible : Visibility.Collapsed;
+        ToggleDesktopGroupButton.Visibility = FeatureTier.IsFull ? Visibility.Visible : Visibility.Collapsed;
 
         RefreshTexts();
         LocalizationService.LanguageChanged += RefreshTexts;
@@ -39,6 +45,18 @@ public sealed partial class EditorWindow : Window
         ExportButton.Label = LocalizationService.Get("editor.export");
         ImportButton.Label = LocalizationService.Get("editor.import");
         ImportLnkButton.Label = LocalizationService.Get("editor.importLnk");
+        ToggleDesktopGroupButton.Label = LocalizationService.Get("editor.toggleDesktopGroup");
+    }
+
+    private async void ToggleDesktopGroup_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.SelectedNode is not { IsFolder: true } node)
+        {
+            return;
+        }
+
+        await _repository.SetIsDesktopGroupAsync(node.Id, !node.Item.IsDesktopGroup);
+        await ViewModel.LoadAsync();
     }
 
     private void Tree_SelectionChanged(TreeView sender, TreeViewSelectionChangedEventArgs args)

@@ -41,6 +41,26 @@ public static class SqliteSchema
             BackgroundColorHex TEXT NULL,
             ThemeJson          TEXT NULL
         );
+
+        -- Fase 9 (modo Full): geometria da janela solta de um grupo - so' existe uma linha
+        -- aqui para pastas com IsDesktopGroup=true.
+        CREATE TABLE IF NOT EXISTS DesktopGroupPlacement (
+            GroupId      TEXT PRIMARY KEY REFERENCES MenuItems(Id) ON DELETE CASCADE,
+            X            REAL NOT NULL,
+            Y            REAL NOT NULL,
+            Width        REAL NOT NULL,
+            Height       REAL NOT NULL,
+            DisplayMode  TEXT NOT NULL,
+            IconScale    REAL NOT NULL,
+            IsCollapsed  INTEGER NOT NULL DEFAULT 0
+        );
+
+        -- Fase 9: posicao livre de cada item pinado no canvas do grupo que o contem.
+        CREATE TABLE IF NOT EXISTS DesktopIconPosition (
+            ItemId TEXT PRIMARY KEY REFERENCES MenuItems(Id) ON DELETE CASCADE,
+            X      REAL NOT NULL,
+            Y      REAL NOT NULL
+        );
         """;
 
     public static void EnsureCreated(SqliteConnection connection)
@@ -53,19 +73,21 @@ public static class SqliteSchema
         command.CommandText = CreateTableSql;
         command.ExecuteNonQuery();
 
-        EnsureFolderAppearanceThemeJsonColumn(connection);
+        EnsureColumn(connection, "FolderAppearance", "ThemeJson", "TEXT NULL");
+        EnsureColumn(connection, "MenuItems", "IsDesktopGroup", "INTEGER NOT NULL DEFAULT 0");
     }
 
     /// <summary>
-    /// Fase 8: FolderAppearance ja' existia desde a Fase 4 em bancos reais - SQLite nao tem
-    /// "ADD COLUMN IF NOT EXISTS", entao confere via PRAGMA table_info antes de tentar
-    /// adicionar a coluna nova (ThemeJson, o tema completo do modo Full).
+    /// SQLite nao tem "ADD COLUMN IF NOT EXISTS" - confere via PRAGMA table_info antes de
+    /// tentar adicionar uma coluna que uma fase posterior precisou numa tabela que ja
+    /// existia em bancos reais de fases anteriores.
     /// </summary>
-    private static void EnsureFolderAppearanceThemeJsonColumn(SqliteConnection connection)
+    private static void EnsureColumn(SqliteConnection connection, string table, string column, string columnDefinition)
     {
         using (var check = connection.CreateCommand())
         {
-            check.CommandText = "SELECT COUNT(*) FROM pragma_table_info('FolderAppearance') WHERE name = 'ThemeJson';";
+            check.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = @column;";
+            check.Parameters.AddWithValue("@column", column);
             var exists = Convert.ToInt64(check.ExecuteScalar()) > 0;
             if (exists)
             {
@@ -74,7 +96,7 @@ public static class SqliteSchema
         }
 
         using var alter = connection.CreateCommand();
-        alter.CommandText = "ALTER TABLE FolderAppearance ADD COLUMN ThemeJson TEXT NULL;";
+        alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {columnDefinition};";
         alter.ExecuteNonQuery();
     }
 }

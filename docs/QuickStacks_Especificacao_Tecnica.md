@@ -487,6 +487,67 @@ limpar só a cor de fundo sem perder o resto do tema, e o caso de a linha sumir 
 volta a ficar vazio). App confirmado rodando de pé depois da mudança (mesmo critério da seção
 6.10).
 
+## 6.12 Fase 9 — Grupos soltos na área de trabalho (modo Panel) + duas causas-raiz de crash
+
+`DesktopGroupWindow` (nova janela WinUI3): canvas livre com ícones arrastáveis por pasta com
+`IsDesktopGroup=true`, geometria persistida em `DesktopGroupPlacement` (1:1 com `MenuItems.Id`,
+mesma tabela desenhada na seção 6.11), reflow em cascata pra ícone sem posição salva. Ligar o
+modo Full abre uma janela por grupo existente (`TrayIconWindow.OpenAllDesktopGroupsAsync`);
+desligar só fecha as janelas — os dados sobrevivem, igual ao EasyWinMenu nunca apagar config do
+usuário ao trocar de flag. Arrastar-e-soltar do Explorer pra dentro do grupo via
+`StandardDataFormats.StorageItems`. Entrar numa subpasta abre o `PopupWindow` já existente
+(Fase 1) ali dentro (`NavigateToFolderAsync`) em vez de duplicar navegação em trilha numa
+segunda janela.
+
+Esta fase expôs **dois bugs de inicialização pré-existentes**, nenhum dos dois causado pelo
+código novo — só nunca detectados porque `DesktopGroupWindow` foi a primeira janela nova desde
+a Fase 1, e o app nunca tinha sido testado de verdade em modo publicado (`dotnet publish`)
+depois da Fase 7:
+
+1. **`{ThemeResource LayerFillColorDefaultBrush}` nunca resolvia, desde a Fase 1** —
+   `XamlParseException: Cannot find a Resource with the Name/Key ...`. Causa: `App.xaml` nunca
+   teve os dicionários padrão do Fluent mergeados (`XamlControlsResources`, o jeito "normal" do
+   WinUI 3) porque mergeá-los trava/derruba o processo nesta máquina com o mesmo tipo de falha
+   nativa (`0xC0000409`) do `RadioMenuFlyoutItem` da seção 6.10 — reproduzido isolado. Sem essa
+   maquiagem, nenhum `{ThemeResource ...}` em nenhuma janela (incluindo `PopupWindow` e
+   `EditorWindow`, existentes desde a Fase 1) jamais teria resolvido pra um usuário real — só
+   não crashava porque, até a Fase 9, nenhuma dessas janelas tinha sido construída de verdade
+   fora do ambiente sintético dos testes de integração (que não sobem UI). Correção definitiva:
+   eliminar todo uso de `{ThemeResource ...}` no projeto — `ThemeService.Register(Panel root)`
+   agora pinta o fundo de cada janela direto por código, escolhendo a cor a partir de
+   `FrameworkElement.ActualTheme` (`CreateDefaultBackgroundBrush`), sem depender de nenhum
+   dicionário de recursos do framework.
+2. **`dotnet publish` não copiava os `.xbf` (XAML compilado) pro output** —
+   `XamlParseException: "XAML parsing failed."` já na primeira janela (`TrayIconWindow`),
+   determinístico em toda publicação, mas ausente no `dotnet build` (Debug). Causa:
+   `EnableCoreMrtTooling=false` (necessário nesta máquina por não ter Visual Studio — seção 4)
+   também desliga, como efeito colateral, o passo que levaria os `.xbf` gerados em `obj/` até o
+   diretório publicado; eles ficavam presos em `obj/x64/Release/.../win-x64/*.xbf`, nunca
+   chegando à pasta que `publish.ps1` distribui. **Esta é a causa mais provável de o usuário ter
+   reportado "parece que estou com o exe errado"** — o instalador/publicação mais recente da
+   Fase 7 já rodava sobre uma base sem os dois primeiros vícios corrigidos, mas o efeito prático
+   seria o mesmo tipo de sintoma (app "não faz o que deveria"). Correção: um target de MSBuild
+   em `QuickStacks.UI.csproj` (`IncludeXbfInPublishOutput`) que inclui os `.xbf` gerados em
+   `@(None)` com `CopyToPublishDirectory` antes de `ComputeFilesToPublish`. Verificado depois da
+   correção: publicação limpa (`Remove-Item` + `publish.ps1`) com os 5 `.xbf` presentes, app
+   publicado sobe sem exceção (`Application.UnhandledException` instrumentado
+   temporariamente para confirmar — nenhuma disparada), e com o modo Full ligado e uma pasta
+   real marcada `IsDesktopGroup=1` via mutação direta do banco, a janela do grupo abre de
+   verdade (`WinUI Desktop`, `Rect=80;80;260;220`, confirmado por UI Automation).
+
+Testes: 29/29 de integração, 22/22 unitários, sem alteração de contagem nesta fase (a fase foi
+majoritariamente UI, não testável por automação de banco). Verificação de execução: processo
+sobe e fica de pé tanto no `dotnet build` (Debug) quanto no `dotnet publish` (Release,
+autocontido) — o critério da seção 6.10 agora cobre explicitamente as duas formas de rodar, não
+só uma.
+
+**Ainda não verificado interativamente** (mesma ressalva honesta da seção 6.10/do
+`DragGhostWindow` do EasyWinMenu): arrastar um ícone dentro do canvas com o mouse de verdade,
+soltar um arquivo vindo do Explorer, redimensionar a janela do grupo, múltiplos grupos abertos
+ao mesmo tempo, e o botão "marcar como grupo de área de trabalho" no `EditorWindow` — validados
+por leitura de código e pela construção real da janela (via UI Automation), não por interação
+de mouse simulada.
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
 Todas as fases do roteiro original (Fase 1 a Fase 7) foram implementadas, e o crash de

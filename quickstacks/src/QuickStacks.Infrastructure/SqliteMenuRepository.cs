@@ -98,10 +98,10 @@ public sealed class SqliteMenuRepository : IMenuRepository
         command.CommandText = """
             INSERT INTO MenuItems
                 (Id, ParentId, Name, Description, Type, Path, Arguments, WorkingDirectory, Icon,
-                 SortOrder, IsFavorite, LaunchCount, LastUsedUtc, CreatedAt, UpdatedAt)
+                 SortOrder, IsFavorite, LaunchCount, LastUsedUtc, CreatedAt, UpdatedAt, IsDesktopGroup)
             VALUES
                 (@Id, @ParentId, @Name, @Description, @Type, @Path, @Arguments, @WorkingDirectory, @Icon,
-                 @SortOrder, @IsFavorite, @LaunchCount, @LastUsedUtc, @CreatedAt, @UpdatedAt);
+                 @SortOrder, @IsFavorite, @LaunchCount, @LastUsedUtc, @CreatedAt, @UpdatedAt, @IsDesktopGroup);
             """;
         Bind(command, item);
         await command.ExecuteNonQueryAsync(ct);
@@ -118,7 +118,7 @@ public sealed class SqliteMenuRepository : IMenuRepository
                 ParentId = @ParentId, Name = @Name, Description = @Description, Type = @Type,
                 Path = @Path, Arguments = @Arguments, WorkingDirectory = @WorkingDirectory, Icon = @Icon,
                 SortOrder = @SortOrder, IsFavorite = @IsFavorite, LaunchCount = @LaunchCount,
-                LastUsedUtc = @LastUsedUtc, UpdatedAt = @UpdatedAt
+                LastUsedUtc = @LastUsedUtc, UpdatedAt = @UpdatedAt, IsDesktopGroup = @IsDesktopGroup
             WHERE Id = @Id;
             """;
         Bind(command, item);
@@ -335,6 +335,129 @@ public sealed class SqliteMenuRepository : IMenuRepository
         await cleanup.ExecuteNonQueryAsync(ct);
     }
 
+    public async Task<IReadOnlyList<MenuItem>> GetDesktopGroupsAsync(CancellationToken ct = default)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT * FROM MenuItems WHERE ParentId IS NULL AND IsDesktopGroup = 1 ORDER BY Name;";
+        return await ReadAllAsync(command, ct);
+    }
+
+    public async Task SetIsDesktopGroupAsync(string folderId, bool isDesktopGroup, CancellationToken ct = default)
+    {
+        using var connection = Open();
+        using (var update = connection.CreateCommand())
+        {
+            update.CommandText = "UPDATE MenuItems SET IsDesktopGroup = @flag, UpdatedAt = @updatedAt WHERE Id = @id;";
+            update.Parameters.AddWithValue("@flag", isDesktopGroup ? 1 : 0);
+            update.Parameters.AddWithValue("@updatedAt", DateTimeOffset.UtcNow.ToString("O"));
+            update.Parameters.AddWithValue("@id", folderId);
+            await update.ExecuteNonQueryAsync(ct);
+        }
+
+        if (!isDesktopGroup)
+        {
+            return;
+        }
+
+        using var checkPlacement = connection.CreateCommand();
+        checkPlacement.CommandText = "SELECT COUNT(*) FROM DesktopGroupPlacement WHERE GroupId = @id;";
+        checkPlacement.Parameters.AddWithValue("@id", folderId);
+        var hasPlacement = Convert.ToInt64(await checkPlacement.ExecuteScalarAsync(ct)) > 0;
+        if (!hasPlacement)
+        {
+            // Cascata de janelas: cada grupo novo nasce um pouco deslocado do ultimo, pra nao
+            // empilhar tudo exatamente no mesmo canto da tela.
+            using var count = connection.CreateCommand();
+            count.CommandText = "SELECT COUNT(*) FROM DesktopGroupPlacement;";
+            var existing = Convert.ToInt64(await count.ExecuteScalarAsync(ct));
+            var offset = (existing % 10) * 28;
+            await SetDesktopGroupPlacementAsync(DesktopGroupPlacement.CreateDefault(folderId, 80 + offset, 80 + offset), ct);
+        }
+    }
+
+    public async Task<DesktopGroupPlacement?> GetDesktopGroupPlacementAsync(string groupId, CancellationToken ct = default)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT X, Y, Width, Height, DisplayMode, IconScale, IsCollapsed FROM DesktopGroupPlacement WHERE GroupId = @groupId;";
+        command.Parameters.AddWithValue("@groupId", groupId);
+
+        using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            return null;
+        }
+
+        return new DesktopGroupPlacement(
+            groupId,
+            reader.GetDouble(0),
+            reader.GetDouble(1),
+            reader.GetDouble(2),
+            reader.GetDouble(3),
+            Enum.Parse<DesktopGroupDisplayMode>(reader.GetString(4)),
+            reader.GetDouble(5),
+            reader.GetInt32(6) != 0);
+    }
+
+    public async Task SetDesktopGroupPlacementAsync(DesktopGroupPlacement placement, CancellationToken ct = default)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO DesktopGroupPlacement (GroupId, X, Y, Width, Height, DisplayMode, IconScale, IsCollapsed)
+            VALUES (@groupId, @x, @y, @width, @height, @displayMode, @iconScale, @isCollapsed)
+            ON CONFLICT(GroupId) DO UPDATE SET
+                X = excluded.X, Y = excluded.Y, Width = excluded.Width, Height = excluded.Height,
+                DisplayMode = excluded.DisplayMode, IconScale = excluded.IconScale, IsCollapsed = excluded.IsCollapsed;
+            """;
+        command.Parameters.AddWithValue("@groupId", placement.GroupId);
+        command.Parameters.AddWithValue("@x", placement.X);
+        command.Parameters.AddWithValue("@y", placement.Y);
+        command.Parameters.AddWithValue("@width", placement.Width);
+        command.Parameters.AddWithValue("@height", placement.Height);
+        command.Parameters.AddWithValue("@displayMode", placement.DisplayMode.ToString());
+        command.Parameters.AddWithValue("@iconScale", placement.IconScale);
+        command.Parameters.AddWithValue("@isCollapsed", placement.IsCollapsed ? 1 : 0);
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task<IReadOnlyDictionary<string, DesktopIconPosition>> GetDesktopIconPositionsAsync(string groupId, CancellationToken ct = default)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT p.ItemId, p.X, p.Y FROM DesktopIconPosition p
+            INNER JOIN MenuItems m ON m.Id = p.ItemId
+            WHERE m.ParentId = @groupId;
+            """;
+        command.Parameters.AddWithValue("@groupId", groupId);
+
+        var result = new Dictionary<string, DesktopIconPosition>();
+        using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var itemId = reader.GetString(0);
+            result[itemId] = new DesktopIconPosition(itemId, reader.GetDouble(1), reader.GetDouble(2));
+        }
+
+        return result;
+    }
+
+    public async Task SetDesktopIconPositionAsync(DesktopIconPosition position, CancellationToken ct = default)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO DesktopIconPosition (ItemId, X, Y) VALUES (@itemId, @x, @y)
+            ON CONFLICT(ItemId) DO UPDATE SET X = excluded.X, Y = excluded.Y;
+            """;
+        command.Parameters.AddWithValue("@itemId", position.ItemId);
+        command.Parameters.AddWithValue("@x", position.X);
+        command.Parameters.AddWithValue("@y", position.Y);
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
     private static void Bind(SqliteCommand command, MenuItem item)
     {
         command.Parameters.AddWithValue("@Id", item.Id);
@@ -352,6 +475,7 @@ public sealed class SqliteMenuRepository : IMenuRepository
         command.Parameters.AddWithValue("@LastUsedUtc", (object?)item.LastUsedUtc?.ToString("O") ?? DBNull.Value);
         command.Parameters.AddWithValue("@CreatedAt", item.CreatedAt.ToString("O"));
         command.Parameters.AddWithValue("@UpdatedAt", item.UpdatedAt.ToString("O"));
+        command.Parameters.AddWithValue("@IsDesktopGroup", item.IsDesktopGroup ? 1 : 0);
     }
 
     private static MenuItem Map(SqliteDataReader reader)
@@ -373,6 +497,7 @@ public sealed class SqliteMenuRepository : IMenuRepository
             LastUsedUtc = reader.IsDBNull(reader.GetOrdinal("LastUsedUtc")) ? null : DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("LastUsedUtc"))),
             CreatedAt = DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("CreatedAt"))),
             UpdatedAt = DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("UpdatedAt"))),
+            IsDesktopGroup = reader.GetInt32(reader.GetOrdinal("IsDesktopGroup")) != 0,
         };
     }
 
@@ -442,10 +567,10 @@ public sealed class SqliteMenuRepository : IMenuRepository
             insert.CommandText = """
                 INSERT INTO MenuItems
                     (Id, ParentId, Name, Description, Type, Path, Arguments, WorkingDirectory, Icon,
-                     SortOrder, IsFavorite, LaunchCount, LastUsedUtc, CreatedAt, UpdatedAt)
+                     SortOrder, IsFavorite, LaunchCount, LastUsedUtc, CreatedAt, UpdatedAt, IsDesktopGroup)
                 VALUES
                     (@Id, @ParentId, @Name, @Description, @Type, @Path, @Arguments, @WorkingDirectory, @Icon,
-                     @SortOrder, @IsFavorite, @LaunchCount, @LastUsedUtc, @CreatedAt, @UpdatedAt);
+                     @SortOrder, @IsFavorite, @LaunchCount, @LastUsedUtc, @CreatedAt, @UpdatedAt, @IsDesktopGroup);
                 """;
             Bind(insert, item);
             await insert.ExecuteNonQueryAsync(ct);

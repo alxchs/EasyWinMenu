@@ -98,6 +98,14 @@ public sealed partial class PopupWindow : Window
         await ApplyFolderBackgroundAsync();
     }
 
+    /// <summary>Usado pela janela de grupo solto (Fase 9) para abrir uma subpasta diretamente neste popup.</summary>
+    public async Task NavigateToFolderAsync(string folderId, string folderName)
+    {
+        await ViewModel.NavigateToFolderIdAsync(folderId, folderName);
+        ApplyRememberedSizeForCurrentFolder();
+        await ApplyFolderBackgroundAsync();
+    }
+
     public void ActivateNearCursor()
     {
         if (GetCursorPos(out var cursor))
@@ -270,7 +278,7 @@ public sealed partial class PopupWindow : Window
 
         RootGrid.Background = hex is not null && TryParseHexColor(hex, out var color)
             ? new SolidColorBrush(color)
-            : (Brush)Microsoft.UI.Xaml.Application.Current.Resources["LayerFillColorDefaultBrush"];
+            : ThemeService.CreateDefaultBackgroundBrush(RootGrid.ActualTheme);
     }
 
     private static bool TryParseHexColor(string hex, out Color color)

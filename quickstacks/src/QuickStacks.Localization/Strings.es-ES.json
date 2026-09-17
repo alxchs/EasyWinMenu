@@ -34,6 +34,7 @@
   "editor.importLnkDialogTitle": "Importar accesos directos",
   "editor.importLnkConfirmTextFormat": "¿Importar {0} acceso(s) directo(s) dentro de \"{1}\"?",
   "editor.rootLabel": "raíz",
+  "editor.toggleDesktopGroup": "Grupo de escritorio",
   "editor.newFolderDialogTitle": "Nueva carpeta",
   "editor.folderNameLabel": "Nombre de la carpeta",
   "editor.defaultFolderName": "Nueva carpeta",

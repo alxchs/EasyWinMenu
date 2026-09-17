@@ -72,4 +72,19 @@ public interface IMenuRepository
     Task<FolderTheme> GetFolderThemeAsync(string folderId, CancellationToken ct = default);
 
     Task SetFolderThemeAsync(string folderId, FolderTheme theme, CancellationToken ct = default);
+
+    /// <summary>Toda pasta de nivel raiz com IsDesktopGroup=true (Fase 9, modo Full).</summary>
+    Task<IReadOnlyList<MenuItem>> GetDesktopGroupsAsync(CancellationToken ct = default);
+
+    /// <summary>Liga/desliga IsDesktopGroup; ligar sem geometria previa cria uma com <see cref="DesktopGroupPlacement.CreateDefault"/>.</summary>
+    Task SetIsDesktopGroupAsync(string folderId, bool isDesktopGroup, CancellationToken ct = default);
+
+    Task<DesktopGroupPlacement?> GetDesktopGroupPlacementAsync(string groupId, CancellationToken ct = default);
+
+    Task SetDesktopGroupPlacementAsync(DesktopGroupPlacement placement, CancellationToken ct = default);
+
+    /// <summary>Posicao de cada item pinado no canvas do grupo <paramref name="groupId"/> (Fase 9, modo Panel).</summary>
+    Task<IReadOnlyDictionary<string, DesktopIconPosition>> GetDesktopIconPositionsAsync(string groupId, CancellationToken ct = default);
+
+    Task SetDesktopIconPositionAsync(DesktopIconPosition position, CancellationToken ct = default);
 }

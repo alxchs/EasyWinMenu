@@ -34,6 +34,7 @@
   "editor.importLnkDialogTitle": "Importar atalhos",
   "editor.importLnkConfirmTextFormat": "Importar {0} atalho(s) para dentro de \"{1}\"?",
   "editor.rootLabel": "raiz",
+  "editor.toggleDesktopGroup": "Grupo de area de trabalho",
   "editor.newFolderDialogTitle": "Nova pasta",
   "editor.folderNameLabel": "Nome da pasta",
   "editor.defaultFolderName": "Nova pasta",

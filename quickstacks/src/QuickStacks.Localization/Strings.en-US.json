@@ -34,6 +34,7 @@
   "editor.importLnkDialogTitle": "Import shortcuts",
   "editor.importLnkConfirmTextFormat": "Import {0} shortcut(s) into \"{1}\"?",
   "editor.rootLabel": "root",
+  "editor.toggleDesktopGroup": "Desktop group",
   "editor.newFolderDialogTitle": "New folder",
   "editor.folderNameLabel": "Folder name",
   "editor.defaultFolderName": "New folder",

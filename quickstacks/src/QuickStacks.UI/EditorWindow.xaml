@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:app="using:QuickStacks.Application">
 
-    <Grid x:Name="RootGrid" Background="{ThemeResource LayerFillColorDefaultBrush}">
+    <Grid x:Name="RootGrid">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -20,6 +20,8 @@
             <AppBarButton x:Name="ExportButton" Icon="Save" Click="Export_Click" />
             <AppBarButton x:Name="ImportButton" Icon="OpenFile" Click="Import_Click" />
             <AppBarButton x:Name="ImportLnkButton" Icon="Link" Click="ImportLnk_Click" />
+            <AppBarSeparator x:Name="DesktopGroupSeparator" />
+            <AppBarButton x:Name="ToggleDesktopGroupButton" Icon="Pin" Click="ToggleDesktopGroup_Click" />
         </CommandBar>
 
         <!-- Padrao oficial do WinUI 3 para dados hierarquicos: um TreeViewItem aninhado no

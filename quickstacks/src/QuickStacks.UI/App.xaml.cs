@@ -47,5 +47,11 @@ public partial class App : Microsoft.UI.Xaml.Application
         _trayIconWindow = new TrayIconWindow();
         _trayIconWindow.Activate();
         _trayIconWindow.AppWindow.Hide();
+
+        // So' depois desta janela ja' ter sido ativada - ver o comentario em
+        // TrayIconWindow.OpenDesktopGroupsIfFull para o motivo (XamlParseException se uma
+        // Window com {ThemeResource} for construida antes da primeira janela do processo
+        // ser ativada - so' que aqui nao usamos mais ThemeResource nenhum, e' so' por cautela).
+        _trayIconWindow.OpenDesktopGroupsIfFull();
     }
 }

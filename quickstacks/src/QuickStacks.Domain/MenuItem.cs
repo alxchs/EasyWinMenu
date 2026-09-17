@@ -41,6 +41,13 @@ public sealed class MenuItem
 
     public bool IsFolder => Type == MenuItemType.Folder;
 
+    /// <summary>
+    /// Fase 9 (modo Full): esta pasta tambem existe como uma janela solta na area de
+    /// trabalho, alem de aparecer no popup normal - mesmo item, dois lugares possiveis,
+    /// igual ao MenuCategory.IsDesktopGroup do EasyWinMenu. So' faz sentido quando IsFolder.
+    /// </summary>
+    public bool IsDesktopGroup { get; set; }
+
     public static MenuItem CreateFolder(string name, string? parentId, int sortOrder)
     {
         var now = DateTimeOffset.UtcNow;

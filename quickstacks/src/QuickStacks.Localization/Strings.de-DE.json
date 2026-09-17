@@ -34,6 +34,7 @@
   "editor.importLnkDialogTitle": "Verknüpfungen importieren",
   "editor.importLnkConfirmTextFormat": "{0} Verknüpfung(en) in \"{1}\" importieren?",
   "editor.rootLabel": "Stamm",
+  "editor.toggleDesktopGroup": "Desktopgruppe",
   "editor.newFolderDialogTitle": "Neuer Ordner",
   "editor.folderNameLabel": "Ordnername",
   "editor.defaultFolderName": "Neuer Ordner",

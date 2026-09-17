@@ -119,6 +119,27 @@ public sealed partial class FolderNavigationViewModel : ObservableObject
         await LoadAsync();
     }
 
+    /// <summary>
+    /// Navega direto para uma pasta conhecida pelo Id, reconstruindo a trilha real ate' ela -
+    /// usado pela janela de grupo solto (Fase 9) para abrir uma subpasta no popup existente
+    /// em vez de duplicar navegacao em trilha numa segunda janela.
+    /// </summary>
+    public async Task NavigateToFolderIdAsync(string folderId, string folderName)
+    {
+        var ancestors = await _repository.GetAncestorsAsync(folderId);
+        Breadcrumb.Clear();
+        Breadcrumb.Add(new BreadcrumbNodeViewModel(null, RootLabel));
+        foreach (var ancestor in ancestors)
+        {
+            Breadcrumb.Add(new BreadcrumbNodeViewModel(ancestor.Id, ancestor.Name));
+        }
+
+        Breadcrumb.Add(new BreadcrumbNodeViewModel(folderId, folderName));
+        Mode = BrowseMode.Folder;
+        CurrentFolderId = folderId;
+        await LoadAsync();
+    }
+
     /// <summary>Duplo clique/Enter numa pasta: empurra a trilha e recarrega in-place.</summary>
     [RelayCommand]
     public async Task NavigateIntoAsync(MenuEntryViewModel folder)
