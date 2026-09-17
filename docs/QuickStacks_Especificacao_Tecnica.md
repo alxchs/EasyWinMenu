@@ -450,24 +450,63 @@ abrir o popup, navegar pelas pastas, arrastar itens — a verificação nesta ro
 "o processo inicializa e fica de pé", não o funcionamento fim-a-fim de cada recurso. Isso
 continua como a pendência mais importante do projeto.
 
+## 6.11 Fase 8 — Feature flag Lite/Full + fundação do tema completo
+
+Pedido novo: um único produto/código com uma flag **Lite** (o QuickStacks como sempre foi) e
+**Full** (tudo o que o EasyWinMenu tem — inclusive os grupos soltos na área de trabalho,
+confirmado com o usuário que não é só "capacidades soltas", é também esse segundo paradigma
+de janela coexistindo com o popup). Um agente catalogou **130 itens distintos** do EasyWinMenu
+(lendo `docs/PROMPT.md` inteiro, `docs/OVERVIEW.md` inteiro e ~30 arquivos de código) — o
+roteiro completo, fase a fase, com a referência exata de qual arquivo do EasyWinMenu serve de
+modelo pra cada item, está registrado no plano local (`deep-twirling-ocean.md`), não
+duplicado aqui para não ter duas fontes de verdade desatualizando uma da outra.
+
+- **`FeatureTier`** (`QuickStacks.UI`, mesmo padrão estático de `ThemeService`/
+  `LocalizationService`): `Lite`/`Full` em `Settings` (`"product.tier"`), trocável pelo
+  submenu "Modo" na bandeja — `ToggleMenuFlyoutItem`, nunca `RadioMenuFlyoutItem` (mesma regra
+  da seção 6.10: trava/derruba o processo nesta máquina).
+- **Decisão de arquitetura**: um grupo de área de trabalho (fases futuras) não é uma entidade
+  paralela — é o mesmo `MenuItem` do tipo `Folder`, só com `IsDesktopGroup=true` e uma
+  geometria própria numa tabela nova (`DesktopGroupPlacement`, ainda não criada — entra
+  quando a fase dos grupos começar). Mesma lógica que o `MenuCategory.IsDesktopGroup` do
+  EasyWinMenu já validava.
+- **`FolderTheme`** (`QuickStacks.Domain`): registro com todos os campos do `MenuTheme` do
+  EasyWinMenu (cor de fundo/borda/texto/destaque, raio de canto, sombra completa, fontes,
+  espaçamento, tamanho de ícone, duração de animação) — cada campo `null` = "usa o tema
+  global". A cor de fundo simples da Fase 4 continua na sua própria coluna
+  (`FolderAppearance.BackgroundColorHex`, agora aceitando `NULL`); o resto do tema vai
+  serializado em `FolderAppearance.ThemeJson` — evita 17 colunas soltas pra um recurso que só
+  o modo Full usa. `IMenuRepository.Get/SetFolderThemeAsync`.
+- **Editor visual do tema completo ainda não existe** — só o armazenamento. A UI (equivalente
+  ao `ThemeEditWindow` do EasyWinMenu) fica pra quando a Fase 9 (grupos soltos) tiver um
+  cabeçalho de grupo de verdade pra pendurar esse comando, já que é lá que o EasyWinMenu
+  também oferece "Editar tema".
+
+Testes: 24/24 de integração (+ 4 novos cobrindo o `FolderTheme` completo, incluindo o caso de
+limpar só a cor de fundo sem perder o resto do tema, e o caso de a linha sumir quando tudo
+volta a ficar vazio). App confirmado rodando de pé depois da mudança (mesmo critério da seção
+6.10).
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
-Todas as fases do roteiro original (Fase 1 a Fase 7) foram implementadas. Trabalho futuro
-identificado ao longo do caminho, sem fase própria ainda:
+Todas as fases do roteiro original (Fase 1 a Fase 7) foram implementadas, e o crash de
+inicialização foi corrigido (6.10). A partir daqui o roteiro é o programa Lite/Full (Fase 8
+em diante, ver 6.11) — fases 9 a 20 cobrem grupos soltos na área de trabalho, tema completo
+com editor, organização automática viva, multi-monitor, atalhos globais, iniciar com o
+Windows, instância única, menu real da área de trabalho, área de transferência, extração real
+de ícone, paridade de execução, menu real do Explorer, e identidade/instalador do modo Full —
+o detalhe de cada uma está no plano local, não duplicado aqui.
+
+Trabalho menor, sem fase própria ainda:
 
 - Reordenar itens dentro do mesmo nível por arraste, com persistência de `SortOrder` em lote
   (pendência anotada na Fase 2 — `IMenuRepository.ReorderChildrenAsync` já existe e tem
   teste, só falta o gesto de arraste na `TreeView`/`GridView`).
-- Extração real de ícone dos executáveis/`.lnk` para os ladrilhos (hoje `MenuItem.Icon` só
-  guarda uma string de caminho; não há nenhum código que efetivamente carregue/renderize um
-  ícone extraído de um `.exe`/`.lnk` — os glifos do Segoe Fluent Icons são o que aparece hoje).
-- Cores customizáveis além do fundo (texto, destaque, bordas) e um seletor de cor visual em
-  vez de um campo hex (anotado como fora de escopo na Fase 4).
-- Empacotamento MSIX de verdade (acima) — precisa de uma máquina com Visual Studio.
+- Empacotamento MSIX de verdade (seção 6.9) — precisa de uma máquina com Visual Studio.
 - Verificação interativa completa (seção 6.10 confirmou que o app abre e fica de pé, mas não
   cada recurso individualmente): clicar no ícone da bandeja, o popup abrindo de verdade,
   navegar pelas pastas, o drag-and-drop para o Explorer, redimensionamento visual, os
-  submenus Tema/Idioma (agora com `ToggleMenuFlyoutItem`) marcando/desmarcando corretamente.
+  submenus (agora todos `ToggleMenuFlyoutItem`) marcando/desmarcando corretamente.
 
 ## 8. Testes automatizados
 
@@ -483,9 +522,11 @@ só verificação manual), o QuickStacks já nasce com:
   dentro de si mesma/de um descendente), cascata de exclusão (incluindo `FolderAppearance`),
   reordenar irmãos, importar/exportar (inclusive com o pai fora de ordem na lista de
   entrada), busca global (incluindo escape de coringas do `LIKE`), favoritos, recentes, mais
-  usados, cor de fundo por pasta (incluindo rejeição de hex mal formado) e importação de
+  usados, cor de fundo por pasta (incluindo rejeição de hex mal formado), importação de
   `.lnk` reais criados via COM no próprio teste (`LnkResolver`/`LnkImportService`, incluindo
-  ordenação e não sobrescrita de irmãos existentes). 20/20 passando.
+  ordenação e não sobrescrita de irmãos existentes) e o tema completo por pasta (Fase 8,
+  round-trip de todos os campos, limpar só a cor de fundo sem perder o resto, linha some
+  quando tudo volta a ficar vazio). 24/24 passando.
 
 Nenhum teste de UI/WinUI 3 ainda (a interação de drag-and-drop e o comportamento do ícone de
 bandeja só têm a cobertura de "compila e o tipo confere", não de comportamento real — ver

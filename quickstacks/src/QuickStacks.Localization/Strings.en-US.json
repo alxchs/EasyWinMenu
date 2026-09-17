@@ -6,6 +6,9 @@
   "tray.theme.dark": "Dark",
   "tray.theme.system": "Follow Windows",
   "tray.language": "Language",
+  "tray.tier": "Mode",
+  "tray.tier.lite": "Lite",
+  "tray.tier.full": "Full",
   "tray.exit": "Exit",
 
   "popup.searchPlaceholder": "Search everything...",

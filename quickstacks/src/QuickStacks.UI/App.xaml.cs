@@ -37,6 +37,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         LnkImportService = new LnkImportService(new LnkResolver(), MenuRepository);
         Settings = new SettingsStore();
         ThemeService.Initialize(Settings);
+        FeatureTier.Initialize(Settings);
         LocalizationService.SetLanguage(Settings.Get(SettingsStore.LanguageKey) ?? LocalizationService.DetectLanguage());
         _ = SeedData.EnsureSeededAsync(MenuRepository);
 

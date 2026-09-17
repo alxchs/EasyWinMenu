@@ -49,4 +49,6 @@ public sealed class SettingsStore
     public const string LanguageKey = "language.code";
 
     public const string ThemeModeKey = "theme.mode";
+
+    public const string ProductTierKey = "product.tier";
 }

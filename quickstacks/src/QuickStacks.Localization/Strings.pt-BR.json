@@ -6,6 +6,9 @@
   "tray.theme.dark": "Escuro",
   "tray.theme.system": "Seguir Windows",
   "tray.language": "Idioma",
+  "tray.tier": "Modo",
+  "tray.tier.lite": "Lite",
+  "tray.tier.full": "Full",
   "tray.exit": "Sair",
 
   "popup.searchPlaceholder": "Pesquisar em tudo...",

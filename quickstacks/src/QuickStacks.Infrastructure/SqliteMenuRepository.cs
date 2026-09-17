@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using QuickStacks.Domain;
 
@@ -261,25 +262,77 @@ public sealed class SqliteMenuRepository : IMenuRepository
             throw new ArgumentException($"'{hex}' nao e' uma cor valida (esperado #RRGGBB).", nameof(hex));
         }
 
+        // Sem DELETE quando hex e' nulo: a linha tambem pode estar guardando o tema completo
+        // do modo Full (ThemeJson) - apagar a linha inteira aqui perderia esse tema junto.
         using var connection = Open();
         using var command = connection.CreateCommand();
-
-        if (hex is null)
-        {
-            command.CommandText = "DELETE FROM FolderAppearance WHERE FolderId = @folderId;";
-            command.Parameters.AddWithValue("@folderId", folderId);
-        }
-        else
-        {
-            command.CommandText = """
-                INSERT INTO FolderAppearance (FolderId, BackgroundColorHex) VALUES (@folderId, @hex)
-                ON CONFLICT(FolderId) DO UPDATE SET BackgroundColorHex = excluded.BackgroundColorHex;
-                """;
-            command.Parameters.AddWithValue("@folderId", folderId);
-            command.Parameters.AddWithValue("@hex", hex);
-        }
-
+        command.CommandText = """
+            INSERT INTO FolderAppearance (FolderId, BackgroundColorHex) VALUES (@folderId, @hex)
+            ON CONFLICT(FolderId) DO UPDATE SET BackgroundColorHex = excluded.BackgroundColorHex;
+            """;
+        command.Parameters.AddWithValue("@folderId", folderId);
+        command.Parameters.AddWithValue("@hex", (object?)hex ?? DBNull.Value);
         await command.ExecuteNonQueryAsync(ct);
+
+        await DeleteFolderAppearanceRowIfEmptyAsync(connection, folderId, ct);
+    }
+
+    public async Task<FolderTheme> GetFolderThemeAsync(string folderId, CancellationToken ct = default)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT BackgroundColorHex, ThemeJson FROM FolderAppearance WHERE FolderId = @folderId;";
+        command.Parameters.AddWithValue("@folderId", folderId);
+
+        using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            return FolderTheme.Empty;
+        }
+
+        var backgroundHex = reader.IsDBNull(0) ? null : reader.GetString(0);
+        var themeJson = reader.IsDBNull(1) ? null : reader.GetString(1);
+        var rest = themeJson is null ? FolderTheme.Empty : JsonSerializer.Deserialize<FolderTheme>(themeJson) ?? FolderTheme.Empty;
+        return rest with { BackgroundColorHex = backgroundHex };
+    }
+
+    public async Task SetFolderThemeAsync(string folderId, FolderTheme theme, CancellationToken ct = default)
+    {
+        if (theme.BackgroundColorHex is not null && !HexColor.IsValid(theme.BackgroundColorHex))
+        {
+            throw new ArgumentException($"'{theme.BackgroundColorHex}' nao e' uma cor valida (esperado #RRGGBB).", nameof(theme));
+        }
+
+        // BackgroundColorHex fica na sua propria coluna (Fase 4, so' precisa dela a maioria
+        // do tempo); o resto do tema completo (Fase 8/modo Full) vai serializado - evita 17
+        // colunas soltas pra um recurso que so' o modo Full usa.
+        var restJson = JsonSerializer.Serialize(theme with { BackgroundColorHex = null });
+
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO FolderAppearance (FolderId, BackgroundColorHex, ThemeJson) VALUES (@folderId, @hex, @themeJson)
+            ON CONFLICT(FolderId) DO UPDATE SET BackgroundColorHex = excluded.BackgroundColorHex, ThemeJson = excluded.ThemeJson;
+            """;
+        command.Parameters.AddWithValue("@folderId", folderId);
+        command.Parameters.AddWithValue("@hex", (object?)theme.BackgroundColorHex ?? DBNull.Value);
+        command.Parameters.AddWithValue("@themeJson", restJson);
+        await command.ExecuteNonQueryAsync(ct);
+
+        await DeleteFolderAppearanceRowIfEmptyAsync(connection, folderId, ct);
+    }
+
+    /// <summary>Sem cor de fundo simples e sem tema completo, a linha nao serve mais pra nada - some, como antes da Fase 8.</summary>
+    private static async Task DeleteFolderAppearanceRowIfEmptyAsync(SqliteConnection connection, string folderId, CancellationToken ct)
+    {
+        using var cleanup = connection.CreateCommand();
+        cleanup.CommandText = """
+            DELETE FROM FolderAppearance
+            WHERE FolderId = @folderId AND BackgroundColorHex IS NULL AND (ThemeJson IS NULL OR ThemeJson = @emptyThemeJson);
+            """;
+        cleanup.Parameters.AddWithValue("@folderId", folderId);
+        cleanup.Parameters.AddWithValue("@emptyThemeJson", JsonSerializer.Serialize(FolderTheme.Empty));
+        await cleanup.ExecuteNonQueryAsync(ct);
     }
 
     private static void Bind(SqliteCommand command, MenuItem item)

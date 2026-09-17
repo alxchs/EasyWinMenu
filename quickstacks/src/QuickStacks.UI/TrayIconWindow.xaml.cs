@@ -48,6 +48,8 @@ public sealed partial class TrayIconWindow : Window
             _ => LanguagePtBrItem,
         }, LanguagePtBrItem, LanguageEnUsItem, LanguageEsEsItem, LanguageDeDeItem);
 
+        SetCheckedExclusive(FeatureTier.IsFull ? TierFullItem : TierLiteItem, TierLiteItem, TierFullItem);
+
         RefreshTexts();
         LocalizationService.LanguageChanged += RefreshTexts;
     }
@@ -76,6 +78,9 @@ public sealed partial class TrayIconWindow : Window
         ThemeDarkItem.Text = LocalizationService.Get("tray.theme.dark");
         ThemeSystemItem.Text = LocalizationService.Get("tray.theme.system");
         LanguageSubItem.Text = LocalizationService.Get("tray.language");
+        TierSubItem.Text = LocalizationService.Get("tray.tier");
+        TierLiteItem.Text = LocalizationService.Get("tray.tier.lite");
+        TierFullItem.Text = LocalizationService.Get("tray.tier.full");
         ExitItem.Text = LocalizationService.Get("tray.exit");
     }
 
@@ -144,5 +149,17 @@ public sealed partial class TrayIconWindow : Window
             "de-DE" => LanguageDeDeItem,
             _ => LanguagePtBrItem,
         }, LanguagePtBrItem, LanguageEnUsItem, LanguageEsEsItem, LanguageDeDeItem);
+    }
+
+    private void TierLite_Click(object sender, RoutedEventArgs e) => SetTier(FeatureTier.LiteValue);
+
+    private void TierFull_Click(object sender, RoutedEventArgs e) => SetTier(FeatureTier.FullValue);
+
+    private void SetTier(string tier)
+    {
+        var app = (App)Microsoft.UI.Xaml.Application.Current;
+        FeatureTier.SetTier(app.Settings, tier);
+
+        SetCheckedExclusive(FeatureTier.IsFull ? TierFullItem : TierLiteItem, TierLiteItem, TierFullItem);
     }
 }

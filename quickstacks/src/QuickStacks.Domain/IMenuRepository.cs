@@ -67,4 +67,9 @@ public interface IMenuRepository
 
     /// <summary><paramref name="hex"/> nulo remove o override e volta a usar o tema global.</summary>
     Task SetFolderBackgroundColorAsync(string folderId, string? hex, CancellationToken ct = default);
+
+    /// <summary>Tema completo da pasta (Fase 8, modo Full) - <see cref="FolderTheme.Empty"/> se nunca foi customizado.</summary>
+    Task<FolderTheme> GetFolderThemeAsync(string folderId, CancellationToken ct = default);
+
+    Task SetFolderThemeAsync(string folderId, FolderTheme theme, CancellationToken ct = default);
 }

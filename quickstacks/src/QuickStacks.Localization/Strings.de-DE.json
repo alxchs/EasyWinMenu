@@ -6,6 +6,9 @@
   "tray.theme.dark": "Dunkel",
   "tray.theme.system": "Windows folgen",
   "tray.language": "Sprache",
+  "tray.tier": "Modus",
+  "tray.tier.lite": "Lite",
+  "tray.tier.full": "Full",
   "tray.exit": "Beenden",
 
   "popup.searchPlaceholder": "Alles durchsuchen...",

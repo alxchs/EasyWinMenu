@@ -38,7 +38,8 @@ public static class SqliteSchema
         -- quando a pasta tem uma cor propria; sem linha = usa o tema global.
         CREATE TABLE IF NOT EXISTS FolderAppearance (
             FolderId          TEXT PRIMARY KEY REFERENCES MenuItems(Id) ON DELETE CASCADE,
-            BackgroundColorHex TEXT NOT NULL
+            BackgroundColorHex TEXT NULL,
+            ThemeJson          TEXT NULL
         );
         """;
 
@@ -51,5 +52,29 @@ public static class SqliteSchema
         using var command = connection.CreateCommand();
         command.CommandText = CreateTableSql;
         command.ExecuteNonQuery();
+
+        EnsureFolderAppearanceThemeJsonColumn(connection);
+    }
+
+    /// <summary>
+    /// Fase 8: FolderAppearance ja' existia desde a Fase 4 em bancos reais - SQLite nao tem
+    /// "ADD COLUMN IF NOT EXISTS", entao confere via PRAGMA table_info antes de tentar
+    /// adicionar a coluna nova (ThemeJson, o tema completo do modo Full).
+    /// </summary>
+    private static void EnsureFolderAppearanceThemeJsonColumn(SqliteConnection connection)
+    {
+        using (var check = connection.CreateCommand())
+        {
+            check.CommandText = "SELECT COUNT(*) FROM pragma_table_info('FolderAppearance') WHERE name = 'ThemeJson';";
+            var exists = Convert.ToInt64(check.ExecuteScalar()) > 0;
+            if (exists)
+            {
+                return;
+            }
+        }
+
+        using var alter = connection.CreateCommand();
+        alter.CommandText = "ALTER TABLE FolderAppearance ADD COLUMN ThemeJson TEXT NULL;";
+        alter.ExecuteNonQuery();
     }
 }

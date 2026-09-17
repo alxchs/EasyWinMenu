@@ -33,6 +33,12 @@
                         <ToggleMenuFlyoutItem x:Name="LanguageEsEsItem" Text="Español (España)" Click="LanguageEsEs_Click" />
                         <ToggleMenuFlyoutItem x:Name="LanguageDeDeItem" Text="Deutsch (Deutschland)" Click="LanguageDeDe_Click" />
                     </MenuFlyoutSubItem>
+                    <!-- Fase 8: Lite (como sempre foi) vs Full (tudo do EasyWinMenu, roteiro
+                         nas fases 8-20). -->
+                    <MenuFlyoutSubItem x:Name="TierSubItem">
+                        <ToggleMenuFlyoutItem x:Name="TierLiteItem" Click="TierLite_Click" />
+                        <ToggleMenuFlyoutItem x:Name="TierFullItem" Click="TierFull_Click" />
+                    </MenuFlyoutSubItem>
                     <MenuFlyoutSeparator />
                     <MenuFlyoutItem x:Name="ExitItem" Command="{x:Bind ExitCommand}" />
                 </MenuFlyout>

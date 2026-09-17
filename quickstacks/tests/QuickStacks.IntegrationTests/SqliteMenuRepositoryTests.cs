@@ -263,4 +263,72 @@ public class SqliteMenuRepositoryTests : IDisposable
 
         await Assert.ThrowsAsync<ArgumentException>(() => _repository.SetFolderBackgroundColorAsync(pasta.Id, "nao-e-uma-cor"));
     }
+
+    [Fact]
+    public async Task GetFolderThemeAsync_WithNoOverride_ReturnsEmpty()
+    {
+        var pasta = MenuItem.CreateFolder("Pasta", null, 0);
+        await _repository.AddAsync(pasta);
+
+        Assert.Equal(FolderTheme.Empty, await _repository.GetFolderThemeAsync(pasta.Id));
+    }
+
+    [Fact]
+    public async Task SetFolderThemeAsync_RoundTripsEveryField()
+    {
+        var pasta = MenuItem.CreateFolder("Pasta", null, 0);
+        await _repository.AddAsync(pasta);
+
+        var tema = new FolderTheme(
+            BackgroundColorHex: "#101010",
+            BorderColorHex: "#202020",
+            TextColorHex: "#EFEFEF",
+            HighlightColorHex: "#3D7EB8FF",
+            CornerRadius: 6,
+            ShadowBlurRadius: 12,
+            ShadowDepth: 2,
+            ShadowDirection: 315,
+            ShadowOpacity: 0.35,
+            ItemSpacing: 2,
+            ItemPadding: 8,
+            IconSize: 18,
+            TitleFontFamily: "Segoe UI",
+            TitleFontSize: 13,
+            TitleBold: true,
+            ItemFontFamily: "Segoe UI",
+            ItemFontSize: 13,
+            AnimationDurationMs: 120);
+
+        await _repository.SetFolderThemeAsync(pasta.Id, tema);
+
+        Assert.Equal(tema, await _repository.GetFolderThemeAsync(pasta.Id));
+        // A coluna de cor de fundo simples (Fase 4) continua funcionando junto com o tema completo.
+        Assert.Equal("#101010", await _repository.GetFolderBackgroundColorAsync(pasta.Id));
+    }
+
+    [Fact]
+    public async Task SetFolderThemeAsync_ThenClearingBackgroundColor_KeepsRestOfTheme()
+    {
+        var pasta = MenuItem.CreateFolder("Pasta", null, 0);
+        await _repository.AddAsync(pasta);
+        await _repository.SetFolderThemeAsync(pasta.Id, FolderTheme.Empty with { BackgroundColorHex = "#101010", BorderColorHex = "#202020" });
+
+        await _repository.SetFolderBackgroundColorAsync(pasta.Id, null);
+
+        var tema = await _repository.GetFolderThemeAsync(pasta.Id);
+        Assert.Null(tema.BackgroundColorHex);
+        Assert.Equal("#202020", tema.BorderColorHex);
+    }
+
+    [Fact]
+    public async Task SetFolderThemeAsync_AllFieldsEmpty_DeletesTheRow()
+    {
+        var pasta = MenuItem.CreateFolder("Pasta", null, 0);
+        await _repository.AddAsync(pasta);
+        await _repository.SetFolderThemeAsync(pasta.Id, FolderTheme.Empty with { BorderColorHex = "#202020" });
+
+        await _repository.SetFolderThemeAsync(pasta.Id, FolderTheme.Empty);
+
+        Assert.Equal(FolderTheme.Empty, await _repository.GetFolderThemeAsync(pasta.Id));
+    }
 }
