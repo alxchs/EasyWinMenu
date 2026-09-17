@@ -47,6 +47,7 @@ public sealed partial class DesktopGroupWindow : Window
         ThemeService.Register(RootGrid);
         HeaderBar.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Black) { Opacity = 0.12 };
         AppWindow.Changed += AppWindow_Changed;
+        RootGrid.KeyDown += RootGrid_KeyDown;
 
         _placement = DesktopGroupPlacement.CreateDefault(_groupId, 80, 80);
 
@@ -58,11 +59,78 @@ public sealed partial class DesktopGroupWindow : Window
         _placement = await _repository.GetDesktopGroupPlacementAsync(_groupId)
             ?? DesktopGroupPlacement.CreateDefault(_groupId, 80, 80);
 
+        await RescueIfUnreachableAsync();
+
         RefreshTexts();
         ApplyDisplayModeChrome();
         ResizeForCurrentMode();
         await ReloadAsync();
     }
+
+    /// <summary>
+    /// Fase 12: se o monitor onde este grupo foi posicionado da ultima vez nao existe mais
+    /// (desconectado, resolucao mudou), traz o grupo de volta pra dentro de uma area de
+    /// trabalho de verdade em vez de deixa-lo preso fora da tela e inalcancavel.
+    /// </summary>
+    private async Task RescueIfUnreachableAsync()
+    {
+        var workAreas = DisplayInventory.GetWorkAreas();
+        if (workAreas.Count == 0)
+        {
+            return;
+        }
+
+        var groupRect = new MonitorRect(_placement.X, _placement.Y, _placement.Width, _placement.Height);
+        if (MonitorPlacement.IsReachable(groupRect, workAreas))
+        {
+            return;
+        }
+
+        var ownerIndex = MonitorPlacement.IndexOfOwner(groupRect, workAreas);
+        if (ownerIndex < 0)
+        {
+            return;
+        }
+
+        var (x, y) = MonitorPlacement.ClampInto(_placement.X, _placement.Y, _placement.Width, _placement.Height, workAreas[ownerIndex]);
+        _placement = _placement with { X = x, Y = y };
+        await _repository.SetDesktopGroupPlacementAsync(_placement);
+    }
+
+    /// <summary>Win+Shift+seta move o grupo pro monitor vizinho (Fase 12), igual ao atalho nativo do Windows pra janelas comuns - so' funciona com a janela em foco, ja' que nao ha hook global (removido do EasyWinMenu por travar o sistema - decisao herdada, nao reaberta aqui).</summary>
+    private async void RootGrid_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key is not (Windows.System.VirtualKey.Left or Windows.System.VirtualKey.Right))
+        {
+            return;
+        }
+
+        var windowsDown = IsKeyDown(Windows.System.VirtualKey.LeftWindows) || IsKeyDown(Windows.System.VirtualKey.RightWindows);
+        var shiftDown = IsKeyDown(Windows.System.VirtualKey.Shift);
+        if (!windowsDown || !shiftDown)
+        {
+            return;
+        }
+
+        var workAreas = DisplayInventory.GetWorkAreas();
+        var groupRect = new MonitorRect(_placement.X, _placement.Y, _placement.Width, _placement.Height);
+        var currentIndex = MonitorPlacement.IndexOfOwner(groupRect, workAreas);
+        var direction = e.Key == Windows.System.VirtualKey.Right ? 1 : -1;
+        var targetIndex = MonitorPlacement.AdjacentIndex(currentIndex, workAreas, direction);
+        if (targetIndex is null)
+        {
+            return;
+        }
+
+        var (x, y) = MonitorPlacement.MapBetween(groupRect, workAreas[currentIndex], workAreas[targetIndex.Value]);
+        _placement = _placement with { X = x, Y = y };
+        AppWindow.Move(new PointInt32((int)x, (int)y));
+        await _repository.SetDesktopGroupPlacementAsync(_placement);
+        e.Handled = true;
+    }
+
+    private static bool IsKeyDown(Windows.System.VirtualKey key) =>
+        Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
 
     private void RefreshTexts()
     {
@@ -359,6 +427,15 @@ public sealed partial class DesktopGroupWindow : Window
         _subfolderPopup.ActivateNearCursor();
     }
 
+    /// <summary>
+    /// So' atualiza X/Y (posicao vale nos dois modos) e Width/Height quando em modo Panel - em
+    /// AppFolder a janela e' redimensionada pra caber o ladrilho por ResizeForCurrentMode, e
+    /// gravar esse tamanho por cima destruiria a geometria do Panel guardada pra quando o
+    /// usuario voltar pra ele. Bug corrigido na Fase 12: esta funcao gravava DisplayMode=Panel
+    /// e Arrangement=None fixos, apagando a escolha do usuario (App Folder/organizacao
+    /// automatica) toda vez que a janela se movia - inclusive por causa dos proprios
+    /// MoveAndResize programaticos deste arquivo (resgate de monitor, troca de modo).
+    /// </summary>
     private void AppWindow_Changed(AppWindow sender, AppWindowChangedEventArgs args)
     {
         if (!args.DidPositionChange && !args.DidSizeChange)
@@ -366,9 +443,11 @@ public sealed partial class DesktopGroupWindow : Window
             return;
         }
 
-        _ = _repository.SetDesktopGroupPlacementAsync(new DesktopGroupPlacement(
-            _groupId, sender.Position.X, sender.Position.Y, sender.Size.Width, sender.Size.Height,
-            DesktopGroupDisplayMode.Panel, DesktopGroupPlacement.DefaultIconScale, false));
+        _placement = _placement.DisplayMode == DesktopGroupDisplayMode.Panel
+            ? _placement with { X = sender.Position.X, Y = sender.Position.Y, Width = sender.Size.Width, Height = sender.Size.Height }
+            : _placement with { X = sender.Position.X, Y = sender.Position.Y };
+
+        _ = _repository.SetDesktopGroupPlacementAsync(_placement);
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();

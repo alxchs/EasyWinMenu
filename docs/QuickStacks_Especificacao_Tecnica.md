@@ -609,6 +609,58 @@ janela do grupo abrindo normalmente).
 "Nome"/"Tipo" com múltiplos itens (só a leitura de código e a persistência em banco foram
 confirmadas, não o resultado visual do reflow).
 
+## 6.15 Fase 12 — Multi-monitor para grupos soltos + um bug de corrupção de estado corrigido
+
+`MonitorPlacement` (`QuickStacks.Domain`, porta direta do `MonitorPlacement.cs` do
+EasyWinMenu, geometria pura sobre `MonitorRect` em vez de `System.Windows.Rect` já que
+`QuickStacks.Domain` é `net8.0` puro, sem WPF/WinUI): `IsReachable` (o grupo ainda é alcançável
+com o mouse?), `IndexOfOwner` (a que monitor um grupo pertence), `AdjacentIndex` (vizinho na
+direção Win+Shift+seta, com wrap-around), `MapBetween` (leva um grupo de um monitor pro outro
+preservando a posição relativa), `ClampInto`/`AvoidStacking`. Testado sem hardware real - 10
+testes unitários novos sobre retângulos sintéticos (dois monitores lado a lado, grupo fora de
+tela, etc.), igual ao módulo original do EasyWinMenu.
+
+`DesktopGroupWindow` usa isso em dois pontos: **resgate ao abrir** (`RescueIfUnreachableAsync`
+— se o monitor onde o grupo foi salvo não existe mais, ele volta pra dentro de uma área de
+trabalho de verdade em vez de ficar preso fora da tela) e **Win+Shift+seta** movendo o grupo
+focado pro monitor vizinho (`RootGrid_KeyDown`, checando os modificadores via
+`InputKeyboardSource.GetKeyStateForCurrentThread` — só funciona com a janela em foco, já que
+não há hook global de teclado; a mesma decisão de nunca usar `WH_KEYBOARD_LL`/`WH_MOUSE_LL`
+que o EasyWinMenu já tinha tomado, item 111 do inventário, não foi reaberta aqui). **Não
+implementado nesta fase**: reagir a `DisplaySettingsChanged` em tempo real (plugar/desplugar
+monitor com o app já aberto) — só a checagem na abertura de cada janela.
+
+**Dois defeitos reais encontrados e corrigidos durante a verificação, nenhum deles no código
+novo desta fase**:
+
+1. `Microsoft.UI.Windowing.DisplayArea.FindAll()` (a API WinRT "certa" para enumerar
+   monitores) lança `InvalidCastException: No such interface supported` ao enumerar a lista
+   retornada, **nesta máquina** (mesma classe de defeito específico deste ambiente já
+   documentada para `RadioMenuFlyoutItem`/`XamlControlsResources` — seções 6.10/6.12).
+   Descoberto porque a exceção, não tratada dentro do `InitializeAsync` (Task
+   fire-and-forget chamado do construtor), abortava a inicialização da janela silenciosamente
+   *depois* que `Activate()` já tinha sido chamado pelo `TrayIconWindow` — o resultado visível
+   era a janela abrir do tamanho padrão que o Windows dá a uma janela nova sem
+   `MoveAndResize` bem-sucedido (perto do tamanho da tela inteira), nunca do tamanho pedido.
+   Corrigido trocando `DisplayArea.FindAll()` por `EnumDisplayMonitors`/`GetMonitorInfo` via
+   P/Invoke clássico (`DisplayInventory.cs`) — a mesma API que o `DisplayInventory.cs` do
+   EasyWinMenu já usa, sem nenhum tipo WinRT envolvido.
+2. `DesktopGroupWindow.AppWindow_Changed` (existente desde a Fase 9) gravava
+   `DisplayMode = Panel` e `Arrangement = None` **fixos** toda vez que a janela se movia ou
+   redimensionava — apagando silenciosamente a escolha de App Folder (Fase 10) ou organização
+   automática (Fase 11) do usuário a cada `MoveAndResize` programático (inclusive os desta
+   própria fase: resgate de monitor, troca de modo). Corrigido preservando o `_placement`
+   atual e só atualizando `Width`/`Height` quando o modo é `Panel` (em `AppFolder` o tamanho
+   da janela é sempre o do ladrilho, gravar por cima destruiria a geometria do Panel guardada
+   para quando o usuário voltar a ele).
+
+Testes: 32/32 unitários (+10 de `MonitorPlacement`), 30/30 de integração (sem mudança — os
+dois bugs corrigidos são de UI/runtime, não de schema). Verificação de execução: publicação
+limpa, os 5 `.xbf` presentes, app publicado sobe sem exceção e a janela do grupo abre com a
+geometria correta nos dois modos depois da correção (`Rect=80;80;198;140` em App Folder,
+confirmado via UI Automation — antes da correção do item 1, a mesma situação abria a janela em
+`Rect≈380;452;2880;1541`, essencialmente do tamanho da tela).
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
 Todas as fases do roteiro original (Fase 1 a Fase 7) foram implementadas, e o crash de
