@@ -11,6 +11,7 @@ namespace QuickStacks.UI;
 public partial class App : Microsoft.UI.Xaml.Application
 {
     private TrayIconWindow? _trayIconWindow;
+    private SingleInstanceCoordinator? _singleInstance;
 
     public App()
     {
@@ -32,6 +33,17 @@ public partial class App : Microsoft.UI.Xaml.Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // Fase 14: um segundo lancamento (por exemplo, um verbo do menu de contexto real da
+        // area de trabalho da Fase 15 reabrindo o exe) so' repassa o comando pra instancia ja'
+        // viva e sai - nunca abre um segundo icone na bandeja/segundo conjunto de grupos.
+        _singleInstance = new SingleInstanceCoordinator();
+        if (!_singleInstance.IsFirstInstance)
+        {
+            SingleInstanceCoordinator.TrySendToRunningInstance("open");
+            Exit();
+            return;
+        }
+
         MenuRepository = new SqliteMenuRepository();
         ExportService = new ConfigExportService(MenuRepository);
         LnkImportService = new LnkImportService(new LnkResolver(), MenuRepository);
@@ -53,5 +65,21 @@ public partial class App : Microsoft.UI.Xaml.Application
         // Window com {ThemeResource} for construida antes da primeira janela do processo
         // ser ativada - so' que aqui nao usamos mais ThemeResource nenhum, e' so' por cautela).
         _trayIconWindow.OpenDesktopGroupsIfFull();
+
+        // Despachado pro DispatcherQueue (thread de UI certo) porque chega de uma thread do
+        // listener do named pipe. O try/catch e' obrigatorio aqui, nao defensivo: uma excecao
+        // gerenciada que escapa de um callback do DispatcherQueue derruba o processo inteiro
+        // com uma falha nativa (STATUS_STOWED_EXCEPTION) em vez de ser capturavel normalmente
+        // - reproduzido e documentado na secao 6.16 do doc tecnico.
+        _singleInstance.StartListening(command => _trayIconWindow.DispatcherQueue.TryEnqueue(() =>
+        {
+            try
+            {
+                _trayIconWindow.HandleExternalCommand(command);
+            }
+            catch
+            {
+            }
+        }));
     }
 }

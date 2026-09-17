@@ -93,6 +93,15 @@ public sealed partial class TrayIconWindow : Window
         }
     }
 
+    /// <summary>Comando repassado por uma segunda instancia via SingleInstanceCoordinator (Fase 14) - so' "open" existe por enquanto, ja' chamado no thread de UI certo pelo App.OnLaunched (DispatcherQueue.TryEnqueue).</summary>
+    public void HandleExternalCommand(string command)
+    {
+        if (command == "open")
+        {
+            ShowPopup();
+        }
+    }
+
     private void GlobalHotkey_Click(object sender, RoutedEventArgs e)
     {
         var app = (App)Microsoft.UI.Xaml.Application.Current;

@@ -32,18 +32,14 @@
              nunca uma janela nova por subpasta). So' faz sentido no modo Folder - nas vistas
              globais (favoritos/recentes/busca) a trilha some, ja' que os resultados podem vir
              de qualquer nivel da arvore. -->
-        <BreadcrumbBar
-            x:Name="Breadcrumb"
-            Grid.Row="1"
-            Margin="12,10"
-            ItemsSource="{x:Bind ViewModel.Breadcrumb}"
-            ItemClicked="Breadcrumb_ItemClicked">
-            <BreadcrumbBar.ItemTemplate>
-                <DataTemplate x:DataType="app:BreadcrumbNodeViewModel">
-                    <TextBlock Text="{x:Bind Name}" />
-                </DataTemplate>
-            </BreadcrumbBar.ItemTemplate>
-        </BreadcrumbBar>
+        <!-- Trilha construida a mao em vez do BreadcrumbBar nativo: BreadcrumbBar trava o
+             processo com uma falha nativa irrecuperavel ao ser construido nesta maquina (sem
+             excecao gerenciada capturavel - confirmado via dump de crash, mesma familia de
+             causa das outras falhas nativas ja documentadas neste ambiente: um controle Fluent
+             mais novo cuja folha de estilo padrao depende de recursos que App.xaml nao tem
+             mergeados). Mesmo padrao ja usado no DesktopGroupWindow: StackPanel + Button
+             simples em vez de um controle "pronto" com dependencias de tema obscuras. -->
+        <StackPanel x:Name="Breadcrumb" Orientation="Horizontal" Grid.Row="1" Margin="12,10" Spacing="4" />
 
         <!-- Requisitos 2 e 3: drag-and-drop entre pastas / para o Explorer, e reflow
              automatico ao redimensionar (GridView com layout de grade nativo, sem

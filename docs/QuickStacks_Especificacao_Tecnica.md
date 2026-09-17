@@ -695,6 +695,58 @@ também sem o popup abrir), uma limitação de simulação de teclado já conhec
 não do código; `RegisterHotKey` bem-sucedido é a evidência disponível de que o atalho está
 corretamente registrado no sistema.
 
+## 6.17 Fase 14 — Instância única, e um bug crítico de Fase 1 nunca antes detectado
+
+`SingleInstanceCoordinator` (`QuickStacks.UI`, porta direta do arquivo homônimo do
+EasyWinMenu): um `Mutex` nomeado (`QuickStacks.SingleInstance`) decide se este é o primeiro
+lançamento; um segundo lançamento repassa um comando ("open") pra instância já viva via named
+pipe (`QuickStacks.DesktopAction`) e sai imediatamente, em vez de abrir um segundo ícone na
+bandeja. A primeira instância escuta o pipe num loop em background e despacha o comando pro
+`DispatcherQueue` (thread de UI) via `TryEnqueue`.
+
+**Bug crítico encontrado durante a verificação, não relacionado ao código desta fase**: o
+teste de ponta a ponta desta fase foi a **primeira vez neste projeto inteiro (desde a Fase 1)
+que o `PopupWindow` foi construído de verdade num build publicado** — toda verificação
+anterior de UI, em todas as fases anteriores, sempre exercitou `DesktopGroupWindow` ou
+`TrayIconWindow`, nunca o popup principal. O resultado: `new PopupWindow(...)` derrubava o
+processo inteiro com uma falha nativa irrecuperável (`STATUS_STOWED_EXCEPTION`,
+`0xC000027B`) sem nenhuma exceção gerenciada capturável — nem um `try/catch` ao redor da
+chamada pegava nada, e `printexception` num dump de crash confirmou "no current managed
+exception". Causa raiz isolada removendo elementos do XAML um a um e reproduzindo: o
+`BreadcrumbBar` nativo (a trilha de navegação do requisito 1) — um controle Fluent
+comparativamente novo e mais complexo que `MenuFlyout`/`ToggleMenuFlyoutItem` (que já
+funcionam nesta máquina) — não consegue ser construído sem os dicionários de recursos padrão
+do Fluent (`XamlControlsResources`), que **nunca estiveram mergeados em `App.xaml`** desde a
+Fase 1 (a mesma causa-raiz da seção 6.12, mas ali o sintoma era uma `XamlParseException`
+capturável; aqui é uma falha nativa sem exceção gerenciada nenhuma — provavelmente porque o
+`BreadcrumbBar` referencia o recurso ausente de dentro do próprio código nativo/COM do
+controle, não de uma property WinUI comum que o runtime gerenciado intercepta).
+
+Isso significa que **a experiência mais básica do produto — clicar no ícone da bandeja pra
+abrir o popup — provavelmente nunca funcionou de verdade nesta máquina em nenhuma fase
+anterior**, e não foi detectado porque os testes de integração não sobem UI e nenhuma
+verificação interativa anterior chegou a construir o `PopupWindow`. Ferramenta usada para
+diagnosticar: `dotnet-dump analyze` sobre o `.dmp` que o Windows Error Reporting já salva
+automaticamente em `%LOCALAPPDATA%\CrashDumps\` (não precisou de nenhuma instrumentação do
+processo em si) — `clrstack -f` mostrou a pilha gerenciada completa até o ponto exato da
+falha nativa (`PopupWindow.InitializeComponent` → `LoadComponent` → `IApplicationStaticsMethods.LoadComponent`),
+confirmando com precisão qual construtor de janela e qual controle estavam envolvidos.
+
+**Correção**: `BreadcrumbBar` removido e substituído por uma trilha construída à mão
+(`StackPanel` horizontal com `Button`/`TextBlock` simples, reconstruída inteira a cada mudança
+de `ViewModel.Breadcrumb` via `CollectionChanged`) — o mesmo padrão já usado no
+`DesktopGroupWindow` (ladrilhos construídos em código com controles primitivos em vez de
+controles "prontos" com dependências de tema obscuras). Nenhuma funcionalidade perdida: clique
+em qualquer nível anterior ainda chama `NavigateToBreadcrumbCommand`, o nível atual aparece em
+negrito, níveis intermediários são separados por ">".
+
+Testes: 32/32 unitários, 30/30 de integração (sem mudança — UI pura). Verificação de execução:
+publicação limpa, duas instâncias lançadas em sequência resultam em **um único processo**
+(confirmado via `Get-Process`), e o popup abre de verdade (`Rect=0;1144;420;340`, confirmado
+via UI Automation) tanto por auto-teste direto quanto pelo comando repassado de uma segunda
+instância via named pipe — a primeira confirmação real, nesta máquina, de que o popup principal
+do QuickStacks abre sem crashar.
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
 Todas as fases do roteiro original (Fase 1 a Fase 7) foram implementadas, e o crash de

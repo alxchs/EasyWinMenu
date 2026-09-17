@@ -57,6 +57,8 @@ public sealed partial class PopupWindow : Window
                 await ApplyFolderBackgroundAsync();
             }
         };
+        ViewModel.Breadcrumb.CollectionChanged += (_, _) => RebuildBreadcrumb();
+        RebuildBreadcrumb(); // o construtor do ViewModel ja' adiciona o nivel raiz antes desta subscricao existir
 
         AppWindow.Resize(new SizeInt32(DefaultWidth, DefaultHeight));
         AppWindow.Changed += AppWindow_Changed;
@@ -134,11 +136,42 @@ public sealed partial class PopupWindow : Window
 
     // ---- Navegacao (requisito 1) ----
 
-    private async void Breadcrumb_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
+    /// <summary>Reconstroi a trilha inteira a cada mudanca (ela e' curta - profundidade de pastas tipica - reconstruir tudo e' mais simples que reconciliar diffs de item).</summary>
+    private void RebuildBreadcrumb()
     {
-        var target = ViewModel.Breadcrumb[args.Index];
-        await ViewModel.NavigateToBreadcrumbCommand.ExecuteAsync(target);
-        ApplyRememberedSizeForCurrentFolder();
+        Breadcrumb.Children.Clear();
+
+        for (var i = 0; i < ViewModel.Breadcrumb.Count; i++)
+        {
+            var node = ViewModel.Breadcrumb[i];
+            var isLast = i == ViewModel.Breadcrumb.Count - 1;
+
+            if (i > 0)
+            {
+                Breadcrumb.Children.Add(new TextBlock { Text = ">", VerticalAlignment = VerticalAlignment.Center, Opacity = 0.6 });
+            }
+
+            if (isLast)
+            {
+                Breadcrumb.Children.Add(new TextBlock { Text = node.Name, VerticalAlignment = VerticalAlignment.Center, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+            }
+            else
+            {
+                var button = new Microsoft.UI.Xaml.Controls.Button
+                {
+                    Content = node.Name,
+                    Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                    BorderThickness = new Thickness(0),
+                    Padding = new Thickness(4, 2, 4, 2),
+                };
+                button.Click += async (_, _) =>
+                {
+                    await ViewModel.NavigateToBreadcrumbCommand.ExecuteAsync(node);
+                    ApplyRememberedSizeForCurrentFolder();
+                };
+                Breadcrumb.Children.Add(button);
+            }
+        }
     }
 
     /// <summary>So' a BreadcrumbBar depende do nivel atual - nas vistas globais da Fase 3 (favoritos/recentes/busca) ela nao faz sentido.</summary>
