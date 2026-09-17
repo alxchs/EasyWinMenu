@@ -13,6 +13,11 @@
 
   "desktopGroup.switchToAppFolder": "Cerrar como App Folder",
   "desktopGroup.switchToPanel": "Abrir como Panel",
+  "desktopGroup.arrangeMenu": "Organizar por",
+  "desktopGroup.arrangeNone": "Libre (arrastrar)",
+  "desktopGroup.arrangeGrid": "Cuadrícula",
+  "desktopGroup.arrangeByName": "Nombre",
+  "desktopGroup.arrangeByType": "Tipo",
 
   "popup.searchPlaceholder": "Buscar en todo...",
   "popup.favorites": "Favoritos",

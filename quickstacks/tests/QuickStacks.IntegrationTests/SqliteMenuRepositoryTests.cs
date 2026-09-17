@@ -345,6 +345,21 @@ public class SqliteMenuRepositoryTests : IDisposable
         var placement = await _repository.GetDesktopGroupPlacementAsync(pasta.Id);
         Assert.NotNull(placement);
         Assert.Equal(DesktopGroupDisplayMode.Panel, placement!.DisplayMode);
+        Assert.Equal(DesktopIconArrangement.None, placement.Arrangement);
+    }
+
+    [Fact]
+    public async Task SetDesktopGroupPlacementAsync_PersistsArrangement()
+    {
+        var pasta = MenuItem.CreateFolder("Grupo", null, 0);
+        await _repository.AddAsync(pasta);
+        await _repository.SetIsDesktopGroupAsync(pasta.Id, true);
+        var original = await _repository.GetDesktopGroupPlacementAsync(pasta.Id);
+
+        await _repository.SetDesktopGroupPlacementAsync(original! with { Arrangement = DesktopIconArrangement.ByName });
+
+        var placement = await _repository.GetDesktopGroupPlacementAsync(pasta.Id);
+        Assert.Equal(DesktopIconArrangement.ByName, placement!.Arrangement);
     }
 
     [Fact]

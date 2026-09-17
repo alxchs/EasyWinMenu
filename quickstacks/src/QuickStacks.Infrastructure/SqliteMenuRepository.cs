@@ -380,7 +380,7 @@ public sealed class SqliteMenuRepository : IMenuRepository
     {
         using var connection = Open();
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT X, Y, Width, Height, DisplayMode, IconScale, IsCollapsed FROM DesktopGroupPlacement WHERE GroupId = @groupId;";
+        command.CommandText = "SELECT X, Y, Width, Height, DisplayMode, IconScale, IsCollapsed, Arrangement FROM DesktopGroupPlacement WHERE GroupId = @groupId;";
         command.Parameters.AddWithValue("@groupId", groupId);
 
         using var reader = await command.ExecuteReaderAsync(ct);
@@ -397,7 +397,8 @@ public sealed class SqliteMenuRepository : IMenuRepository
             reader.GetDouble(3),
             Enum.Parse<DesktopGroupDisplayMode>(reader.GetString(4)),
             reader.GetDouble(5),
-            reader.GetInt32(6) != 0);
+            reader.GetInt32(6) != 0,
+            Enum.Parse<DesktopIconArrangement>(reader.GetString(7)));
     }
 
     public async Task SetDesktopGroupPlacementAsync(DesktopGroupPlacement placement, CancellationToken ct = default)
@@ -405,11 +406,12 @@ public sealed class SqliteMenuRepository : IMenuRepository
         using var connection = Open();
         using var command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO DesktopGroupPlacement (GroupId, X, Y, Width, Height, DisplayMode, IconScale, IsCollapsed)
-            VALUES (@groupId, @x, @y, @width, @height, @displayMode, @iconScale, @isCollapsed)
+            INSERT INTO DesktopGroupPlacement (GroupId, X, Y, Width, Height, DisplayMode, IconScale, IsCollapsed, Arrangement)
+            VALUES (@groupId, @x, @y, @width, @height, @displayMode, @iconScale, @isCollapsed, @arrangement)
             ON CONFLICT(GroupId) DO UPDATE SET
                 X = excluded.X, Y = excluded.Y, Width = excluded.Width, Height = excluded.Height,
-                DisplayMode = excluded.DisplayMode, IconScale = excluded.IconScale, IsCollapsed = excluded.IsCollapsed;
+                DisplayMode = excluded.DisplayMode, IconScale = excluded.IconScale, IsCollapsed = excluded.IsCollapsed,
+                Arrangement = excluded.Arrangement;
             """;
         command.Parameters.AddWithValue("@groupId", placement.GroupId);
         command.Parameters.AddWithValue("@x", placement.X);
@@ -419,6 +421,7 @@ public sealed class SqliteMenuRepository : IMenuRepository
         command.Parameters.AddWithValue("@displayMode", placement.DisplayMode.ToString());
         command.Parameters.AddWithValue("@iconScale", placement.IconScale);
         command.Parameters.AddWithValue("@isCollapsed", placement.IsCollapsed ? 1 : 0);
+        command.Parameters.AddWithValue("@arrangement", placement.Arrangement.ToString());
         await command.ExecuteNonQueryAsync(ct);
     }
 

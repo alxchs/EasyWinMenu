@@ -58,9 +58,19 @@ public sealed partial class DesktopGroupWindow : Window
         _placement = await _repository.GetDesktopGroupPlacementAsync(_groupId)
             ?? DesktopGroupPlacement.CreateDefault(_groupId, 80, 80);
 
+        RefreshTexts();
         ApplyDisplayModeChrome();
         ResizeForCurrentMode();
         await ReloadAsync();
+    }
+
+    private void RefreshTexts()
+    {
+        ArrangeSubItem.Text = LocalizationService.Get("desktopGroup.arrangeMenu");
+        ArrangeNoneItem.Text = LocalizationService.Get("desktopGroup.arrangeNone");
+        ArrangeGridItem.Text = LocalizationService.Get("desktopGroup.arrangeGrid");
+        ArrangeByNameItem.Text = LocalizationService.Get("desktopGroup.arrangeByName");
+        ArrangeByTypeItem.Text = LocalizationService.Get("desktopGroup.arrangeByType");
     }
 
     /// <summary>Mostra o cabecalho/canvas (Panel) ou o ladrilho fechado (AppFolder) - a mesma janela, conteudo trocado, sem recriar nada.</summary>
@@ -92,17 +102,30 @@ public sealed partial class DesktopGroupWindow : Window
             return;
         }
 
-        var positions = await _repository.GetDesktopIconPositionsAsync(_groupId);
-
         IconCanvas.Children.Clear();
 
+        // Fase 11: organizacao automatica "viva" - com um modo de arranjo ativo, a posicao
+        // salva de cada icone (DesktopIconPosition) e' ignorada e a grade e' recalculada aqui
+        // sempre que o conteudo/geometria muda; None e' o unico modo onde o usuario controla
+        // a posicao pelo arrastar-e-soltar.
+        var allowManualDrag = _placement.Arrangement == DesktopIconArrangement.None;
+        var ordered = _placement.Arrangement switch
+        {
+            DesktopIconArrangement.ByName => children.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase),
+            DesktopIconArrangement.ByType => children.OrderBy(c => c.Type).ThenBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase),
+            DesktopIconArrangement.Grid => children.OrderBy(c => c.SortOrder),
+            _ => children.OrderBy(c => c.SortOrder),
+        };
+
+        var positions = allowManualDrag ? await _repository.GetDesktopIconPositionsAsync(_groupId) : null;
+
         var cascade = 0;
-        foreach (var child in children.OrderBy(c => c.SortOrder))
+        foreach (var child in ordered)
         {
             var entry = new MenuEntryViewModel(child);
-            var tile = BuildTile(entry);
+            var tile = BuildTile(entry, allowManualDrag);
 
-            if (positions.TryGetValue(child.Id, out var position))
+            if (positions is not null && positions.TryGetValue(child.Id, out var position))
             {
                 Canvas.SetLeft(tile, position.X);
                 Canvas.SetTop(tile, position.Y);
@@ -116,6 +139,19 @@ public sealed partial class DesktopGroupWindow : Window
 
             IconCanvas.Children.Add(tile);
         }
+    }
+
+    /// <summary>Alterna o modo de organizacao automatica (Fase 11) - Grade tambem forca reflow em cascata (mesma logica de "sem posicao salva" acima), Nome/Tipo ordenam por esses criterios.</summary>
+    private async void SetArrangement_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuFlyoutItem { Tag: string tag } || !Enum.TryParse<DesktopIconArrangement>(tag, out var arrangement))
+        {
+            return;
+        }
+
+        _placement = _placement with { Arrangement = arrangement };
+        await _repository.SetDesktopGroupPlacementAsync(_placement);
+        await ReloadAsync();
     }
 
     /// <summary>
@@ -234,7 +270,7 @@ public sealed partial class DesktopGroupWindow : Window
         _sheetPopup.ActivateCentered();
     }
 
-    private FrameworkElement BuildTile(MenuEntryViewModel entry)
+    private FrameworkElement BuildTile(MenuEntryViewModel entry, bool allowManualDrag)
     {
         var stack = new StackPanel
         {
@@ -254,11 +290,12 @@ public sealed partial class DesktopGroupWindow : Window
             HorizontalAlignment = HorizontalAlignment.Center,
         });
 
-        AttachTileBehavior(stack, entry);
+        AttachTileBehavior(stack, entry, allowManualDrag);
         return stack;
     }
 
-    private void AttachTileBehavior(FrameworkElement tile, MenuEntryViewModel entry)
+    /// <summary>Com um modo de organizacao automatica ativo (Fase 11), so' o duplo-toque (abrir/navegar) fica ligado - arrastar manualmente entraria em conflito com o reflow que a proxima recarga vai forcar de qualquer forma.</summary>
+    private void AttachTileBehavior(FrameworkElement tile, MenuEntryViewModel entry, bool allowManualDrag)
     {
         var dragging = false;
         Point dragStartPointer = default;
@@ -275,6 +312,11 @@ public sealed partial class DesktopGroupWindow : Window
                 await LaunchService.LaunchAsync(_repository, entry);
             }
         };
+
+        if (!allowManualDrag)
+        {
+            return;
+        }
 
         tile.PointerPressed += (_, e) =>
         {

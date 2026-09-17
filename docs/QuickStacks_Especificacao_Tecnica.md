@@ -587,6 +587,28 @@ janela em modo AppFolder foi confirmada, não o clique), o toggle do menu de con
 (`ToggleDisplayModeItem`) acionado por um clique direito de verdade, e a persistência do modo
 ao fechar/reabrir com múltiplos grupos.
 
+## 6.14 Fase 11 — Organização automática (Grid/ByName/ByType) "viva"
+
+`DesktopGroupPlacement` ganha `Arrangement` (`DesktopIconArrangement`: `None`/`Grid`/`ByName`/
+`ByType`, coluna nova `Arrangement TEXT NOT NULL DEFAULT 'None'`, migrada via `EnsureColumn`
+para bancos existentes). Com um modo diferente de `None` ativo, `DesktopGroupWindow.ReloadAsync`
+ignora `DesktopIconPosition` (a posição livre salva) e recalcula a grade em cascata sempre que
+recarrega — `ByName`/`ByType` ordenam antes de colocar, `Grid` usa a mesma ordem de
+`SortOrder` de sempre, só forçando a grade em vez de respeitar posições soltas. Arrastar um
+ícone manualmente fica desligado (`AttachTileBehavior(..., allowManualDrag: false)`) quando um
+arranjo automático está ativo, porque a próxima recarga desfaria o arrasto de qualquer jeito —
+menos confuso que deixar arrastar e ver o ícone "voltar" sozinho. Alternável pelo mesmo menu de
+contexto do clique direito da Fase 10, num submenu novo ("Organizar por").
+
+Testes: 30/30 de integração (+1 cobrindo persistência de `Arrangement` em
+`SetDesktopGroupPlacementAsync`), 22/22 unitários. Verificação de execução: publicação limpa,
+app publicado sobe sem exceção com o modo Full ligado (confirmado via UI Automation, mesma
+janela do grupo abrindo normalmente).
+
+**Ainda não verificado interativamente**: a reordenação de fato ao trocar de "Livre" para
+"Nome"/"Tipo" com múltiplos itens (só a leitura de código e a persistência em banco foram
+confirmadas, não o resultado visual do reflow).
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
 Todas as fases do roteiro original (Fase 1 a Fase 7) foram implementadas, e o crash de

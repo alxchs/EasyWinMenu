@@ -52,7 +52,8 @@ public static class SqliteSchema
             Height       REAL NOT NULL,
             DisplayMode  TEXT NOT NULL,
             IconScale    REAL NOT NULL,
-            IsCollapsed  INTEGER NOT NULL DEFAULT 0
+            IsCollapsed  INTEGER NOT NULL DEFAULT 0,
+            Arrangement  TEXT NOT NULL DEFAULT 'None'
         );
 
         -- Fase 9: posicao livre de cada item pinado no canvas do grupo que o contem.
@@ -75,6 +76,7 @@ public static class SqliteSchema
 
         EnsureColumn(connection, "FolderAppearance", "ThemeJson", "TEXT NULL");
         EnsureColumn(connection, "MenuItems", "IsDesktopGroup", "INTEGER NOT NULL DEFAULT 0");
+        EnsureColumn(connection, "DesktopGroupPlacement", "Arrangement", "TEXT NOT NULL DEFAULT 'None'");
     }
 
     /// <summary>

@@ -11,6 +11,12 @@
         <Grid.ContextFlyout>
             <MenuFlyout>
                 <MenuFlyoutItem x:Name="ToggleDisplayModeItem" Click="ToggleDisplayMode_Click" />
+                <MenuFlyoutSubItem x:Name="ArrangeSubItem">
+                    <MenuFlyoutItem x:Name="ArrangeNoneItem" Tag="None" Click="SetArrangement_Click" />
+                    <MenuFlyoutItem x:Name="ArrangeGridItem" Tag="Grid" Click="SetArrangement_Click" />
+                    <MenuFlyoutItem x:Name="ArrangeByNameItem" Tag="ByName" Click="SetArrangement_Click" />
+                    <MenuFlyoutItem x:Name="ArrangeByTypeItem" Tag="ByType" Click="SetArrangement_Click" />
+                </MenuFlyoutSubItem>
             </MenuFlyout>
         </Grid.ContextFlyout>
         <Grid.RowDefinitions>
