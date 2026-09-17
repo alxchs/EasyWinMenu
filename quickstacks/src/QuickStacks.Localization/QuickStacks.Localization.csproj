@@ -9,8 +9,19 @@
          NAO .resw/MRT - ver docs/QuickStacks_Especificacao_Tecnica.md secao 4: a maquina de
          dev nao tem a ferramenta de PRI que .resw exigiria. Mesma tecnica que o LocalizationService
          do EasyWinMenu ja usa (JSON embutido), so' que via recurso de assembly em vez de
-         recurso WPF, ja' que esta e' uma classlib sem UseWPF. -->
-    <EmbeddedResource Include="Strings.*.json" />
+         recurso WPF, ja' que esta e' uma classlib sem UseWPF.
+
+         WithCulture="false" e' obrigatorio: sem isso, o MSBuild reconhece "de-DE"/"en-US"/
+         "es-ES"/"pt-BR" no nome do arquivo como um segmento de cultura (a mesma convencao de
+         satellite assembly que .resx usaria) e trata os 4 arquivos como recursos SATELITE -
+         os 4 ganham o MESMO nome de manifesto ("Strings.json", sem a cultura) e vao parar em
+         4 DLLs satelite separadas (uma por pasta de cultura) em vez do assembly principal.
+         Isso deixava GetManifestResourceNames() do assembly principal vazio - toda chave de
+         traducao voltava sempre igual a si mesma (o fallback de "chave nao encontrada"), nunca
+         detectado porque os testes existentes so' comparavam as 4 tabelas ENTRE SI (todas
+         vazias = "iguais"), nunca verificavam que uma chave conhecida resolvia pra um valor de
+         verdade. -->
+    <EmbeddedResource Include="Strings.*.json" WithCulture="false" />
   </ItemGroup>
 
   <ItemGroup>

@@ -747,6 +747,58 @@ via UI Automation) tanto por auto-teste direto quanto pelo comando repassado de 
 instância via named pipe — a primeira confirmação real, nesta máquina, de que o popup principal
 do QuickStacks abre sem crashar.
 
+## 6.18 Fase 15 — Menu de contexto real da área de trabalho, e a internacionalização inteira nunca ter funcionado
+
+`DesktopContextMenuRegistration` (`QuickStacks.UI`, porta direta do arquivo homônimo do
+EasyWinMenu): registra um submenu em cascata no próprio menu de contexto real da área de
+trabalho do Windows (`HKCU\Software\Classes\DesktopBackground\Shell\QuickStacks`) — o truque
+clássico de verbo por registro, sem nenhuma DLL de shell extension nem hospedagem COM. Quatro
+verbos: Novo grupo, Todos → App Folder, Todos → Panel, Editar estrutura. Cada verbo relança o
+próprio exe com `--desktop-action=<ação>`; o `SingleInstanceCoordinator` (Fase 14) garante que
+isso ou abre o app do zero (se estava fechado — `App.OnLaunched` processa a ação direto) ou
+repassa a ação pra instância já rodando via named pipe. Registrado/desregistrado junto com o
+toggle Lite/Full da bandeja (só faz sentido em Full).
+
+**Segundo bug crítico de Fase 1 nunca antes detectado, encontrado durante a verificação**: os
+rótulos dos verbos apareceram como as chaves de tradução cruas (`"desktop.newGroup"` em vez de
+`"New group"`) em vez do texto de verdade. Investigação com `dotnet build -v:detailed` revelou
+a causa raiz: o `<EmbeddedResource Include="Strings.*.json" />` em
+`QuickStacks.Localization.csproj` **nunca embutiu nada no assembly principal** — o MSBuild
+reconhece "de-DE"/"en-US"/"es-ES"/"pt-BR" no nome do arquivo como um segmento de **cultura**
+(a mesma convenção que `.resx` usa para satellite assemblies) e trata os 4 arquivos como
+recursos satélite: os 4 ganham o **mesmo** nome de manifesto (`Strings.json`, sem a cultura) e
+vão parar em 4 DLLs satélite separadas — nenhuma delas no assembly principal, onde
+`LocalizationService.LoadTable` procura (`assembly.GetManifestResourceStream(...)`, sem
+suporte a satellite assemblies). `assembly.GetManifestResourceNames()` no `.dll` publicado
+confirmou **zero** recursos embutidos.
+
+Isso significa que **`LocalizationService.Get`/`GetForLanguage` provavelmente nunca retornou
+uma tradução de verdade em nenhuma fase deste projeto** (RF15, "internacionalização completa",
+implementada na Fase 5) — toda chave sempre caiu no fallback de "chave não encontrada" (que
+devolve a própria chave), silenciosamente, sem crash, sem exceção, só texto errado na UI. Não
+detectado porque os 3 testes existentes de `LocalizationServiceTests` só comparam as 4 tabelas
+**entre si** (`EveryLanguage_HasEveryKeyThatDefaultLanguageHas`) ou verificam o comportamento
+do fallback usando uma chave **inexistente de propósito** — nenhum deles jamais checou que uma
+chave **conhecida** resolve pra uma tradução real, então quatro tabelas igualmente vazias
+"batiam" nos testes de paridade e o fallback "nunca lança" continuava verdadeiro mesmo com
+tudo vazio.
+
+**Correção**: `WithCulture="false"` no item `EmbeddedResource` do `.csproj` — desliga a
+inferência automática de cultura, cada arquivo passa a virar um recurso comum do assembly
+principal com nome distinto (confirmado via `GetManifestResourceNames()`:
+`QuickStacks.Localization.Strings.{de-DE,en-US,es-ES,pt-BR}.json`, um por idioma, no assembly
+certo). Teste de regressão novo (`GetForLanguage_KnownKey_ReturnsRealTranslation_NotTheKeyItself`)
+verifica que uma chave conhecida (`"tray.open"`) retorna a tradução de verdade ("Open"/"Abrir"),
+não a chave — o tipo de asserção que faltava e teria pego isso desde a Fase 5.
+
+Testes: 34/34 unitários (+2 do novo teste de regressão), 30/30 de integração. Verificação de
+execução: publicação limpa, os verbos aparecem no registro com rótulos corretos (confirmado via
+`Get-ChildItem` no `HKCU`), o verbo "Novo grupo" testado de ponta a ponta via
+`Start-Process ... -ArgumentList "--desktop-action=new-group"` — resultou num único processo
+(instância repassada corretamente), uma nova pasta criada e marcada como grupo, e a janela do
+grupo novo abrindo de verdade ao lado da já existente (dois `WinUI Desktop` confirmados via UI
+Automation, o novo na posição em cascata `+28px`).
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
 Todas as fases do roteiro original (Fase 1 a Fase 7) foram implementadas, e o crash de

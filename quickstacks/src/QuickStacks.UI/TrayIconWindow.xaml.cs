@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using QuickStacks.Domain;
 using QuickStacks.Infrastructure;
 using QuickStacks.Localization;
 
@@ -93,12 +94,61 @@ public sealed partial class TrayIconWindow : Window
         }
     }
 
-    /// <summary>Comando repassado por uma segunda instancia via SingleInstanceCoordinator (Fase 14) - so' "open" existe por enquanto, ja' chamado no thread de UI certo pelo App.OnLaunched (DispatcherQueue.TryEnqueue).</summary>
+    /// <summary>Comando repassado por uma segunda instancia via SingleInstanceCoordinator (Fase 14) - "open" (bandeja/hotkey) ou um dos verbos do menu de contexto real da area de trabalho (Fase 15). Ja' chamado no thread de UI certo pelo App.OnLaunched (DispatcherQueue.TryEnqueue).</summary>
     public void HandleExternalCommand(string command)
     {
-        if (command == "open")
+        switch (command)
         {
-            ShowPopup();
+            case "open":
+                ShowPopup();
+                break;
+            case DesktopContextMenuRegistration.NewGroupAction:
+                _ = CreateNewDesktopGroupAsync();
+                break;
+            case DesktopContextMenuRegistration.AllAppFolderAction:
+                _ = SetAllGroupsDisplayModeAsync(DesktopGroupDisplayMode.AppFolder);
+                break;
+            case DesktopContextMenuRegistration.AllPanelAction:
+                _ = SetAllGroupsDisplayModeAsync(DesktopGroupDisplayMode.Panel);
+                break;
+            case DesktopContextMenuRegistration.OpenEditorAction:
+                OpenEditor();
+                break;
+        }
+    }
+
+    /// <summary>Verbo "Novo grupo" do menu de contexto real da area de trabalho (Fase 15) - cria uma pasta raiz ja' marcada como grupo e reabre as janelas soltas pra mostra-la.</summary>
+    private async Task CreateNewDesktopGroupAsync()
+    {
+        var app = (App)Microsoft.UI.Xaml.Application.Current;
+        var existing = await app.MenuRepository.GetDesktopGroupsAsync();
+        var folder = MenuItem.CreateFolder(LocalizationService.Get("editor.defaultFolderName"), null, existing.Count);
+        await app.MenuRepository.AddAsync(folder);
+        await app.MenuRepository.SetIsDesktopGroupAsync(folder.Id, true);
+
+        if (FeatureTier.IsFull)
+        {
+            await OpenAllDesktopGroupsAsync();
+        }
+    }
+
+    /// <summary>Verbos "Todos -> App Folder"/"Todos -> Panel" do menu de contexto real da area de trabalho (Fase 15).</summary>
+    private async Task SetAllGroupsDisplayModeAsync(DesktopGroupDisplayMode mode)
+    {
+        var app = (App)Microsoft.UI.Xaml.Application.Current;
+        var groups = await app.MenuRepository.GetDesktopGroupsAsync();
+        foreach (var group in groups)
+        {
+            var placement = await app.MenuRepository.GetDesktopGroupPlacementAsync(group.Id);
+            if (placement is not null)
+            {
+                await app.MenuRepository.SetDesktopGroupPlacementAsync(placement with { DisplayMode = mode });
+            }
+        }
+
+        if (FeatureTier.IsFull)
+        {
+            await OpenAllDesktopGroupsAsync();
         }
     }
 
@@ -123,6 +173,7 @@ public sealed partial class TrayIconWindow : Window
         if (FeatureTier.IsFull)
         {
             _ = OpenAllDesktopGroupsAsync();
+            DesktopContextMenuRegistration.Register();
         }
     }
 
@@ -240,10 +291,12 @@ public sealed partial class TrayIconWindow : Window
         if (FeatureTier.IsFull)
         {
             _ = OpenAllDesktopGroupsAsync();
+            DesktopContextMenuRegistration.Register();
         }
         else
         {
             CloseAllDesktopGroups();
+            DesktopContextMenuRegistration.Unregister();
         }
     }
 

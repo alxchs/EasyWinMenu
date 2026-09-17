@@ -27,6 +27,23 @@ public class LocalizationServiceTests
         Assert.Equal("chave.que.nao.existe", LocalizationService.GetForLanguage("en-US", "chave.que.nao.existe"));
     }
 
+    /// <summary>
+    /// Regressao: os 4 arquivos Strings.*.json sao embutidos via WithCulture="false" no
+    /// .csproj - sem essa flag, o MSBuild reconhece "en-US" etc. no nome do arquivo como
+    /// cultura de satellite assembly e todos os 4 acabam com o MESMO nome de manifesto,
+    /// nenhum deles no assembly principal - toda chave conhecida silenciosamente voltava
+    /// igual a si mesma (bug real, encontrado na Fase 15, nunca pego pelos testes de
+    /// paridade acima porque eles so' comparam as tabelas ENTRE SI, e duas tabelas vazias
+    /// tambem "batem"). Este teste falha se o assembly nao tiver nenhum recurso embutido.
+    /// </summary>
+    [Theory]
+    [InlineData("en-US", "tray.open", "Open")]
+    [InlineData("pt-BR", "tray.open", "Abrir")]
+    public void GetForLanguage_KnownKey_ReturnsRealTranslation_NotTheKeyItself(string languageCode, string key, string expected)
+    {
+        Assert.Equal(expected, LocalizationService.GetForLanguage(languageCode, key));
+    }
+
     [Fact]
     public void GetForLanguage_UnsupportedLanguage_FallsBackToDefault()
     {

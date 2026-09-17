@@ -13,6 +13,11 @@
   "tray.startWithWindows": "Iniciar com o Windows",
   "tray.exit": "Sair",
 
+  "desktop.contextMenuRoot": "QuickStacks",
+  "desktop.newGroup": "Novo grupo",
+  "desktop.allAppFolder": "Todos os grupos -> App Folder",
+  "desktop.allPanel": "Todos os grupos -> Painel",
+
   "desktopGroup.switchToAppFolder": "Fechar como App Folder",
   "desktopGroup.switchToPanel": "Abrir como Painel",
   "desktopGroup.arrangeMenu": "Organizar por",

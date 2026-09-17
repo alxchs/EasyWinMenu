@@ -33,13 +33,18 @@ public partial class App : Microsoft.UI.Xaml.Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        // Fase 14: um segundo lancamento (por exemplo, um verbo do menu de contexto real da
-        // area de trabalho da Fase 15 reabrindo o exe) so' repassa o comando pra instancia ja'
-        // viva e sai - nunca abre um segundo icone na bandeja/segundo conjunto de grupos.
+        // Fase 15: um verbo do menu de contexto real da area de trabalho relanca o exe com
+        // "--desktop-action=<acao>" - se nao houver nenhum, o comando padrao e' so' "open"
+        // (equivalente a clicar no icone da bandeja).
+        var desktopAction = DesktopContextMenuRegistration.ParseAction(Environment.GetCommandLineArgs());
+        var command = desktopAction ?? "open";
+
+        // Fase 14: um segundo lancamento so' repassa o comando pra instancia ja' viva e sai -
+        // nunca abre um segundo icone na bandeja/segundo conjunto de grupos.
         _singleInstance = new SingleInstanceCoordinator();
         if (!_singleInstance.IsFirstInstance)
         {
-            SingleInstanceCoordinator.TrySendToRunningInstance("open");
+            SingleInstanceCoordinator.TrySendToRunningInstance(command);
             Exit();
             return;
         }
@@ -65,6 +70,20 @@ public partial class App : Microsoft.UI.Xaml.Application
         // Window com {ThemeResource} for construida antes da primeira janela do processo
         // ser ativada - so' que aqui nao usamos mais ThemeResource nenhum, e' so' por cautela).
         _trayIconWindow.OpenDesktopGroupsIfFull();
+
+        // Se este primeiro lancamento ja' veio com uma acao (o app estava fechado quando o
+        // usuario clicou um verbo do menu de contexto real da area de trabalho), processa
+        // agora - sem isso, so' segundos lancamentos (Fase 14) executariam alguma acao.
+        if (desktopAction is not null)
+        {
+            try
+            {
+                _trayIconWindow.HandleExternalCommand(desktopAction);
+            }
+            catch
+            {
+            }
+        }
 
         // Despachado pro DispatcherQueue (thread de UI certo) porque chega de uma thread do
         // listener do named pipe. O try/catch e' obrigatorio aqui, nao defensivo: uma excecao
