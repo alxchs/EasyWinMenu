@@ -116,6 +116,22 @@ public sealed partial class PopupWindow : Window
         Activate();
     }
 
+    /// <summary>
+    /// "Sheet" de navegacao do App Folder (Fase 10): centralizado na tela em vez de perto do
+    /// cursor - o ladrilho fechado nao tem "onde o usuario clicou" como ponto de partida
+    /// natural, ja' que ele mesmo e' um alvo fixo na area de trabalho.
+    /// </summary>
+    public void ActivateCentered()
+    {
+        var displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(AppWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Primary);
+        var workArea = displayArea.WorkArea;
+        var x = workArea.X + (workArea.Width - AppWindow.Size.Width) / 2;
+        var y = workArea.Y + (workArea.Height - AppWindow.Size.Height) / 2;
+        AppWindow.Move(new PointInt32(x, y));
+
+        Activate();
+    }
+
     // ---- Navegacao (requisito 1) ----
 
     private async void Breadcrumb_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)

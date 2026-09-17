@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using QuickStacks.Application;
 using QuickStacks.Domain;
+using QuickStacks.Localization;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Graphics;
@@ -23,9 +24,16 @@ public sealed partial class DesktopGroupWindow : Window
 {
     private const string DraggedItemFormat = "QuickStacksItemId";
 
+    private const double AppFolderTileWidth = 110;
+    private const double AppFolderTileHeight = 140;
+    private const int AppFolderMosaicCapacity = 9;
+
     private readonly IMenuRepository _repository;
     private readonly string _groupId;
+    private readonly string _groupName;
     private PopupWindow? _subfolderPopup;
+    private PopupWindow? _sheetPopup;
+    private DesktopGroupPlacement _placement;
 
     public DesktopGroupWindow(IMenuRepository repository, MenuItem group)
     {
@@ -33,29 +41,57 @@ public sealed partial class DesktopGroupWindow : Window
 
         _repository = repository;
         _groupId = group.Id;
+        _groupName = group.Name;
         TitleText.Text = group.Name;
 
         ThemeService.Register(RootGrid);
         HeaderBar.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Black) { Opacity = 0.12 };
         AppWindow.Changed += AppWindow_Changed;
 
+        _placement = DesktopGroupPlacement.CreateDefault(_groupId, 80, 80);
+
         _ = InitializeAsync();
     }
 
     private async Task InitializeAsync()
     {
-        var placement = await _repository.GetDesktopGroupPlacementAsync(_groupId)
+        _placement = await _repository.GetDesktopGroupPlacementAsync(_groupId)
             ?? DesktopGroupPlacement.CreateDefault(_groupId, 80, 80);
 
-        AppWindow.MoveAndResize(new RectInt32(
-            (int)placement.X, (int)placement.Y, (int)placement.Width, (int)placement.Height));
-
+        ApplyDisplayModeChrome();
+        ResizeForCurrentMode();
         await ReloadAsync();
+    }
+
+    /// <summary>Mostra o cabecalho/canvas (Panel) ou o ladrilho fechado (AppFolder) - a mesma janela, conteudo trocado, sem recriar nada.</summary>
+    private void ApplyDisplayModeChrome()
+    {
+        var isAppFolder = _placement.DisplayMode == DesktopGroupDisplayMode.AppFolder;
+        HeaderBar.Visibility = isAppFolder ? Visibility.Collapsed : Visibility.Visible;
+        IconCanvas.Visibility = isAppFolder ? Visibility.Collapsed : Visibility.Visible;
+        AppFolderRoot.Visibility = isAppFolder ? Visibility.Visible : Visibility.Collapsed;
+        ToggleDisplayModeItem.Text = LocalizationService.Get(isAppFolder ? "desktopGroup.switchToPanel" : "desktopGroup.switchToAppFolder");
+    }
+
+    private void ResizeForCurrentMode()
+    {
+        var size = _placement.DisplayMode == DesktopGroupDisplayMode.AppFolder
+            ? new SizeInt32((int)AppFolderTileWidth, (int)AppFolderTileHeight)
+            : new SizeInt32((int)_placement.Width, (int)_placement.Height);
+
+        AppWindow.MoveAndResize(new RectInt32((int)_placement.X, (int)_placement.Y, size.Width, size.Height));
     }
 
     private async Task ReloadAsync()
     {
         var children = await _repository.GetChildrenAsync(_groupId);
+
+        if (_placement.DisplayMode == DesktopGroupDisplayMode.AppFolder)
+        {
+            BuildAppFolderTile(children);
+            return;
+        }
+
         var positions = await _repository.GetDesktopIconPositionsAsync(_groupId);
 
         IconCanvas.Children.Clear();
@@ -80,6 +116,122 @@ public sealed partial class DesktopGroupWindow : Window
 
             IconCanvas.Children.Add(tile);
         }
+    }
+
+    /// <summary>
+    /// Ladrilho fechado (Fase 10, modelo AppFolderTile.cs do EasyWinMenu): mosaico 3x3 dos
+    /// primeiros icones + selo de contagem + nome do grupo. Nasce ja' na escala final (a
+    /// janela inteira e' do tamanho do ladrilho, sem LayoutTransform) - item 14 do inventario
+    /// documenta o bug de clique desalinhado que um LayoutTransform causaria aqui.
+    /// </summary>
+    private void BuildAppFolderTile(IReadOnlyList<MenuItem> children)
+    {
+        AppFolderRoot.Children.Clear();
+
+        var stack = new StackPanel { Orientation = Microsoft.UI.Xaml.Controls.Orientation.Vertical, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Spacing = 4 };
+
+        var plateSize = 76.0;
+        var plate = new Border
+        {
+            Width = plateSize,
+            Height = plateSize,
+            CornerRadius = new CornerRadius(plateSize * 0.26),
+            Padding = new Thickness(plateSize * 0.1),
+            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Black) { Opacity = 0.18 },
+        };
+
+        var mosaic = new Grid();
+        for (var i = 0; i < 3; i++)
+        {
+            mosaic.RowDefinitions.Add(new RowDefinition());
+            mosaic.ColumnDefinitions.Add(new ColumnDefinition());
+        }
+
+        var cellIndex = 0;
+        foreach (var child in children.OrderBy(c => c.SortOrder).Take(AppFolderMosaicCapacity))
+        {
+            var entry = new MenuEntryViewModel(child);
+            var cell = new FontIcon
+            {
+                Glyph = entry.Glyph,
+                FontSize = plateSize * 0.16,
+                Margin = new Thickness(1.5),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            Grid.SetRow(cell, cellIndex / 3);
+            Grid.SetColumn(cell, cellIndex % 3);
+            mosaic.Children.Add(cell);
+            cellIndex++;
+        }
+
+        plate.Child = mosaic;
+
+        var plateLayer = new Grid { Width = plateSize, Height = plateSize };
+        plateLayer.Children.Add(plate);
+
+        if (children.Count > 0)
+        {
+            var badgeText = new TextBlock
+            {
+                Text = children.Count > 99 ? "99+" : children.Count.ToString(),
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
+                FontSize = 11,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            var badge = new Border
+            {
+                MinWidth = 20,
+                Height = 20,
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(5, 0, 5, 0),
+                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xE5, 0x39, 0x35)),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, -6, -6, 0),
+                Child = badgeText,
+            };
+            plateLayer.Children.Add(badge);
+        }
+
+        stack.Children.Add(plateLayer);
+        stack.Children.Add(new TextBlock
+        {
+            Text = _groupName,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            MaxLines = 2,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            MaxWidth = plateSize + 24,
+        });
+
+        AppFolderRoot.Children.Add(stack);
+    }
+
+    /// <summary>Alterna Panel/AppFolder (Fase 10) - geometria de cada modo persistida separadamente nao existe ainda (so X/Y/Width/Height unicos); ao voltar pra Panel, o tamanho do painel e' preservado porque so' a janela e' redimensionada, nunca o registro em si.</summary>
+    private async void ToggleDisplayMode_Click(object sender, RoutedEventArgs e)
+    {
+        var newMode = _placement.DisplayMode == DesktopGroupDisplayMode.AppFolder
+            ? DesktopGroupDisplayMode.Panel
+            : DesktopGroupDisplayMode.AppFolder;
+
+        _placement = _placement with { DisplayMode = newMode };
+        await _repository.SetDesktopGroupPlacementAsync(_placement);
+
+        ApplyDisplayModeChrome();
+        ResizeForCurrentMode();
+        await ReloadAsync();
+    }
+
+    private void AppFolderRoot_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        _sheetPopup ??= new PopupWindow(_repository);
+        _ = _sheetPopup.NavigateToFolderAsync(_groupId, _groupName);
+        _sheetPopup.Closed += (_, _) => _sheetPopup = null;
+        _sheetPopup.ActivateCentered();
     }
 
     private FrameworkElement BuildTile(MenuEntryViewModel entry)

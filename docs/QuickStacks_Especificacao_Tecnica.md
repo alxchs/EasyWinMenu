@@ -548,6 +548,45 @@ ao mesmo tempo, e o botão "marcar como grupo de área de trabalho" no `EditorWi
 por leitura de código e pela construção real da janela (via UI Automation), não por interação
 de mouse simulada.
 
+## 6.13 Fase 10 — App Folder (ladrilho fechado) + sheet de navegação
+
+`DesktopGroupWindow` ganha um segundo modo de exibição (`DesktopGroupPlacement.DisplayMode`,
+campo que já existia desde a Fase 9 mas não tinha UI própria): **Panel** (canvas aberto, como
+até aqui) e **AppFolder** (ladrilho fechado — mosaico 3×3 dos primeiros ícones + selo de
+contagem + nome, modelo `AppFolderTile.cs` do EasyWinMenu). A mesma janela troca de conteúdo em
+tempo real (`ApplyDisplayModeChrome`/`ReloadAsync`) sem recriar nada; alternância pelo menu de
+contexto do clique direito (`ToggleDisplayModeItem`) — ainda não o "menu de cabeçalho universal"
+completo da Fase 9 original (renomear, organizar, etc. ficam para quando essas ações forem
+implementadas), só o toggle Panel/AppFolder que é o escopo desta fase.
+
+Dar duplo-toque no ladrilho fechado abre o **sheet de navegação**: o mesmo `PopupWindow` da
+Fase 1, escopado na pasta do grupo (`NavigateToFolderAsync`, já existente desde a Fase 9) — mas
+`ActivateCentered()` (novo método, análogo a `ActivateNearCursor`) em vez de perto do cursor,
+já que um ladrilho fixo na área de trabalho não tem "onde o usuário clicou" como ponto de
+partida natural. Reaproveita o `PopupWindow`/`FolderNavigationViewModel` inteiros — nenhuma
+navegação em trilha nova foi escrita.
+
+**Limitação cosmética encontrada e não resolvida nesta fase**: o tamanho pedido para a janela
+em modo AppFolder (110×140) não é respeitado à risca — `AppWindow.MoveAndResize` aceitou a
+altura (140) mas a largura ficou em ~198px, confirmado via UI Automation
+(`Rect=80;80;198;140`). Causa provável: o `OverlappedPresenter` padrão do WinUI 3 aplica um
+tamanho mínimo de janela vinculado à moldura/título do sistema, mesmo quando o conteúdo visível
+não usa nenhum dos dois — corrigir exigiria trocar o presenter (`IsResizable=false` ou uma
+configuração de borda própria), não tentado aqui para não arriscar quebrar a janela também em
+modo Panel. O ladrilho em si (mosaico + selo) é desenhado corretamente dentro do espaço
+disponível, só a moldura da janela fica mais larga que o ladrilho.
+
+Testes: 29/29 de integração, 22/22 unitários (sem mudança de contagem — fase de UI, não de
+dados). Verificação de execução: publicação limpa, os 5 `.xbf` presentes automaticamente (o
+fix da seção 6.12 se mantém sem intervenção manual), app publicado sobe sem exceção nos dois
+modos (Panel confirmado em `Rect=80;80;260;220`, AppFolder em `Rect=80;80;198;140`, ambos via
+UI Automation).
+
+**Ainda não verificado interativamente**: duplo-toque real no ladrilho (só a construção da
+janela em modo AppFolder foi confirmada, não o clique), o toggle do menu de contexto
+(`ToggleDisplayModeItem`) acionado por um clique direito de verdade, e a persistência do modo
+ao fechar/reabrir com múltiplos grupos.
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
 Todas as fases do roteiro original (Fase 1 a Fase 7) foram implementadas, e o crash de

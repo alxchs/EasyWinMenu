@@ -11,6 +11,9 @@
   "tray.tier.full": "Full",
   "tray.exit": "Exit",
 
+  "desktopGroup.switchToAppFolder": "Close as App Folder",
+  "desktopGroup.switchToPanel": "Open as Panel",
+
   "popup.searchPlaceholder": "Search everything...",
   "popup.favorites": "Favorites",
   "popup.recent": "Recent",

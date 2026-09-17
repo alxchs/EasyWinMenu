@@ -8,6 +8,11 @@
          moldura nativa (ExtendsContentIntoTitleBar) para parecer um painel flutuante, nao uma
          janela de aplicativo comum. -->
     <Grid x:Name="RootGrid">
+        <Grid.ContextFlyout>
+            <MenuFlyout>
+                <MenuFlyoutItem x:Name="ToggleDisplayModeItem" Click="ToggleDisplayMode_Click" />
+            </MenuFlyout>
+        </Grid.ContextFlyout>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -35,5 +40,10 @@
         </Grid>
 
         <Canvas x:Name="IconCanvas" Grid.Row="1" AllowDrop="True" Drop="IconCanvas_Drop" DragOver="IconCanvas_DragOver" />
+
+        <!-- Fase 10: modo App Folder - ladrilho fechado (mosaico + selo) em vez do canvas
+             aberto; construido em codigo (BuildAppFolderTile) igual aos ladrilhos do Panel,
+             ja' que este projeto nao usa DataTemplate declarativo pra essas celulas. -->
+        <Grid x:Name="AppFolderRoot" Grid.Row="1" Visibility="Collapsed" DoubleTapped="AppFolderRoot_DoubleTapped" />
     </Grid>
 </Window>
