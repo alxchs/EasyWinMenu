@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using QuickStacks.Infrastructure;
 using QuickStacks.Localization;
 
@@ -30,22 +31,22 @@ public sealed partial class TrayIconWindow : Window
         }
 
         // O item marcado nos submenus Tema/Idioma precisa refletir o que ja' foi carregado de
-        // Settings em App.OnLaunched - RadioMenuFlyoutItem.IsChecked nao tem como fazer isso
-        // via x:Bind aqui pelo mesmo motivo do PopupWindow (Window nao e' FrameworkElement).
-        (ThemeService.CurrentTheme switch
+        // Settings em App.OnLaunched - setado a mao pelo mesmo motivo do PopupWindow (Window
+        // nao e' FrameworkElement, entao nao da' pra fazer isso via x:Bind aqui).
+        SetCheckedExclusive(ThemeService.CurrentTheme switch
         {
             ElementTheme.Light => ThemeLightItem,
             ElementTheme.Dark => ThemeDarkItem,
             _ => ThemeSystemItem,
-        }).IsChecked = true;
+        }, ThemeLightItem, ThemeDarkItem, ThemeSystemItem);
 
-        (LocalizationService.CurrentLanguage switch
+        SetCheckedExclusive(LocalizationService.CurrentLanguage switch
         {
             "en-US" => LanguageEnUsItem,
             "es-ES" => LanguageEsEsItem,
             "de-DE" => LanguageDeDeItem,
             _ => LanguagePtBrItem,
-        }).IsChecked = true;
+        }, LanguagePtBrItem, LanguageEnUsItem, LanguageEsEsItem, LanguageDeDeItem);
 
         RefreshTexts();
         LocalizationService.LanguageChanged += RefreshTexts;
@@ -56,6 +57,15 @@ public sealed partial class TrayIconWindow : Window
     public IRelayCommand OpenEditorCommand { get; }
 
     public IRelayCommand ExitCommand { get; }
+
+    /// <summary>Marca so' <paramref name="selected"/> entre os itens de <paramref name="group"/> - RadioMenuFlyoutItem faria isso sozinho via GroupName, mas trava/crasha o processo nesta maquina (reproduzido isolado, ver secao 4 do doc tecnico), daqui em diante e' ToggleMenuFlyoutItem com exclusividade a mao.</summary>
+    private static void SetCheckedExclusive(ToggleMenuFlyoutItem selected, params ToggleMenuFlyoutItem[] group)
+    {
+        foreach (var item in group)
+        {
+            item.IsChecked = ReferenceEquals(item, selected);
+        }
+    }
 
     private void RefreshTexts()
     {
@@ -104,6 +114,13 @@ public sealed partial class TrayIconWindow : Window
     {
         var app = (App)Microsoft.UI.Xaml.Application.Current;
         ThemeService.SetTheme(app.Settings, theme);
+
+        SetCheckedExclusive(theme switch
+        {
+            ElementTheme.Light => ThemeLightItem,
+            ElementTheme.Dark => ThemeDarkItem,
+            _ => ThemeSystemItem,
+        }, ThemeLightItem, ThemeDarkItem, ThemeSystemItem);
     }
 
     private void LanguagePtBr_Click(object sender, RoutedEventArgs e) => SetLanguage("pt-BR");
@@ -119,5 +136,13 @@ public sealed partial class TrayIconWindow : Window
         var app = (App)Microsoft.UI.Xaml.Application.Current;
         app.Settings.Set(SettingsStore.LanguageKey, languageCode);
         LocalizationService.SetLanguage(languageCode);
+
+        SetCheckedExclusive(languageCode switch
+        {
+            "en-US" => LanguageEnUsItem,
+            "es-ES" => LanguageEsEsItem,
+            "de-DE" => LanguageDeDeItem,
+            _ => LanguagePtBrItem,
+        }, LanguagePtBrItem, LanguageEnUsItem, LanguageEsEsItem, LanguageDeDeItem);
     }
 }

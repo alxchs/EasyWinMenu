@@ -17,16 +17,21 @@
                 <MenuFlyout>
                     <MenuFlyoutItem x:Name="OpenItem" Command="{x:Bind ShowPopupCommand}" />
                     <MenuFlyoutItem x:Name="EditStructureItem" Command="{x:Bind OpenEditorCommand}" />
+                    <!-- ToggleMenuFlyoutItem, nao RadioMenuFlyoutItem: RadioMenuFlyoutItem
+                         trava/crasha o processo nesta maquina assim que o menu de contexto e'
+                         montado (reproduzido isolado - ver secao 4 do doc tecnico). Sem
+                         agrupamento nativo, a exclusividade mutua e' feita a mao no
+                         code-behind (deixar so o item escolhido marcado). -->
                     <MenuFlyoutSubItem x:Name="ThemeSubItem">
-                        <RadioMenuFlyoutItem x:Name="ThemeLightItem" GroupName="Theme" Click="ThemeLight_Click" />
-                        <RadioMenuFlyoutItem x:Name="ThemeDarkItem" GroupName="Theme" Click="ThemeDark_Click" />
-                        <RadioMenuFlyoutItem x:Name="ThemeSystemItem" GroupName="Theme" Click="ThemeSystem_Click" />
+                        <ToggleMenuFlyoutItem x:Name="ThemeLightItem" Click="ThemeLight_Click" />
+                        <ToggleMenuFlyoutItem x:Name="ThemeDarkItem" Click="ThemeDark_Click" />
+                        <ToggleMenuFlyoutItem x:Name="ThemeSystemItem" Click="ThemeSystem_Click" />
                     </MenuFlyoutSubItem>
                     <MenuFlyoutSubItem x:Name="LanguageSubItem">
-                        <RadioMenuFlyoutItem x:Name="LanguagePtBrItem" Text="Português (Brasil)" GroupName="Language" Click="LanguagePtBr_Click" />
-                        <RadioMenuFlyoutItem x:Name="LanguageEnUsItem" Text="English (US)" GroupName="Language" Click="LanguageEnUs_Click" />
-                        <RadioMenuFlyoutItem x:Name="LanguageEsEsItem" Text="Español (España)" GroupName="Language" Click="LanguageEsEs_Click" />
-                        <RadioMenuFlyoutItem x:Name="LanguageDeDeItem" Text="Deutsch (Deutschland)" GroupName="Language" Click="LanguageDeDe_Click" />
+                        <ToggleMenuFlyoutItem x:Name="LanguagePtBrItem" Text="Português (Brasil)" Click="LanguagePtBr_Click" />
+                        <ToggleMenuFlyoutItem x:Name="LanguageEnUsItem" Text="English (US)" Click="LanguageEnUs_Click" />
+                        <ToggleMenuFlyoutItem x:Name="LanguageEsEsItem" Text="Español (España)" Click="LanguageEsEs_Click" />
+                        <ToggleMenuFlyoutItem x:Name="LanguageDeDeItem" Text="Deutsch (Deutschland)" Click="LanguageDeDe_Click" />
                     </MenuFlyoutSubItem>
                     <MenuFlyoutSeparator />
                     <MenuFlyoutItem x:Name="ExitItem" Command="{x:Bind ExitCommand}" />

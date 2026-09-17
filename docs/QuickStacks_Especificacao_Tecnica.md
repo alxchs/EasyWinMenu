@@ -103,11 +103,11 @@ dotnet test  quickstacks/tests/QuickStacks.IntegrationTests
 
 Todos os projetos foram compilados com sucesso nesta máquina nessas condições; os dois
 projetos de teste rodaram (22/22 unitários e 16/16 de integração passando — números crescem a
-cada fase; ver seção 8 para o total atual). **O que não foi verificado**: execução
-real do app (ícone na bandeja aparecendo, popup abrindo, arraste de verdade para o Explorer,
-redimensionamento visual) — este ambiente de desenvolvimento não tem uma sessão gráfica do
-Windows interativa disponível para rodar o app. Isso fica como verificação manual pendente na
-primeira vez que alguém rodar o QuickStacks numa máquina Windows normal.
+cada fase; ver seção 8 para o total atual). **Correção**: ao contrário do que fases
+anteriores deste documento afirmavam, esta máquina **tem** sessão gráfica interativa — o app
+chegou a ser executado de verdade (seção 6.10) e um bug real de inicialização foi encontrado e
+corrigido lá. O que continua não verificado é só a parte fina da interação (arraste visual
+para o Explorer, redimensionamento) — ver seção 6.10 para o que já foi confirmado rodando.
 
 ## 5. Modelo de dados (SQLite)
 
@@ -412,6 +412,44 @@ que a build normal falhava antes daquele ajuste. Para tentar essa rota:
 4. Assinar o pacote (certificado próprio para distribuição interna, ou Partner Center para a
    Store).
 
+## 6.10 Primeira execução real: crash na inicialização e correção
+
+Depois de publicado (seção 6.9), o QuickStacks foi executado de verdade pela primeira vez
+nesta máquina — todas as fases anteriores só tinham `dotnet build`/`dotnet test` como
+verificação. **Crashava instantaneamente ao abrir**, com o código de saída `-1073741189`
+(`0xC0000409`, uma falha nativa/fast-fail do Windows, não uma exceção .NET capturável — não
+gerava nenhum dump nem entrada no Log de Eventos, sinal de que acontecia cedo demais até para
+os próprios ganchos de diagnóstico do runtime entrarem em ação).
+
+**Investigação** (por isolamento binário, não por suposição):
+1. Um app WinUI 3 mínimo (só uma `Window` vazia, mesmas configurações de projeto) rodou sem
+   problema — descartou o build da máquina, a versão do Windows (uma build canary/Insider,
+   `10.0.26340`) e a ausência de MRT/PRI como causas.
+2. Logs manuais inseridos temporariamente no `App`/`TrayIconWindow` isolaram o travamento
+   exatamente dentro do `InitializeComponent()` do `TrayIconWindow` — ou seja, na construção
+   da árvore XAML do `TaskbarIcon`, antes de qualquer código próprio rodar.
+3. Adicionar o mesmo `TaskbarIcon` com o mesmo menu de contexto a um app mínimo reproduziu o
+   problema; removendo peça por peça, isolou-se exatamente o `RadioMenuFlyoutItem` (usado nos
+   submenus Tema e Idioma) como o componente que trava/derruba o processo nesta máquina.
+   `MenuFlyoutSubItem` sozinho, e `MenuFlyoutItem` comuns, funcionam normalmente — o problema
+   é especificamente o `RadioMenuFlyoutItem` dentro de um `TaskbarIcon.ContextFlyout`.
+   Trocar `Microsoft.WindowsAppSDK` (1.6 → 1.8) e `H.NotifyIcon.WinUI` (2.1.3 → 2.3.2) não
+   mudou nada — não é um bug de versão de pacote, é o controle em si nesta combinação de
+   ambiente.
+
+**Correção**: os dois submenus passaram a usar `ToggleMenuFlyoutItem` em vez de
+`RadioMenuFlyoutItem`. Como `ToggleMenuFlyoutItem` não tem `GroupName`/exclusividade nativa,
+o code-behind (`TrayIconWindow.SetCheckedExclusive`) desmarca manualmente os outros itens do
+mesmo grupo sempre que um é marcado — mesmo efeito visual (só uma opção marcada por vez),
+sem o componente que causava o problema.
+
+**Resultado**: o app agora abre e permanece rodando e respondendo (confirmado via
+`Get-Process ... | Select Responding` alguns segundos depois de aberto, sem diálogo de erro,
+sem crash). **Ainda não testado interativamente**: clicar no ícone da bandeja de verdade,
+abrir o popup, navegar pelas pastas, arrastar itens — a verificação nesta rodada confirmou
+"o processo inicializa e fica de pé", não o funcionamento fim-a-fim de cada recurso. Isso
+continua como a pendência mais importante do projeto.
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
 Todas as fases do roteiro original (Fase 1 a Fase 7) foram implementadas. Trabalho futuro
@@ -426,10 +464,10 @@ identificado ao longo do caminho, sem fase própria ainda:
 - Cores customizáveis além do fundo (texto, destaque, bordas) e um seletor de cor visual em
   vez de um campo hex (anotado como fora de escopo na Fase 4).
 - Empacotamento MSIX de verdade (acima) — precisa de uma máquina com Visual Studio.
-- Verificação manual de ponta a ponta do app rodando numa sessão gráfica real do Windows
-  (bandeja, popup, drag para o Explorer, redimensionamento visual) — nunca foi possível neste
-  ambiente de desenvolvimento (sem sessão gráfica interativa), só a publicação self-contained
-  foi confirmada.
+- Verificação interativa completa (seção 6.10 confirmou que o app abre e fica de pé, mas não
+  cada recurso individualmente): clicar no ícone da bandeja, o popup abrindo de verdade,
+  navegar pelas pastas, o drag-and-drop para o Explorer, redimensionamento visual, os
+  submenus Tema/Idioma (agora com `ToggleMenuFlyoutItem`) marcando/desmarcando corretamente.
 
 ## 8. Testes automatizados
 
