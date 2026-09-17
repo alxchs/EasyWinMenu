@@ -458,3 +458,58 @@ a mesma convenção já usada nos projetos Delphi), lido por um
 tocar em cada `.csproj` individualmente. Ferramentas de desenvolvimento
 soltas (geradores de ícone, sondas de diagnóstico) ficam de fora do
 versionamento — não fazem parte do que é entregue.
+
+## 20. Arrastar entre grupos: o ícone sumia e soltava em lugar errado
+
+A experiência de arrastar um ícone de um grupo para outro estava ruim: o
+objeto sumia durante o arrasto, e ao soltar parecia não ter feito nada mas
+na verdade movia — só que para um lugar diferente de onde foi largado.
+
+Duas causas distintas, achadas por leitura de código (comparando com o
+caminho que já funcionava corretamente — arrastar *dentro* do mesmo
+grupo), não por reprodução visual:
+
+1. **Sumia**: o arrasto movia o ícone só dentro do `Canvas` da própria
+   janela do grupo de origem (`Canvas.SetLeft/Top`). Nada renderiza fora
+   dos limites de uma janela WPF — então, assim que o ícone cruzava a
+   borda da janela (o que acontece o tempo todo ao arrastar para OUTRO
+   grupo, que é uma janela diferente), ele desaparecia, mesmo a captura do
+   mouse continuando ativa e o resto do gesto funcionando por trás dos
+   panos.
+2. **Soltava em lugar errado**: a posição final usada era o cursor cru
+   (`PointToScreen(e.GetPosition(this))`), que descarta o deslocamento
+   entre onde o usuário pegou o ícone e o canto dele — deslocamento que o
+   arrasto dentro do mesmo grupo preservava (`tileStart + delta`), mas que
+   o caminho entre grupos ignorava, recalculando a posição a partir do zero
+   a cada solta.
+
+Corrigido com uma janela-fantasma real (`DragGhostWindow`, um novo arquivo
+em `Desktop/`) — um `VisualBrush` do próprio tile, sem clonar a árvore
+visual — posicionada em coordenadas de tela, que acompanha o cursor e
+atravessa livremente os limites de qualquer janela, do mesmo jeito que o
+Explorer mostra um ícone "flutuando" durante um arrasto. A posição *dela*
+(não a do cursor) virou a fonte de verdade tanto para achar qual grupo está
+embaixo quanto para a posição final no destino, o que resolve as duas
+causas de uma vez.
+
+Repetindo a lição do item 18 (o ladrilho de App Folder que sumia por causa
+de duas chamadas de `PointToScreen` misturando DPI de monitores
+diferentes): `PointToScreen` só é chamado sobre a janela de origem, que
+nunca se move durante o gesto — nunca lido de volta a partir da própria
+janela-fantasma, que é quem se move. Ao introduzir uma coordenada de tela
+nova numa correção de arrasto, desconfie de qualquer leitura de posição
+feita a partir de algo que você acabou de mover.
+
+**Não verificado interativamente.** Uma tentativa de montar um teste
+automatizado (lançar o app com uma configuração de dois grupos conhecidos,
+localizar os tiles via `System.Windows.Automation` e simular o arrasto com
+`SetCursorPos`/`mouse_event`) não conseguiu clicar nos ícones de forma
+confiável: a janela usa `AllowsTransparency=true`, que faz o Windows testar
+cliques pixel a pixel — um clique num pixel transparente atravessa para a
+janela debaixo em vez de acertar o tile — e os elementos internos
+(`StackPanel`/`Canvas` construídos à mão, sem `AutomationPeer` customizado)
+não aparecem de forma utilizável nem na árvore "Raw" da UI Automation. A
+correção ficou validada por leitura de código e por compilação, não por
+reprodução visual — diferente do item 18, onde a reprodução automatizada
+foi possível. Fica pendente a confirmação manual de alguém rodando o app de
+verdade.

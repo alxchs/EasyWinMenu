@@ -44,6 +44,7 @@ using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using Orientation = System.Windows.Controls.Orientation;
 using Panel = System.Windows.Controls.Panel;
 using PlacementMode = System.Windows.Controls.Primitives.PlacementMode;
+using Rectangle = System.Windows.Shapes.Rectangle;
 using Separator = System.Windows.Controls.Separator;
 using Slider = System.Windows.Controls.Slider;
 using StackPanel = System.Windows.Controls.StackPanel;
@@ -1821,9 +1822,21 @@ internal sealed class DesktopGroupWindow : Window
         _openActionsByEntry[entry] = onOpen;
         AttachHoverEffect(tile, entry);
 
-        System.Windows.Point dragStart = default;
-        System.Windows.Point tileStart = default;
+        // O tile so' existe dentro do Canvas desta janela - arrastar movendo Canvas.Left/Top
+        // (como era antes) faz o icone sumir assim que ele passa da borda da PROPRIA janela,
+        // porque nao ha nada visivel fora dos limites de uma janela WPF. Por isso o arrasto
+        // agora move uma janela-fantasma de verdade (_DragGhostWindow), em coordenadas de
+        // tela, que atravessa livremente os limites de qualquer janela - exatamente como o
+        // Explorer mostra um icone "flutuando" durante o arraste.
+        //
+        // Para nao repetir o bug ja documentado (App Folder tile sumindo por causa de
+        // PointToScreen chamado duas vezes por MouseMove, misturando o DPI de antes/depois do
+        // Left/Top mudar), PointToScreen so' e' chamado sobre "this" - a janela de origem, que
+        // nunca se move durante o arrasto - nunca sobre a propria janela-fantasma.
+        System.Windows.Point dragStartScreen = default;
+        System.Windows.Point tileStartScreen = default;
         var dragging = false;
+        DragGhostWindow? ghost = null;
 
         tile.MouseLeftButtonDown += (_, e) =>
         {
@@ -1837,8 +1850,8 @@ internal sealed class DesktopGroupWindow : Window
             SelectEntry(entry, Keyboard.Modifiers == ModifierKeys.Control);
 
             dragging = true;
-            dragStart = e.GetPosition(_canvas);
-            tileStart = new System.Windows.Point(Canvas.GetLeft(tile), Canvas.GetTop(tile));
+            dragStartScreen = PointToScreen(e.GetPosition(this));
+            tileStartScreen = PointToScreen(new System.Windows.Point(Canvas.GetLeft(tile), Canvas.GetTop(tile)));
             tile.CaptureMouse();
             e.Handled = true;
         };
@@ -1850,10 +1863,12 @@ internal sealed class DesktopGroupWindow : Window
                 return;
             }
 
-            var current = e.GetPosition(_canvas);
-            var delta = current - dragStart;
-            Canvas.SetLeft(tile, tileStart.X + delta.X);
-            Canvas.SetTop(tile, tileStart.Y + delta.Y);
+            ghost ??= DragGhostWindow.Show(tile, tileStartScreen, () => tile.Opacity = SelectedTileOpacityWhileDragging);
+
+            var currentScreen = PointToScreen(e.GetPosition(this));
+            var delta = currentScreen - dragStartScreen;
+            ghost.Left = tileStartScreen.X + delta.X;
+            ghost.Top = tileStartScreen.Y + delta.Y;
         };
 
         tile.MouseLeftButtonUp += (_, e) =>
@@ -1866,21 +1881,37 @@ internal sealed class DesktopGroupWindow : Window
             dragging = false;
             tile.ReleaseMouseCapture();
 
-            var screenPoint = PointToScreen(e.GetPosition(this));
-            var targetGroup = FindGroupWindowAt(screenPoint, this);
+            // Enquanto o tile esteve escondido (arrasto em andamento), a posicao que "vale"
+            // e' a da janela-fantasma - ela e' quem preserva corretamente o ponto onde o
+            // usuario pegou o icone (grab offset), coisa que o codigo antigo perdia ao
+            // recalcular a posicao a partir do cursor cru no drop.
+            var finalScreenTopLeft = ghost?.CurrentTopLeft ?? tileStartScreen;
+            ghost?.Close();
+            ghost = null;
+            tile.Opacity = 1.0;
+
+            var screenCenter = new System.Windows.Point(
+                finalScreenTopLeft.X + tile.ActualWidth / 2,
+                finalScreenTopLeft.Y + tile.ActualHeight / 2);
+
+            var targetGroup = FindGroupWindowAt(screenCenter, this);
             if (targetGroup is not null)
             {
-                MoveEntryToOtherGroup(entry, targetGroup, screenPoint);
+                MoveEntryToOtherGroup(entry, targetGroup, finalScreenTopLeft);
                 return;
             }
 
-            var x = ClampToCanvas(Canvas.GetLeft(tile), tile.ActualWidth, _canvas.ActualWidth, PaddingX);
-            var y = ClampToCanvas(Canvas.GetTop(tile), tile.ActualHeight, _canvas.ActualHeight, PaddingY);
+            var localTopLeft = _canvas.PointFromScreen(finalScreenTopLeft);
+            var x = ClampToCanvas(localTopLeft.X, tile.ActualWidth, _canvas.ActualWidth, PaddingX);
+            var y = ClampToCanvas(localTopLeft.Y, tile.ActualHeight, _canvas.ActualHeight, PaddingY);
             Canvas.SetLeft(tile, x);
             Canvas.SetTop(tile, y);
             onMoved(x, y);
         };
     }
+
+    /// <summary>Opacidade do tile de origem enquanto a janela-fantasma o representa em tela - o mesmo "ícone esmaecido" que o Explorer usa durante um arrasto.</summary>
+    private const double SelectedTileOpacityWhileDragging = 0.35;
 
     /// <summary>Whichever other open group's window occupies this screen point, if any.</summary>
     private static DesktopGroupWindow? FindGroupWindowAt(System.Windows.Point screenPoint, DesktopGroupWindow excluding)
@@ -1910,7 +1941,7 @@ internal sealed class DesktopGroupWindow : Window
     /// into the wrong list and mistaken for a standalone desktop group instead of a
     /// subfolder that belongs to the target.
     /// </summary>
-    private void MoveEntryToOtherGroup(object entry, DesktopGroupWindow target, System.Windows.Point screenPoint)
+    private void MoveEntryToOtherGroup(object entry, DesktopGroupWindow target, System.Windows.Point tileTopLeftScreen)
     {
         switch (entry)
         {
@@ -1932,7 +1963,7 @@ internal sealed class DesktopGroupWindow : Window
 
         FinishStructuralChange();
 
-        var dropPoint = target._canvas.PointFromScreen(screenPoint);
+        var dropPoint = target._canvas.PointFromScreen(tileTopLeftScreen);
         target.AcceptMovedEntry(entry, dropPoint);
     }
 

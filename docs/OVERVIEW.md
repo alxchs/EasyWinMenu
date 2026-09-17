@@ -127,6 +127,36 @@ funciona de fora desta rede, sem custo.
     querer um grupo independente da área de trabalho. Um registro estático
     (`_allGroupWindows`) é o que permite a um grupo achar qual outro está
     embaixo do ponto onde o mouse soltou.
+    - **Correção**: o ícone arrastado sumia assim que cruzava a borda da
+      própria janela do grupo de origem, e soltava numa posição diferente
+      de onde o usuário largou o mouse. As duas causas eram distintas: (1)
+      o arrasto movia o tile só dentro do `Canvas` da janela de origem
+      (`Canvas.SetLeft/Top`) — nada renderiza fora dos limites de uma janela
+      WPF, então o ícone literalmente desaparecia ao ultrapassar a borda,
+      mesmo captura de mouse continuando ativa; (2) o ponto de soltura usado
+      para a posição final era o cursor cru (`PointToScreen(e.GetPosition(this))`),
+      descartando o deslocamento entre onde o usuário pegou o ícone e o
+      canto superior-esquerdo dele — deslocamento que o arrasto *dentro* do
+      mesmo grupo preservava corretamente (`tileStart + delta`), mas o
+      arrasto *entre* grupos não. Corrigido com uma janela-fantasma real
+      (`DragGhostWindow`, um `VisualBrush` do próprio tile) que acompanha o
+      cursor em coordenadas de tela — atravessando livremente os limites de
+      qualquer janela, como o Explorer mostra um ícone "flutuando" durante
+      um arrasto — e cuja posição (não o cursor) alimenta tanto a detecção
+      de qual grupo está embaixo quanto a posição final no grupo de destino.
+      `PointToScreen` só é chamado sobre a janela de origem (que nunca se
+      move durante o arrasto), nunca lido de volta a partir da própria
+      janela-fantasma, para não reintroduzir o mesmo tipo de bug de DPI já
+      documentado abaixo para o App Folder. **Não verificado
+      interativamente**: uma tentativa de reproduzir o arrasto via input
+      sintético (`SendInput`/`mouse_event`) não conseguiu acertar os tiles de
+      forma confiável — a janela usa `AllowsTransparency=true` (teste de
+      clique pixel-a-pixel: um clique num pixel transparente atravessa para
+      a janela debaixo) e os elementos internos não expõem uma árvore de
+      UI Automation rica o bastante para mirar com segurança. A correção
+      foi validada por leitura de código (a mesma inconsistência de
+      coordenadas comparada ponto a ponto com o caminho que já funcionava
+      dentro do mesmo grupo) e por compilação, não por reprodução visual.
   - A legenda do grupo tem uma dica (tooltip) resumindo suas configurações
     — estilo, organização, tamanho do ícone, opacidade, selo
     (`UpdateHeaderTooltip`), recalculada sempre que algo relevante muda.
