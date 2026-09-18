@@ -34,11 +34,11 @@ public sealed partial class PopupWindow : Window, ICutVisualOwner
 
     public string OwnerId => ViewModel.CurrentFolderId ?? "root";
 
-    public PopupWindow(IMenuRepository repository)
+    public PopupWindow(IMenuRepository repository, IIconCacheService? iconCache = null)
     {
         InitializeComponent();
 
-        ViewModel = new FolderNavigationViewModel(repository);
+        ViewModel = new FolderNavigationViewModel(repository, iconCache ?? App.IconCache);
         Repository = repository;
 
         ThemeService.Register(RootGrid);

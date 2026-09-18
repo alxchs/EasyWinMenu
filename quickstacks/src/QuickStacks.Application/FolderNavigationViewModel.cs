@@ -30,10 +30,12 @@ public sealed partial class FolderNavigationViewModel : ObservableObject
     private const int GlobalListLimit = 20;
 
     private readonly IMenuRepository _repository;
+    private readonly IIconCacheService? _iconCache;
 
-    public FolderNavigationViewModel(IMenuRepository repository)
+    public FolderNavigationViewModel(IMenuRepository repository, IIconCacheService? iconCache = null)
     {
         _repository = repository;
+        _iconCache = iconCache;
         Breadcrumb.Add(new BreadcrumbNodeViewModel(null, RootLabel));
     }
 
@@ -68,7 +70,7 @@ public sealed partial class FolderNavigationViewModel : ObservableObject
         Items.Clear();
         foreach (var entry in source)
         {
-            Items.Add(new MenuEntryViewModel(entry));
+            Items.Add(new MenuEntryViewModel(entry, _iconCache));
         }
     }
 

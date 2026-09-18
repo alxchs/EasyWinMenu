@@ -29,7 +29,11 @@ public partial class App : Microsoft.UI.Xaml.Application
 
     public ILnkImportService LnkImportService { get; private set; } = null!;
 
+    public IIconCacheService IconCacheService { get; private set; } = null!;
+
     public SettingsStore Settings { get; private set; } = null!;
+
+    public static IIconCacheService? IconCache => Current is App app ? app.IconCacheService : null;
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
@@ -50,6 +54,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         }
 
         MenuRepository = new SqliteMenuRepository();
+        IconCacheService = new IconCacheService();
         ExportService = new ConfigExportService(MenuRepository);
         LnkImportService = new LnkImportService(new LnkResolver(), MenuRepository);
         Settings = new SettingsStore();

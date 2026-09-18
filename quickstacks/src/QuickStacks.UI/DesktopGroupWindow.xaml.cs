@@ -235,7 +235,7 @@ public sealed partial class DesktopGroupWindow : Window, ICutVisualOwner
         var cascade = 0;
         foreach (var child in ordered)
         {
-            var entry = new MenuEntryViewModel(child);
+            var entry = new MenuEntryViewModel(child, App.IconCache);
             var tile = BuildTile(entry, allowManualDrag);
 
             _tilesByEntry[child.Id] = tile;
@@ -302,15 +302,31 @@ public sealed partial class DesktopGroupWindow : Window, ICutVisualOwner
         var cellIndex = 0;
         foreach (var child in children.OrderBy(c => c.SortOrder).Take(AppFolderMosaicCapacity))
         {
-            var entry = new MenuEntryViewModel(child);
-            var cell = new FontIcon
+            var entry = new MenuEntryViewModel(child, App.IconCache);
+            FrameworkElement cell;
+            if (entry.HasCustomIcon && !string.IsNullOrEmpty(entry.IconPath))
             {
-                Glyph = entry.Glyph,
-                FontSize = plateSize * 0.16,
-                Margin = new Thickness(1.5),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
+                cell = new Image
+                {
+                    Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(entry.IconPath)),
+                    Width = plateSize * 0.22,
+                    Height = plateSize * 0.22,
+                    Margin = new Thickness(1.5),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+            }
+            else
+            {
+                cell = new FontIcon
+                {
+                    Glyph = entry.Glyph,
+                    FontSize = plateSize * 0.16,
+                    Margin = new Thickness(1.5),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+            }
             Grid.SetRow(cell, cellIndex / 3);
             Grid.SetColumn(cell, cellIndex % 3);
             mosaic.Children.Add(cell);
@@ -395,7 +411,20 @@ public sealed partial class DesktopGroupWindow : Window, ICutVisualOwner
             Padding = new Thickness(4),
             Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), // area clicavel/arrastavel inclui o espaco vazio ao redor do texto
         };
-        stack.Children.Add(new FontIcon { Glyph = entry.Glyph, FontSize = 28, HorizontalAlignment = HorizontalAlignment.Center });
+        if (entry.HasCustomIcon && !string.IsNullOrEmpty(entry.IconPath))
+        {
+            stack.Children.Add(new Image
+            {
+                Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(entry.IconPath)),
+                Width = 28,
+                Height = 28,
+                HorizontalAlignment = HorizontalAlignment.Center,
+            });
+        }
+        else
+        {
+            stack.Children.Add(new FontIcon { Glyph = entry.Glyph, FontSize = 28, HorizontalAlignment = HorizontalAlignment.Center });
+        }
         stack.Children.Add(new TextBlock
         {
             Text = entry.Name,

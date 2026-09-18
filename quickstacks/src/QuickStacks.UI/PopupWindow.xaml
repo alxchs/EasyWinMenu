@@ -72,7 +72,15 @@
                             </MenuFlyout>
                         </StackPanel.ContextFlyout>
                         <Grid HorizontalAlignment="Center">
-                            <FontIcon Glyph="{x:Bind Glyph}" FontSize="32" />
+                            <Image
+                                Source="{x:Bind IconPath}"
+                                Width="32"
+                                Height="32"
+                                Visibility="{x:Bind HasCustomIcon}" />
+                            <FontIcon
+                                Glyph="{x:Bind Glyph}"
+                                FontSize="32"
+                                Visibility="{x:Bind HasNoCustomIcon}" />
                             <TextBlock
                                 Text="★"
                                 FontSize="12"

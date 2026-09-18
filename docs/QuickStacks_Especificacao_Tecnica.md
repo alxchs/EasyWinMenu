@@ -811,6 +811,16 @@ Suporte completo a comandos de teclado da área de transferência tanto no popup
 
 Testes: 40/40 unitários (+6 do `PendingCutCoordinatorTests`), 30/30 de integração. Publicação limpa (`publish.ps1`) verificada com sucesso.
 
+## 6.20 Fase 17 — Extração Real de Ícones e Cache de PNG em Disco
+
+Extração de ícones de alta resolução e cache persistente em PNG para arquivos, executáveis e atalhos:
+
+- **Extração com Fallback multinível**: `IconCacheService` (`QuickStacks.Infrastructure`) utiliza a API de Shell do Windows (`SHGetImageList` com `SHIL_JUMBO` 256x256 e `SHIL_EXTRALARGE` 48x48) via interop COM, com fallback para `Icon.ExtractAssociatedIcon` e ícones de pastas do sistema.
+- **Cache Persistente em Disco**: os ícones extraídos são convertidos e salvos como arquivos PNG no diretório `%LocalAppData%\QuickStacks\IconCache\`, indexados por hash SHA-256 do caminho do arquivo e data de modificação (`LastWriteTimeUtc`). Chamadas subsequentes são resolvidas diretamente do disco em milissegundos sem chamadas COM adicionais.
+- **Interface e Domínio desacoplados**: `IIconCacheService` (`QuickStacks.Domain`) define o contrato de serviço (`GetIconPath(targetPath)`), permitindo injeção limpa no `MenuEntryViewModel` e `FolderNavigationViewModel`.
+- **Renderização WinUI 3**: nos ladrilhos do `PopupWindow` e `DesktopGroupWindow` (inclusive mosaicos de pastas), quando um ícone personalizado/extraído estiver em cache (`entry.HasCustomIcon && entry.IconPath != null`), o componente renderiza uma tag `Image` com `BitmapImage` da imagem PNG; caso contrário, mantém fallback imediato para o `FontIcon` de glifo Segoe Fluent Icons.
+- **Testes**: 3 testes de integração em `IconCacheServiceTests` validando extração real de executáveis (`cmd.exe`), cabeçalho PNG (`89 50 4E 47`) e reutilização de cache. Total de 33/33 testes de integração passando.
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
 Todas as fases do roteiro original (Fase 1 a Fase 7) foram implementadas, e o crash de
