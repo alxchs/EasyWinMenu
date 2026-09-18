@@ -838,6 +838,16 @@ Paridade abrangente de execução de itens, parâmetros de processo, comandos de
 - **Editor de Itens (`EditorWindow`)**: adição de seletor de modo de execução e suporte a itens do tipo `Command`.
 - **Testes**: 9 novos testes unitários em `LaunchPlannerTests` cobrindo todas as variações de modos, expansões e resolução de PATH; 1 novo teste de integração em `SqliteMenuRepositoryTests` validando round-trip de persistência de `ExecutionMode`. Total de 49 testes unitários e 34 testes de integração passando (83 no total).
 
+## 6.22 Fase 19 — Menu de Contexto Nativo do Shell / Explorer
+
+Hospedagem COM completa do menu de contexto genuíno do Windows Explorer:
+
+- **Hospedagem COM (`IContextMenu`, `IContextMenu2`, `IContextMenu3`)**: `ShellContextMenuService` (`QuickStacks.Infrastructure`) consome a Shell API via `SHParseDisplayName` e `SHBindToParent`, obtendo a interface `IShellFolder` e consultando `IContextMenu` para o item real apontado.
+- **Subclassing de Janela (`SetWindowSubclass`)**: intercepta e encaminha dinamicamente mensagens Win32 (`WM_INITMENUPOPUP`, `WM_DRAWITEM`, `WM_MEASUREITEM`, `WM_MENUCHAR`) para `HandleMenuMsg` e `HandleMenuMsg2`, garantindo que extensões de terceiros com owner-drawn e submenus (ex: 7-Zip, Git, WinRAR, VS Code, Tortoise, ferramentas de antivírus) renderizem e processem eventos perfeitamente.
+- **Invocação e Desacoplamento de COM**: a seleção é executada via `IContextMenu.InvokeCommand` com liberação determinística de ponteiros COM e PIDL no bloco `finally`. A interface pura `IShellContextMenuService` reside em `QuickStacks.Domain`.
+- **Acesso na Interface**: opção "Menu padrão do Windows" nos menus de contexto de itens do `PopupWindow` e ladrilhos do `DesktopGroupWindow`, permitindo acessar todas as extensões do Explorer sem perder o tema e agilidade do QuickStacks.
+- **Testes**: 4 testes de integração em `ShellContextMenuServiceTests` validando conformidade com a interface, parâmetros vazios, handles nulos e caminhos inexistentes sem disparar exceções não tratadas. Total de 87 testes (49 unitários + 38 de integração) passando com sucesso.
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
 Todas as fases do roteiro original (Fase 1 a Fase 7) foram implementadas, e o crash de

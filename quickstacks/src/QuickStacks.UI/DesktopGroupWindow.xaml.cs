@@ -625,8 +625,30 @@ public sealed partial class DesktopGroupWindow : Window, ICutVisualOwner
                 }
             };
             flyout.Items.Add(propsItem);
+
+            var standardMenuItem = new MenuFlyoutItem { Text = LocalizationService.Get("item.standardMenu") };
+            standardMenuItem.Click += (_, _) =>
+            {
+                var path = LaunchService.TryResolvePhysicalPath(entry) ?? entry.Path;
+                if (!string.IsNullOrWhiteSpace(path) && GetCursorPos(out var cursor))
+                {
+                    var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                    App.ShellContextMenu?.TryShow(hwnd, path, cursor.X, cursor.Y);
+                }
+            };
+            flyout.Items.Add(standardMenuItem);
         }
 
         return flyout;
     }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct CursorPoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out CursorPoint point);
 }

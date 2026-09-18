@@ -117,6 +117,7 @@ public sealed partial class PopupWindow : Window, ICutVisualOwner
         ((MenuFlyoutItem)flyout.Items[3]).Text = LocalizationService.Get("item.revealInExplorer");
         ((MenuFlyoutItem)flyout.Items[4]).Text = LocalizationService.Get("item.copyPath");
         ((MenuFlyoutItem)flyout.Items[5]).Text = LocalizationService.Get("item.properties");
+        ((MenuFlyoutItem)flyout.Items[6]).Text = LocalizationService.Get("item.standardMenu");
     }
 
     public FolderNavigationViewModel ViewModel { get; }
@@ -377,6 +378,19 @@ public sealed partial class PopupWindow : Window, ICutVisualOwner
             if (!string.IsNullOrWhiteSpace(path))
             {
                 ShellHelper.ShowProperties(path);
+            }
+        }
+    }
+
+    private void StandardMenu_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: MenuEntryViewModel entry })
+        {
+            var path = LaunchService.TryResolvePhysicalPath(entry) ?? entry.Path;
+            if (!string.IsNullOrWhiteSpace(path) && GetCursorPos(out var cursor))
+            {
+                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                App.ShellContextMenu?.TryShow(hwnd, path, cursor.X, cursor.Y);
             }
         }
     }

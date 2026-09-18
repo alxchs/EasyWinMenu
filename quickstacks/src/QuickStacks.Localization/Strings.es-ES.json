@@ -71,5 +71,6 @@
   "item.runAsAdmin": "Ejecutar como administrador",
   "item.revealInExplorer": "Abrir ubicación del archivo",
   "item.copyPath": "Copiar ruta",
-  "item.properties": "Propiedades"
+  "item.properties": "Propiedades",
+  "item.standardMenu": "Menú estándar de Windows"
 }

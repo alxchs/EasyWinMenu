@@ -31,9 +31,13 @@ public partial class App : Microsoft.UI.Xaml.Application
 
     public IIconCacheService IconCacheService { get; private set; } = null!;
 
+    public IShellContextMenuService ShellContextMenuService { get; private set; } = null!;
+
     public SettingsStore Settings { get; private set; } = null!;
 
     public static IIconCacheService? IconCache => Current is App app ? app.IconCacheService : null;
+
+    public static IShellContextMenuService? ShellContextMenu => Current is App app ? app.ShellContextMenuService : null;
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
@@ -55,6 +59,7 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         MenuRepository = new SqliteMenuRepository();
         IconCacheService = new IconCacheService();
+        ShellContextMenuService = new ShellContextMenuService();
         ExportService = new ConfigExportService(MenuRepository);
         LnkImportService = new LnkImportService(new LnkResolver(), MenuRepository);
         Settings = new SettingsStore();

@@ -73,6 +73,7 @@
                                 <MenuFlyoutItem Click="RevealInExplorer_Click" Visibility="{x:Bind HasFileTarget}" />
                                 <MenuFlyoutItem Click="CopyPath_Click" Visibility="{x:Bind HasFileTarget}" />
                                 <MenuFlyoutItem Click="Properties_Click" Visibility="{x:Bind HasFileTarget}" />
+                                <MenuFlyoutItem Click="StandardMenu_Click" Visibility="{x:Bind HasFileTarget}" />
                             </MenuFlyout>
                         </StackPanel.ContextFlyout>
                         <Grid HorizontalAlignment="Center">
