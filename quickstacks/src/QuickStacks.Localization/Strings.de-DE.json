@@ -72,5 +72,11 @@
   "item.revealInExplorer": "Dateispeicherort öffnen",
   "item.copyPath": "Pfad kopieren",
   "item.properties": "Eigenschaften",
-  "item.standardMenu": "Standard-Windows-Menü"
+  "item.standardMenu": "Standard-Windows-Menü",
+  "tray.help": "Hilfe und Tastaturkürzel (F1)...",
+  "help.title": "QuickStacks - Hilfe & Kurzanleitung",
+  "help.tab.overview": "Übersicht",
+  "help.tab.shortcuts": "Tastaturkürzel",
+  "help.tab.desktopGroups": "Desktop-Gruppen",
+  "help.tab.about": "Über"
 }

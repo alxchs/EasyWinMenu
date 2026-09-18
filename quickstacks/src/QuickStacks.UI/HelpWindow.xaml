@@ -1,0 +1,190 @@
+<Window
+    x:Class="QuickStacks.UI.HelpWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid x:Name="RootGrid" Padding="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Grid Grid.Row="0" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Width="44" Height="44" CornerRadius="8" Background="#1A0078D4" Margin="0,0,14,0">
+                <FontIcon Glyph="&#xE897;" FontSize="24" Foreground="#0078D4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock x:Name="HeaderTitle" FontSize="20" FontWeight="SemiBold" Text="QuickStacks" />
+                <TextBlock x:Name="HeaderSubtitle" FontSize="13" Opacity="0.7" Text="Central de Ajuda e Guia do Usuário" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Tab Selector Bar -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,0,0,16">
+            <Button x:Name="TabOverviewButton" Click="TabOverview_Click" FontWeight="SemiBold" />
+            <Button x:Name="TabShortcutsButton" Click="TabShortcuts_Click" />
+            <Button x:Name="TabDesktopGroupsButton" Click="TabDesktopGroups_Click" />
+            <Button x:Name="TabAboutButton" Click="TabAbout_Click" />
+        </StackPanel>
+
+        <!-- Content Area -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,12,0">
+            <Grid>
+                <!-- 1. Visao Geral -->
+                <StackPanel x:Name="PanelOverview" Spacing="16">
+                    <Border Background="#0A000000" BorderBrush="#1F000000" BorderThickness="1" CornerRadius="8" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="O que é o QuickStacks?" FontWeight="SemiBold" FontSize="15" />
+                            <TextBlock TextWrapping="Wrap" LineHeight="20" Text="O QuickStacks é um organizador e lançador rápido de produtividade para Windows. Ele substitui a desordem na área de trabalho e menus complexos por pilhas e grupos limpos, acessíveis instantaneamente por clique ou por atalhos globais de teclado." />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#0A000000" BorderBrush="#1F000000" BorderThickness="1" CornerRadius="8" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Modos de Operação (Lite vs Full)" FontWeight="SemiBold" FontSize="15" />
+                            <TextBlock TextWrapping="Wrap" LineHeight="20" Text="• Modo Lite: Operação minimalista. Apenas o ícone na bandeja do sistema e o popup rápido perto do cursor. Ideal para computadores corporativos ou para quem busca o máximo de leveza." />
+                            <TextBlock TextWrapping="Wrap" LineHeight="20" Text="• Modo Full: Experiência completa com paridade total com o EasyWinMenu. Habilita grupos visuais na Área de Trabalho (painéis e pastas), suporte a múltiplos monitores, menus de contexto integrados ao shell do Windows Explorer e comandos na área de trabalho." />
+                            <TextBlock TextWrapping="Wrap" Opacity="0.75" FontSize="12" Margin="0,4,0,0" Text="Dica: Alterne entre os modos clicando com o botão direito no ícone da bandeja -> Modo de Operação." />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#0A000000" BorderBrush="#1F000000" BorderThickness="1" CornerRadius="8" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Editor de Estrutura" FontWeight="SemiBold" FontSize="15" />
+                            <TextBlock TextWrapping="Wrap" LineHeight="20" Text="Pelo menu da bandeja, abra 'Editar estrutura...' para organizar livremente seus itens em pastas, importar arquivos de atalho (.lnk), definir argumentos de linha de comando, modos de execução (Normal, Minimizado, Maximizado ou Administrador) e marcar pastas para exibição na Área de Trabalho." />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- 2. Atalhos de Teclado -->
+                <StackPanel x:Name="PanelShortcuts" Spacing="16" Visibility="Collapsed">
+                    <Border Background="#0A000000" BorderBrush="#1F000000" BorderThickness="1" CornerRadius="8" Padding="16">
+                        <StackPanel Spacing="12">
+                            <TextBlock Text="Atalhos Globais e Navegação" FontWeight="SemiBold" FontSize="15" />
+                            
+                            <Grid ColumnSpacing="12" RowSpacing="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="220" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <Border Grid.Row="0" Grid.Column="0" Background="#14000000" CornerRadius="4" Padding="6,3" HorizontalAlignment="Left">
+                                    <TextBlock Text="F1" FontFamily="Consolas" FontWeight="SemiBold" />
+                                </Border>
+                                <TextBlock Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Text="Abre esta central de ajuda em qualquer tela." />
+
+                                <Border Grid.Row="1" Grid.Column="0" Background="#14000000" CornerRadius="4" Padding="6,3" HorizontalAlignment="Left">
+                                    <TextBlock Text="Ctrl + Alt + Q" FontFamily="Consolas" FontWeight="SemiBold" />
+                                </Border>
+                                <TextBlock Grid.Row="1" Grid.Column="1" VerticalAlignment="Center" Text="Abre o menu popup do QuickStacks próximo ao cursor." />
+
+                                <Border Grid.Row="2" Grid.Column="0" Background="#14000000" CornerRadius="4" Padding="6,3" HorizontalAlignment="Left">
+                                    <TextBlock Text="Win + Ctrl + Alt + D" FontFamily="Consolas" FontWeight="SemiBold" />
+                                </Border>
+                                <TextBlock Grid.Row="2" Grid.Column="1" VerticalAlignment="Center" Text="Restaura e foca todas as janelas de grupo na área de trabalho (modo Full)." />
+
+                                <Border Grid.Row="3" Grid.Column="0" Background="#14000000" CornerRadius="4" Padding="6,3" HorizontalAlignment="Left">
+                                    <TextBlock Text="Win + Shift + Esquerda/Direita" FontFamily="Consolas" FontWeight="SemiBold" />
+                                </Border>
+                                <TextBlock Grid.Row="3" Grid.Column="1" VerticalAlignment="Center" Text="Move o grupo focalizado diretamente para o monitor adjacente." />
+
+                                <Border Grid.Row="4" Grid.Column="0" Background="#14000000" CornerRadius="4" Padding="6,3" HorizontalAlignment="Left">
+                                    <TextBlock Text="Ctrl + C / Ctrl + X / Ctrl + V" FontFamily="Consolas" FontWeight="SemiBold" />
+                                </Border>
+                                <TextBlock Grid.Row="4" Grid.Column="1" VerticalAlignment="Center" Text="Copia caminho, recorta item e cola entre pastas ou grupos com efeito translúcido." />
+
+                                <Border Grid.Row="5" Grid.Column="0" Background="#14000000" CornerRadius="4" Padding="6,3" HorizontalAlignment="Left">
+                                    <TextBlock Text="Setas (↑ / ↓ / ← / →)" FontFamily="Consolas" FontWeight="SemiBold" />
+                                </Border>
+                                <TextBlock Grid.Row="5" Grid.Column="1" VerticalAlignment="Center" Text="Navega entre os itens da lista ou grade." />
+
+                                <Border Grid.Row="6" Grid.Column="0" Background="#14000000" CornerRadius="4" Padding="6,3" HorizontalAlignment="Left">
+                                    <TextBlock Text="Enter / Espaço" FontFamily="Consolas" FontWeight="SemiBold" />
+                                </Border>
+                                <TextBlock Grid.Row="6" Grid.Column="1" VerticalAlignment="Center" Text="Executa o item selecionado ou entra na subpasta." />
+
+                                <Border Grid.Row="7" Grid.Column="0" Background="#14000000" CornerRadius="4" Padding="6,3" HorizontalAlignment="Left">
+                                    <TextBlock Text="Backspace / Esc" FontFamily="Consolas" FontWeight="SemiBold" />
+                                </Border>
+                                <TextBlock Grid.Row="7" Grid.Column="1" VerticalAlignment="Center" Text="Backspace volta para a pasta pai; Esc fecha o menu popup." />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- 3. Grupos da Area de Trabalho -->
+                <StackPanel x:Name="PanelDesktopGroups" Spacing="16" Visibility="Collapsed">
+                    <Border Background="#0A000000" BorderBrush="#1F000000" BorderThickness="1" CornerRadius="8" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Grupos Flutuantes na Área de Trabalho" FontWeight="SemiBold" FontSize="15" />
+                            <TextBlock TextWrapping="Wrap" LineHeight="20" Text="No modo Full, qualquer pasta raiz marcada como 'Fixar na Área de Trabalho' se torna uma janela viva sobre o desktop. Você pode posicionar livremente e a coordenada é persistida individualmente para cada monitor." />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#0A000000" BorderBrush="#1F000000" BorderThickness="1" CornerRadius="8" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Modos de Visualização" FontWeight="SemiBold" FontSize="15" />
+                            <TextBlock TextWrapping="Wrap" LineHeight="20" Text="• Painel: Grade ampla de blocos com ícones e rótulos. Perfeito para grupos de acesso diário, pastas de projetos ou atalhos de utilitários." />
+                            <TextBlock TextWrapping="Wrap" LineHeight="20" Text="• App Folder: Ícone compacto no estilo de pilhas modernas. Ao clicar, expande em um popup elegante com todos os seus itens." />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#0A000000" BorderBrush="#1F000000" BorderThickness="1" CornerRadius="8" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Arrastar e Soltar (Drag &amp; Drop)" FontWeight="SemiBold" FontSize="15" />
+                            <TextBlock TextWrapping="Wrap" LineHeight="20" Text="Arraste arquivos, executáveis ou atalhos do Windows Explorer diretamente para dentro de qualquer grupo na Área de Trabalho para adicioná-los instantaneamente à pilha." />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- 4. Sobre -->
+                <StackPanel x:Name="PanelAbout" Spacing="16" Visibility="Collapsed">
+                    <Border Background="#0A000000" BorderBrush="#1F000000" BorderThickness="1" CornerRadius="8" Padding="16">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="QuickStacks" FontWeight="SemiBold" FontSize="16" />
+                            <TextBlock Text="Versão 1.1.0" Opacity="0.8" />
+                            <TextBlock TextWrapping="Wrap" LineHeight="20" Text="Lançador e organizador desktop moderno, projetado para máxima fluidez, estabilidade e elegância visual no Windows 10 e Windows 11." />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#0A000000" BorderBrush="#1F000000" BorderThickness="1" CornerRadius="8" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Arquitetura e Engenharia" FontWeight="SemiBold" FontSize="15" />
+                            <TextBlock TextWrapping="Wrap" LineHeight="20" Text="• Clean Architecture &amp; SOLID: Separação estrita entre Domain, Application, Infrastructure, UI e Localization." />
+                            <TextBlock TextWrapping="Wrap" LineHeight="20" Text="• Shell Nativo COM: Extração jumbo de ícones e hospedagem direta de IContextMenu2/3 do Windows Explorer." />
+                            <TextBlock TextWrapping="Wrap" LineHeight="20" Text="• Armazenamento Resiliente: Banco local SQLite WAL com auto-migração sem bloqueio." />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#0A000000" BorderBrush="#1F000000" BorderThickness="1" CornerRadius="8" Padding="16">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Ambiente em Execução" FontWeight="SemiBold" FontSize="15" />
+                            <TextBlock x:Name="StatusTierText" Text="Modo: -" />
+                            <TextBlock x:Name="StatusLanguageText" Text="Idioma: -" />
+                            <TextBlock x:Name="StatusThemeText" Text="Tema: -" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</Window>
+

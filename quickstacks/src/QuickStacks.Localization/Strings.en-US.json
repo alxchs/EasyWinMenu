@@ -72,5 +72,11 @@
   "item.revealInExplorer": "Open file location",
   "item.copyPath": "Copy path",
   "item.properties": "Properties",
-  "item.standardMenu": "Standard Windows menu"
+  "item.standardMenu": "Standard Windows menu",
+  "tray.help": "Help & Shortcuts (F1)...",
+  "help.title": "QuickStacks - Help & Quick Guide",
+  "help.tab.overview": "Overview",
+  "help.tab.shortcuts": "Shortcuts",
+  "help.tab.desktopGroups": "Desktop Groups",
+  "help.tab.about": "About"
 }

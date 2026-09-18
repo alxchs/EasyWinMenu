@@ -23,11 +23,16 @@ public sealed partial class TrayIconWindow : Window
     {
         ShowPopupCommand = new RelayCommand(ShowPopup);
         OpenEditorCommand = new RelayCommand(OpenEditor);
+        OpenHelpCommand = new RelayCommand(App.OpenHelp);
         ExitCommand = new RelayCommand(() => Microsoft.UI.Xaml.Application.Current.Exit());
 
         InitializeComponent();
 
-        var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "quickstacks-placeholder.ico");
+        var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "quickstacks.ico");
+        if (!System.IO.File.Exists(iconPath))
+        {
+            iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "quickstacks-placeholder.ico");
+        }
         if (System.IO.File.Exists(iconPath))
         {
             TrayIcon.Icon = new System.Drawing.Icon(iconPath);
@@ -181,6 +186,8 @@ public sealed partial class TrayIconWindow : Window
 
     public IRelayCommand OpenEditorCommand { get; }
 
+    public IRelayCommand OpenHelpCommand { get; }
+
     public IRelayCommand ExitCommand { get; }
 
     /// <summary>Marca so' <paramref name="selected"/> entre os itens de <paramref name="group"/> - RadioMenuFlyoutItem faria isso sozinho via GroupName, mas trava/crasha o processo nesta maquina (reproduzido isolado, ver secao 4 do doc tecnico), daqui em diante e' ToggleMenuFlyoutItem com exclusividade a mao.</summary>
@@ -206,6 +213,7 @@ public sealed partial class TrayIconWindow : Window
         TierFullItem.Text = LocalizationService.Get("tray.tier.full");
         GlobalHotkeyItem.Text = LocalizationService.Get("tray.globalHotkey");
         StartWithWindowsItem.Text = LocalizationService.Get("tray.startWithWindows");
+        HelpItem.Text = LocalizationService.Get("tray.help");
         ExitItem.Text = LocalizationService.Get("tray.exit");
     }
 

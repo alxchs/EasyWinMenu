@@ -45,6 +45,7 @@
                     <ToggleMenuFlyoutItem x:Name="GlobalHotkeyItem" Click="GlobalHotkey_Click" />
                     <ToggleMenuFlyoutItem x:Name="StartWithWindowsItem" Click="StartWithWindows_Click" />
                     <MenuFlyoutSeparator />
+                    <MenuFlyoutItem x:Name="HelpItem" Command="{x:Bind OpenHelpCommand}" />
                     <MenuFlyoutItem x:Name="ExitItem" Command="{x:Bind ExitCommand}" />
                 </MenuFlyout>
             </tb:TaskbarIcon.ContextFlyout>

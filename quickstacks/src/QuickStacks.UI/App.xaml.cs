@@ -39,6 +39,19 @@ public partial class App : Microsoft.UI.Xaml.Application
 
     public static IShellContextMenuService? ShellContextMenu => Current is App app ? app.ShellContextMenuService : null;
 
+    private static HelpWindow? _helpWindow;
+
+    public static void OpenHelp()
+    {
+        if (_helpWindow is null)
+        {
+            _helpWindow = new HelpWindow();
+            _helpWindow.Closed += (_, _) => _helpWindow = null;
+        }
+
+        _helpWindow.Activate();
+    }
+
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         // Fase 15: um verbo do menu de contexto real da area de trabalho relanca o exe com

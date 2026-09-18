@@ -249,6 +249,10 @@ public sealed partial class PopupWindow : Window, ICutVisualOwner
 
         switch (e.Key)
         {
+            case VirtualKey.F1:
+                App.OpenHelp();
+                e.Handled = true;
+                return;
             case VirtualKey.Enter:
                 await ActivateSelectedAsync();
                 e.Handled = true;

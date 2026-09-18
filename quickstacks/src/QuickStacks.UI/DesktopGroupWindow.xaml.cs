@@ -117,6 +117,13 @@ public sealed partial class DesktopGroupWindow : Window, ICutVisualOwner
     /// <summary>Win+Shift+seta move o grupo pro monitor vizinho (Fase 12), igual ao atalho nativo do Windows pra janelas comuns - so' funciona com a janela em foco, ja' que nao ha hook global (removido do EasyWinMenu por travar o sistema - decisao herdada, nao reaberta aqui).</summary>
     private async void RootGrid_KeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (e.Key == Windows.System.VirtualKey.F1)
+        {
+            App.OpenHelp();
+            e.Handled = true;
+            return;
+        }
+
         var ctrlDown = IsKeyDown(Windows.System.VirtualKey.Control);
         if (ctrlDown && e.Key == Windows.System.VirtualKey.C)
         {

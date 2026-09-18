@@ -72,5 +72,11 @@
   "item.revealInExplorer": "Abrir ubicación del archivo",
   "item.copyPath": "Copiar ruta",
   "item.properties": "Propiedades",
-  "item.standardMenu": "Menú estándar de Windows"
+  "item.standardMenu": "Menú estándar de Windows",
+  "tray.help": "Ayuda y Atajos (F1)...",
+  "help.title": "QuickStacks - Ayuda y Guía Rápida",
+  "help.tab.overview": "Visión General",
+  "help.tab.shortcuts": "Atajos",
+  "help.tab.desktopGroups": "Escritorio",
+  "help.tab.about": "Acerca de"
 }

@@ -848,6 +848,21 @@ Hospedagem COM completa do menu de contexto genuíno do Windows Explorer:
 - **Acesso na Interface**: opção "Menu padrão do Windows" nos menus de contexto de itens do `PopupWindow` e ladrilhos do `DesktopGroupWindow`, permitindo acessar todas as extensões do Explorer sem perder o tema e agilidade do QuickStacks.
 - **Testes**: 4 testes de integração em `ShellContextMenuServiceTests` validando conformidade com a interface, parâmetros vazios, handles nulos e caminhos inexistentes sem disparar exceções não tratadas. Total de 87 testes (49 unitários + 38 de integração) passando com sucesso.
 
+## 6.23 Fase 20 — Identidade Visual, Help Integrado e Distribuição
+
+Consolidação visual, central de ajuda nativa e pacote de distribuição do QuickStacks:
+
+- **Identidade Visual e Ícones Oficiais**: criação e vinculação do ícone multi-camadas nativo `quickstacks.ico` no `QuickStacks.UI.csproj` como `<ApplicationIcon>` e asset persistido, configurado dinamicamente para o `TrayIcon` e janelas via `AppWindow.SetIcon`.
+- **Sistema de Ajuda Integrado (`HelpWindow`)**: janela de apoio ao usuário estruturada e moderna em WinUI 3 com design Fluent, organizada em 4 seções temáticas:
+  1. *Visão Geral*: proposta do QuickStacks, comparação detalhada entre Modo Lite e Modo Full, e orientações de personalização.
+  2. *Atalhos de Teclado*: matriz de atalhos globais e de navegação (`F1`, `Ctrl+Alt+Q`, `Win+Ctrl+Alt+D`, `Win+Shift+Setas`, `Ctrl+C/X/V`, `Esc`, `Backspace`, etc.).
+  3. *Área de Trabalho*: guia completo de uso de grupos soltos (Painel e App Folder), drag & drop do Explorer e menus de contexto no desktop.
+  4. *Sobre*: metadados da aplicação (v1.1.0), arquitetura em camadas e diagnóstico ao vivo do ambiente (Modo, Idioma, Tema).
+- **Atalho F1 e Acesso Rápido**: acionamento do Help via tecla `F1` em qualquer janela (`PopupWindow`, `DesktopGroupWindow`), além de item dedicado no menu de contexto da bandeja do sistema (`tray.help`).
+- **Localização Multilíngue**: paridade completa das novas chaves em português (`pt-BR`), inglês (`en-US`), espanhol (`es-ES`) e alemão (`de-DE`).
+- **Script de Distribuição Inno Setup (`tools/QuickStacks.iss`)**: automação do instalador Windows x64 completo com suporte aos 4 idiomas, inicialização opcional com o Windows, ícones na área de trabalho e no menu iniciar, e desinstalação limpa.
+- **Bateria de Testes**: 49 testes unitários e 38 testes de integração passando (87 no total).
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
 Todas as fases do roteiro original (Fase 1 a Fase 7) foram implementadas, e o crash de
