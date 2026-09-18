@@ -799,6 +799,18 @@ execução: publicação limpa, os verbos aparecem no registro com rótulos corr
 grupo novo abrindo de verdade ao lado da já existente (dois `WinUI Desktop` confirmados via UI
 Automation, o novo na posição em cascata `+28px`).
 
+## 6.19 Fase 16 — Área de transferência do Windows (Ctrl+C, Ctrl+X, Ctrl+V com recorte diferido)
+
+Suporte completo a comandos de teclado da área de transferência tanto no popup (`PopupWindow`) quanto nas janelas de grupos de área de trabalho (`DesktopGroupWindow`):
+
+- **Arquitetura desacoplada e Clean Architecture**: `PendingCutCoordinator` (`QuickStacks.Domain`, net8.0 puro, sem dependências de UI) gerencia os itens em estado de recorte pendente (`PendingCutItem`), o consumo por caminhos colados e a detecção de itens que deixaram de existir no disco. 6 testes unitários dedicados em `QuickStacks.UnitTests` validam todo o ciclo de vida.
+- **Serviço de UI**: `ClipboardService` (`QuickStacks.UI`) centraliza o interop com a área de transferência do Windows via `StandardDataFormats.StorageItems` (`DataPackageOperation.Copy` para Ctrl+C e `Move` para Ctrl+X) e coordena os proprietários visuais (`ICutVisualOwner`).
+- **Recorte diferido (Pending Cut) com feedback visual**: ao pressionar Ctrl+X em um item, o arquivo é colocado na área de transferência e o ladrilho tem sua opacidade reduzida para 50% (`Opacity = 0.5`), exatamente como no Windows Explorer. O item de origem **nunca é apagado antes de confirmar a colagem**.
+- **Colagem e consumo de corte**: pressionar Ctrl+V lê os arquivos da área de transferência, adiciona à pasta de destino no SQLite e consome os cortes correspondentes, deletando os itens da origem no repositório e recarregando automaticamente os proprietários afetados.
+- **Watcher em disco (Explorer)**: timer a cada 2 segundos (`DispatcherQueueTimer`) verifica se arquivos cortados foram movidos fisicamente no disco por aplicativos externos (`!File.Exists && !Directory.Exists`), finalizando a deleção no banco e desligando o timer quando a fila fica ociosa.
+
+Testes: 40/40 unitários (+6 do `PendingCutCoordinatorTests`), 30/30 de integração. Publicação limpa (`publish.ps1`) verificada com sucesso.
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
 Todas as fases do roteiro original (Fase 1 a Fase 7) foram implementadas, e o crash de

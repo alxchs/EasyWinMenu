@@ -22,7 +22,7 @@ namespace QuickStacks.UI;
 /// pastas e para o Explorer (requisito 2), e uma janela de verdade redimensionavel com
 /// reflow automatico dos icones (requisito 3).
 /// </summary>
-public sealed partial class PopupWindow : Window
+public sealed partial class PopupWindow : Window, ICutVisualOwner
 {
     private const string DraggedItemFormat = "QuickStacksItemId";
     private const int DefaultWidth = 420;
@@ -32,6 +32,8 @@ public sealed partial class PopupWindow : Window
     private string _typeAheadBuffer = string.Empty;
     private DateTime _typeAheadLastKeyUtc = DateTime.MinValue;
 
+    public string OwnerId => ViewModel.CurrentFolderId ?? "root";
+
     public PopupWindow(IMenuRepository repository)
     {
         InitializeComponent();
@@ -40,6 +42,9 @@ public sealed partial class PopupWindow : Window
         Repository = repository;
 
         ThemeService.Register(RootGrid);
+        ClipboardService.RegisterOwner(this);
+        Closed += (_, _) => ClipboardService.UnregisterOwner(this);
+        ItemsGrid.ContainerContentChanging += ItemsGrid_ContainerContentChanging;
 
         // Microsoft.UI.Xaml.Window nao e' um FrameworkElement, entao x:Bind com Mode=OneWay
         // no conteudo raiz de uma Window nao compila (o codigo gerado precisa de um
@@ -68,6 +73,27 @@ public sealed partial class PopupWindow : Window
         Closed += (_, _) => LocalizationService.LanguageChanged -= RefreshTexts;
 
         _ = InitializeAsync();
+    }
+
+    public void RefreshCutVisuals()
+    {
+        foreach (var item in ViewModel.Items)
+        {
+            if (ItemsGrid.ContainerFromItem(item) is FrameworkElement container)
+            {
+                container.Opacity = ClipboardService.Coordinator.IsCutPending(item.Id) ? 0.5 : 1.0;
+            }
+        }
+    }
+
+    public Task ReloadAsync() => ViewModel.LoadAsync();
+
+    private void ItemsGrid_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+    {
+        if (args.Item is MenuEntryViewModel entry && args.ItemContainer is not null)
+        {
+            args.ItemContainer.Opacity = ClipboardService.Coordinator.IsCutPending(entry.Id) ? 0.5 : 1.0;
+        }
     }
 
     private void RefreshTexts()
@@ -184,6 +210,38 @@ public sealed partial class PopupWindow : Window
 
     private async void ItemsGrid_KeyDown(object sender, KeyRoutedEventArgs e)
     {
+        var ctrlDown = IsKeyDown(VirtualKey.Control);
+        if (ctrlDown && e.Key == VirtualKey.C)
+        {
+            if (ItemsGrid.SelectedItem is MenuEntryViewModel { Path: { } path })
+            {
+                ClipboardService.Copy(path);
+            }
+            e.Handled = true;
+            return;
+        }
+
+        if (ctrlDown && e.Key == VirtualKey.X)
+        {
+            if (ItemsGrid.SelectedItem is MenuEntryViewModel { Path: { } path } entry)
+            {
+                ClipboardService.Cut(entry.Id, path, OwnerId, DispatcherQueue);
+            }
+            e.Handled = true;
+            return;
+        }
+
+        if (ctrlDown && e.Key == VirtualKey.V)
+        {
+            var targetFolderId = ViewModel.CurrentFolderId;
+            await ClipboardService.PasteAsync(Repository, targetFolderId, async () =>
+            {
+                await ViewModel.LoadAsync();
+            });
+            e.Handled = true;
+            return;
+        }
+
         switch (e.Key)
         {
             case VirtualKey.Enter:
@@ -451,6 +509,9 @@ public sealed partial class PopupWindow : Window
             AppWindow.Resize(new SizeInt32(width, height));
         }
     }
+
+    private static bool IsKeyDown(VirtualKey key) =>
+        Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out CursorPoint point);

@@ -20,7 +20,7 @@ namespace QuickStacks.UI;
 /// (Fase 1) ali dentro em vez de duplicar navegação em trilha numa segunda janela - reaproveita
 /// código testado em vez de recriar breadcrumbs para este caso.
 /// </summary>
-public sealed partial class DesktopGroupWindow : Window
+public sealed partial class DesktopGroupWindow : Window, ICutVisualOwner
 {
     private const string DraggedItemFormat = "QuickStacksItemId";
 
@@ -31,9 +31,14 @@ public sealed partial class DesktopGroupWindow : Window
     private readonly IMenuRepository _repository;
     private readonly string _groupId;
     private readonly string _groupName;
+    private readonly Dictionary<string, FrameworkElement> _tilesByEntry = [];
     private PopupWindow? _subfolderPopup;
     private PopupWindow? _sheetPopup;
     private DesktopGroupPlacement _placement;
+    private MenuEntryViewModel? _selectedEntry;
+    private FrameworkElement? _selectedTile;
+
+    public string OwnerId => _groupId;
 
     public DesktopGroupWindow(IMenuRepository repository, MenuItem group)
     {
@@ -45,6 +50,9 @@ public sealed partial class DesktopGroupWindow : Window
         TitleText.Text = group.Name;
 
         ThemeService.Register(RootGrid);
+        ClipboardService.RegisterOwner(this);
+        Closed += (_, _) => ClipboardService.UnregisterOwner(this);
+
         HeaderBar.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Black) { Opacity = 0.12 };
         AppWindow.Changed += AppWindow_Changed;
         RootGrid.KeyDown += RootGrid_KeyDown;
@@ -52,6 +60,14 @@ public sealed partial class DesktopGroupWindow : Window
         _placement = DesktopGroupPlacement.CreateDefault(_groupId, 80, 80);
 
         _ = InitializeAsync();
+    }
+
+    public void RefreshCutVisuals()
+    {
+        foreach (var (id, tile) in _tilesByEntry)
+        {
+            tile.Opacity = ClipboardService.Coordinator.IsCutPending(id) ? 0.5 : 1.0;
+        }
     }
 
     private async Task InitializeAsync()
@@ -100,6 +116,34 @@ public sealed partial class DesktopGroupWindow : Window
     /// <summary>Win+Shift+seta move o grupo pro monitor vizinho (Fase 12), igual ao atalho nativo do Windows pra janelas comuns - so' funciona com a janela em foco, ja' que nao ha hook global (removido do EasyWinMenu por travar o sistema - decisao herdada, nao reaberta aqui).</summary>
     private async void RootGrid_KeyDown(object sender, KeyRoutedEventArgs e)
     {
+        var ctrlDown = IsKeyDown(Windows.System.VirtualKey.Control);
+        if (ctrlDown && e.Key == Windows.System.VirtualKey.C)
+        {
+            if (_selectedEntry is { Path: { } path })
+            {
+                ClipboardService.Copy(path);
+            }
+            e.Handled = true;
+            return;
+        }
+
+        if (ctrlDown && e.Key == Windows.System.VirtualKey.X)
+        {
+            if (_selectedEntry is { Path: { } path } entry)
+            {
+                ClipboardService.Cut(entry.Id, path, _groupId, DispatcherQueue);
+            }
+            e.Handled = true;
+            return;
+        }
+
+        if (ctrlDown && e.Key == Windows.System.VirtualKey.V)
+        {
+            await ClipboardService.PasteAsync(_repository, _groupId, ReloadAsync);
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key is not (Windows.System.VirtualKey.Left or Windows.System.VirtualKey.Right))
         {
             return;
@@ -160,7 +204,7 @@ public sealed partial class DesktopGroupWindow : Window
         AppWindow.MoveAndResize(new RectInt32((int)_placement.X, (int)_placement.Y, size.Width, size.Height));
     }
 
-    private async Task ReloadAsync()
+    public async Task ReloadAsync()
     {
         var children = await _repository.GetChildrenAsync(_groupId);
 
@@ -170,6 +214,7 @@ public sealed partial class DesktopGroupWindow : Window
             return;
         }
 
+        _tilesByEntry.Clear();
         IconCanvas.Children.Clear();
 
         // Fase 11: organizacao automatica "viva" - com um modo de arranjo ativo, a posicao
@@ -192,6 +237,9 @@ public sealed partial class DesktopGroupWindow : Window
         {
             var entry = new MenuEntryViewModel(child);
             var tile = BuildTile(entry, allowManualDrag);
+
+            _tilesByEntry[child.Id] = tile;
+            tile.Opacity = ClipboardService.Coordinator.IsCutPending(child.Id) ? 0.5 : 1.0;
 
             if (positions is not null && positions.TryGetValue(child.Id, out var position))
             {
@@ -381,6 +429,14 @@ public sealed partial class DesktopGroupWindow : Window
             }
         };
 
+        // Selecao pra Ctrl+C/X (Fase 16) - independe do modo de organizacao automatica, por
+        // isso fica antes do "return" abaixo que so' guarda o comportamento de arrastar.
+        tile.Tapped += (_, _) =>
+        {
+            _selectedEntry = entry;
+            _selectedTile = tile;
+        };
+
         if (!allowManualDrag)
         {
             return;
@@ -469,14 +525,26 @@ public sealed partial class DesktopGroupWindow : Window
             return;
         }
 
-        var items = await e.DataView.GetStorageItemsAsync();
+        await AddStorageItemsAsync(await e.DataView.GetStorageItemsAsync());
+    }
+
+    private async Task AddStorageItemsAsync(IReadOnlyList<IStorageItem> items)
+    {
         var siblingCount = (await _repository.GetChildrenAsync(_groupId)).Count;
+        var pastedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var storageItem in items)
         {
             var type = storageItem is StorageFolder ? MenuItemType.Executable : MenuItemType.Executable;
             var launchItem = MenuItem.CreateShortcut(storageItem.Name, _groupId, type, storageItem.Path, siblingCount++);
             await _repository.AddAsync(launchItem);
+            pastedPaths.Add(storageItem.Path);
+        }
+
+        var consumed = ClipboardService.Coordinator.ConsumeMatching(pastedPaths);
+        foreach (var cut in consumed)
+        {
+            await _repository.DeleteAsync(cut.ItemId);
         }
 
         await ReloadAsync();
