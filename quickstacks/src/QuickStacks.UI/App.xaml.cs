@@ -33,11 +33,15 @@ public partial class App : Microsoft.UI.Xaml.Application
 
     public IShellContextMenuService ShellContextMenuService { get; private set; } = null!;
 
+    public IUpdateService UpdateService { get; private set; } = null!;
+
     public SettingsStore Settings { get; private set; } = null!;
 
     public static IIconCacheService? IconCache => Current is App app ? app.IconCacheService : null;
 
     public static IShellContextMenuService? ShellContextMenu => Current is App app ? app.ShellContextMenuService : null;
+
+    public static IUpdateService? Updates => Current is App app ? app.UpdateService : null;
 
     private static HelpWindow? _helpWindow;
 
@@ -73,6 +77,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         MenuRepository = new SqliteMenuRepository();
         IconCacheService = new IconCacheService();
         ShellContextMenuService = new ShellContextMenuService();
+        UpdateService = new UpdateService();
         ExportService = new ConfigExportService(MenuRepository);
         LnkImportService = new LnkImportService(new LnkResolver(), MenuRepository);
         Settings = new SettingsStore();

@@ -78,5 +78,11 @@
   "help.tab.overview": "Overview",
   "help.tab.shortcuts": "Shortcuts",
   "help.tab.desktopGroups": "Desktop Groups",
-  "help.tab.about": "About"
+  "help.tab.about": "About",
+  "update.checkNow": "Check for updates",
+  "update.checking": "Checking...",
+  "update.upToDate": "You are already using the latest version.",
+  "update.available": "New version available: v{0}",
+  "update.download": "Download & Update",
+  "update.failed": "Unable to check for updates."
 }

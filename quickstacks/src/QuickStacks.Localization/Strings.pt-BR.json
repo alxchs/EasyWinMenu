@@ -78,5 +78,11 @@
   "help.tab.overview": "Visão Geral",
   "help.tab.shortcuts": "Atalhos",
   "help.tab.desktopGroups": "Área de Trabalho",
-  "help.tab.about": "Sobre"
+  "help.tab.about": "Sobre",
+  "update.checkNow": "Verificar atualizações",
+  "update.checking": "Verificando...",
+  "update.upToDate": "Você já está na versão mais recente.",
+  "update.available": "Nova versão disponível: v{0}",
+  "update.download": "Baixar e Atualizar",
+  "update.failed": "Não foi possível verificar atualizações."
 }

@@ -78,5 +78,11 @@
   "help.tab.overview": "Übersicht",
   "help.tab.shortcuts": "Tastaturkürzel",
   "help.tab.desktopGroups": "Desktop-Gruppen",
-  "help.tab.about": "Über"
+  "help.tab.about": "Über",
+  "update.checkNow": "Nach Updates suchen",
+  "update.checking": "Wird gesucht...",
+  "update.upToDate": "Sie verwenden bereits die neueste Version.",
+  "update.available": "Neue Version verfügbar: v{0}",
+  "update.download": "Herunterladen & Aktualisieren",
+  "update.failed": "Updates konnten nicht geprüft werden."
 }

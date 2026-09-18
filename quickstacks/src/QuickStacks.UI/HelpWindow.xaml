@@ -182,6 +182,18 @@
                             <TextBlock x:Name="StatusThemeText" Text="Tema: -" />
                         </StackPanel>
                     </Border>
+
+                    <Border Background="#0A000000" BorderBrush="#1F000000" BorderThickness="1" CornerRadius="8" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Atualizações do Sistema" FontWeight="SemiBold" FontSize="15" />
+                            <TextBlock Text="Canal de distribuição: updates.alxchs.com" Opacity="0.7" FontSize="12" />
+                            <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,4,0,0">
+                                <Button x:Name="CheckUpdatesButton" Click="CheckUpdates_Click" />
+                                <Button x:Name="DownloadUpdateButton" Click="DownloadUpdate_Click" Visibility="Collapsed" />
+                            </StackPanel>
+                            <TextBlock x:Name="UpdateStatusText" TextWrapping="Wrap" Opacity="0.85" FontSize="13" Visibility="Collapsed" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Grid>
         </ScrollViewer>

@@ -50,6 +50,74 @@ public sealed partial class HelpWindow : Window
         StatusTierText.Text = $"Modo: {(FeatureTier.IsFull ? "Full" : "Lite")}";
         StatusLanguageText.Text = $"Idioma: {LocalizationService.CurrentLanguage}";
         StatusThemeText.Text = $"Tema: {ThemeService.CurrentTheme}";
+
+        CheckUpdatesButton.Content = LocalizationService.Get("update.checkNow");
+        DownloadUpdateButton.Content = LocalizationService.Get("update.download");
+    }
+
+    private string? _pendingDownloadUrl;
+
+    private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        CheckUpdatesButton.IsEnabled = false;
+        UpdateStatusText.Visibility = Visibility.Visible;
+        UpdateStatusText.Text = LocalizationService.Get("update.checking");
+        DownloadUpdateButton.Visibility = Visibility.Collapsed;
+
+        try
+        {
+            var updateService = App.Updates;
+            if (updateService is null)
+            {
+                UpdateStatusText.Text = LocalizationService.Get("update.failed");
+                return;
+            }
+
+            var result = await updateService.CheckForUpdatesAsync();
+            if (result.HasUpdate && result.UpdateInfo is not null)
+            {
+                _pendingDownloadUrl = result.UpdateInfo.DownloadUrl;
+                UpdateStatusText.Text = LocalizationService.Format("update.available", result.UpdateInfo.Version);
+                if (!string.IsNullOrWhiteSpace(_pendingDownloadUrl))
+                {
+                    DownloadUpdateButton.Visibility = Visibility.Visible;
+                }
+            }
+            else if (result.ErrorMessage is not null)
+            {
+                UpdateStatusText.Text = $"{LocalizationService.Get("update.failed")} ({result.ErrorMessage})";
+            }
+            else
+            {
+                UpdateStatusText.Text = LocalizationService.Get("update.upToDate");
+            }
+        }
+        catch (Exception ex)
+        {
+            UpdateStatusText.Text = $"{LocalizationService.Get("update.failed")} ({ex.Message})";
+        }
+        finally
+        {
+            CheckUpdatesButton.IsEnabled = true;
+        }
+    }
+
+    private void DownloadUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(_pendingDownloadUrl))
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = _pendingDownloadUrl,
+                    UseShellExecute = true
+                });
+            }
+            catch
+            {
+            }
+        }
     }
 
     private void RootGrid_KeyDown(object sender, KeyRoutedEventArgs e)

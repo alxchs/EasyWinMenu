@@ -1,0 +1,170 @@
+name: QuickStacks CI/CD, Package & Auto-Update Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      publish_to_private_domain:
+        description: 'Sincronizar com domínio privado de atualização'
+        required: false
+        type: boolean
+        default: true
+      target_domain:
+        description: 'Domínio privado para download e manifesto de atualização'
+        required: false
+        type: string
+        default: 'updates.alxchs.com'
+
+jobs:
+  build-test-release:
+    name: Build, Test, InnoSetup & Release
+    runs-on: windows-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install Inno Setup 6
+        run: choco install innosetup --no-progress -y
+
+      - name: Determine Version
+        id: get_version
+        shell: pwsh
+        run: |
+          $rawVersion = (Get-Content quickstacks/VERSION -ErrorAction SilentlyContinue).Trim()
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+              $tag = $env:GITHUB_REF -replace 'refs/tags/v', ''
+              $version = $tag
+          } elseif (-not [string]::IsNullOrWhiteSpace($rawVersion)) {
+              $version = $rawVersion
+          } else {
+              $version = "1.1.0"
+          }
+          Write-Host "Releasing version: $version"
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "VERSION_CLEAN=$($version.Split('-')[0])" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Restore dependencies
+        run: dotnet restore quickstacks/QuickStacks.slnx
+
+      - name: Run Unit Tests
+        run: dotnet test quickstacks/tests/QuickStacks.UnitTests -c Release --no-restore --logger "trx;LogFileName=unit-tests.trx"
+
+      - name: Run Integration Tests
+        run: dotnet test quickstacks/tests/QuickStacks.IntegrationTests -c Release --no-restore --logger "trx;LogFileName=integration-tests.trx"
+
+      - name: Publish QuickStacks.UI (win-x64 Self-Contained)
+        shell: pwsh
+        run: |
+          dotnet publish quickstacks/src/QuickStacks.UI/QuickStacks.UI.csproj `
+            -c Release `
+            -p:Platform=x64 `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=false `
+            -o quickstacks/publish/win-x64
+
+      - name: Compile Inno Setup Installer
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+              $iscc = (Get-Command iscc.exe -ErrorAction Stop).Source
+          }
+          Write-Host "Compiling installer using $iscc..."
+          & $iscc tools/QuickStacks.iss "/DMyAppVersion=$($env:VERSION)"
+
+      - name: Generate Update Manifest (version.json)
+        id: manifest
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem dist\*.exe | Select-Object -First 1
+          if (-not $installer) {
+              throw "Instalador nao foi encontrado em dist/"
+          }
+          
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
+          $domain = "${{ github.event.inputs.target_domain || 'updates.alxchs.com' }}"
+          $downloadUrl = "https://$domain/quickstacks/$($installer.Name)"
+          
+          $manifest = [ordered]@{
+              version = $env:VERSION
+              downloadUrl = $downloadUrl
+              changelog = "QuickStacks v$($env:VERSION) - Atualizacao automatica com Clean Architecture, WinUI 3 Fluent e integracao completa com Windows Shell."
+              sha256 = $hash
+              isMandatory = $false
+              releaseDateUtc = (Get-Date).ToUniversalTime().ToString("o")
+          }
+          
+          $manifestJson = $manifest | ConvertTo-Json -Depth 5
+          Set-Content -Path "dist\version.json" -Value $manifestJson -Encoding utf8
+          Write-Host "Manifesto version.json gerado com sucesso:"
+          Write-Host $manifestJson
+          
+          "INSTALLER_PATH=$($installer.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "INSTALLER_NAME=$($installer.Name)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SHA256=$hash" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Upload Artifacts to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuickStacks-Release-v${{ env.VERSION }}
+          path: |
+            dist/*.exe
+            dist/version.json
+
+      - name: Deploy to Private Update Domain (S3 / Cloudflare R2 / VPS)
+        id: private_deploy
+        if: ${{ github.event.inputs.publish_to_private_domain != 'false' }}
+        shell: pwsh
+        env:
+          UPDATE_HOST: ${{ secrets.UPDATE_SERVER_HOST }}
+          UPDATE_USER: ${{ secrets.UPDATE_SERVER_USER }}
+          UPDATE_KEY: ${{ secrets.UPDATE_SERVER_SSH_KEY }}
+          UPDATE_PATH: ${{ secrets.UPDATE_SERVER_PATH || '/var/www/updates.alxchs.com/quickstacks' }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:UPDATE_HOST) -or [string]::IsNullOrWhiteSpace($env:UPDATE_KEY)) {
+              Write-Host "SECRETS de servidor privado (UPDATE_SERVER_HOST / UPDATE_SERVER_SSH_KEY) nao configurados."
+              Write-Host "O manifesto dist/version.json e o instalador estao prontos nos artefatos do workflow e no Release do GitHub."
+              Write-Host "Para deploy automatico no dominio privado, configure os segredos do repositorio:"
+              Write-Host "  - UPDATE_SERVER_HOST: IP ou hostname do servidor Nginx/Apache"
+              Write-Host "  - UPDATE_SERVER_USER: Usuario SSH (ex: deploy)"
+              Write-Host "  - UPDATE_SERVER_SSH_KEY: Chave privada SSH autorizada"
+              Write-Host "  - UPDATE_SERVER_PATH: Diretorio web raiz (padrao: /var/www/updates.alxchs.com/quickstacks)"
+          } else {
+              Write-Host "Iniciando upload seguro via SCP para https://${{ github.event.inputs.target_domain || 'updates.alxchs.com' }}..."
+              $keyFile = [System.IO.Path]::GetTempFileName()
+              Set-Content -Path $keyFile -Value $env:UPDATE_KEY
+              try {
+                  scp -o StrictHostKeyChecking=no -i $keyFile dist/*.exe "$($env:UPDATE_USER)@$($env:UPDATE_HOST):$($env:UPDATE_PATH)/"
+                  scp -o StrictHostKeyChecking=no -i $keyFile dist/version.json "$($env:UPDATE_USER)@$($env:UPDATE_HOST):$($env:UPDATE_PATH)/version.json"
+                  Write-Host "Deploy no dominio privado concluido com sucesso!"
+              } finally {
+                  Remove-Item -Force $keyFile -ErrorAction SilentlyContinue
+              }
+          }
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: QuickStacks v${{ env.VERSION }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            dist/*.exe
+            dist/version.json
