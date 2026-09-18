@@ -32,6 +32,12 @@ public sealed partial class MenuEntryViewModel : ObservableObject
 
     public bool HasNoCustomIcon => IconPath is null;
 
+    public ExecutionMode ExecutionMode => Item.ExecutionMode;
+
+    public bool CanRunAsAdministrator => !IsFolder && Type != MenuItemType.Url;
+
+    public bool HasFileTarget => !IsFolder && Type != MenuItemType.Url && Type != MenuItemType.Command;
+
     /// <summary>Codepoint Segoe Fluent Icons - fallback quando nao ha icone extraido.</summary>
     public string Glyph => Type switch
     {
@@ -39,6 +45,7 @@ public sealed partial class MenuEntryViewModel : ObservableObject
         MenuItemType.Url => "",
         MenuItemType.Shortcut => "",
         MenuItemType.Executable => "",
+        MenuItemType.Command => "",
         _ => "",
     };
 }

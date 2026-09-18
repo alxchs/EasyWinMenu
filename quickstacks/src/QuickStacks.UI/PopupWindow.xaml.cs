@@ -113,6 +113,10 @@ public sealed partial class PopupWindow : Window, ICutVisualOwner
 
         ((MenuFlyoutItem)flyout.Items[0]).Text = LocalizationService.Get("popup.toggleFavorite");
         ((MenuFlyoutItem)flyout.Items[1]).Text = LocalizationService.Get("popup.setFolderColor");
+        ((MenuFlyoutItem)flyout.Items[2]).Text = LocalizationService.Get("item.runAsAdmin");
+        ((MenuFlyoutItem)flyout.Items[3]).Text = LocalizationService.Get("item.revealInExplorer");
+        ((MenuFlyoutItem)flyout.Items[4]).Text = LocalizationService.Get("item.copyPath");
+        ((MenuFlyoutItem)flyout.Items[5]).Text = LocalizationService.Get("item.properties");
     }
 
     public FolderNavigationViewModel ViewModel { get; }
@@ -332,6 +336,48 @@ public sealed partial class PopupWindow : Window, ICutVisualOwner
         if (sender is FrameworkElement { DataContext: MenuEntryViewModel entry })
         {
             await ViewModel.ToggleFavoriteAsync(entry);
+        }
+    }
+
+    private async void RunAsAdmin_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: MenuEntryViewModel entry })
+        {
+            await LaunchService.RunAsAdministratorAsync(Repository, entry);
+        }
+    }
+
+    private void RevealInExplorer_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: MenuEntryViewModel entry })
+        {
+            LaunchService.RevealInExplorer(entry);
+        }
+    }
+
+    private void CopyPath_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: MenuEntryViewModel entry })
+        {
+            var path = LaunchService.TryResolvePhysicalPath(entry) ?? entry.Path;
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                var pkg = new Windows.ApplicationModel.DataTransfer.DataPackage();
+                pkg.SetText(path);
+                Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(pkg);
+            }
+        }
+    }
+
+    private void Properties_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: MenuEntryViewModel entry })
+        {
+            var path = LaunchService.TryResolvePhysicalPath(entry) ?? entry.Path;
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                ShellHelper.ShowProperties(path);
+            }
         }
     }
 

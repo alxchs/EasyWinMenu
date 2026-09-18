@@ -83,7 +83,7 @@ public sealed partial class EditorWindow : Window
         var result = await PromptItemAsync(LocalizationService.Get("editor.newItemDialogTitle"), null);
         if (result is { } item)
         {
-            await ViewModel.AddItemAsync(item.Name, item.Type, item.Path, item.Arguments, item.WorkingDirectory, ViewModel.SelectedNode);
+            await ViewModel.AddItemAsync(item.Name, item.Type, item.Path, item.Arguments, item.WorkingDirectory, item.Mode, ViewModel.SelectedNode);
         }
     }
 
@@ -111,7 +111,7 @@ public sealed partial class EditorWindow : Window
         var result = await PromptItemAsync(LocalizationService.Get("editor.editItemDialogTitle"), node.Item);
         if (result is { } item)
         {
-            await ViewModel.UpdateItemAsync(node, item.Name, item.Path, item.Arguments, item.WorkingDirectory);
+            await ViewModel.UpdateItemAsync(node, item.Name, item.Path, item.Arguments, item.WorkingDirectory, item.Mode);
         }
     }
 
@@ -271,15 +271,21 @@ public sealed partial class EditorWindow : Window
         return await dialog.ShowAsync() == ContentDialogResult.Primary ? textBox.Text : null;
     }
 
-    private async Task<(string Name, MenuItemType Type, string Path, string? Arguments, string? WorkingDirectory)?> PromptItemAsync(string title, MenuItem? existing)
+    private async Task<(string Name, MenuItemType Type, string Path, string? Arguments, string? WorkingDirectory, ExecutionMode Mode)?> PromptItemAsync(string title, MenuItem? existing)
     {
         var nameBox = new TextBox { Header = LocalizationService.Get("editor.field.name"), Text = existing?.Name ?? string.Empty };
         var typeCombo = new ComboBox
         {
             Header = LocalizationService.Get("editor.field.type"),
-            ItemsSource = new[] { MenuItemType.Executable, MenuItemType.Shortcut, MenuItemType.Url },
+            ItemsSource = new[] { MenuItemType.Executable, MenuItemType.Shortcut, MenuItemType.Url, MenuItemType.Command },
             SelectedItem = existing?.Type ?? MenuItemType.Executable,
             IsEnabled = existing is null, // tipo nao muda depois de criado - so nome/caminho/argumentos
+        };
+        var modeCombo = new ComboBox
+        {
+            Header = LocalizationService.Get("editor.field.executionMode"),
+            ItemsSource = new[] { ExecutionMode.Normal, ExecutionMode.Minimized, ExecutionMode.Maximized, ExecutionMode.Administrator },
+            SelectedItem = existing?.ExecutionMode ?? ExecutionMode.Normal,
         };
         var pathBox = new TextBox { Header = LocalizationService.Get("editor.field.path"), Text = existing?.Path ?? string.Empty };
         var argsBox = new TextBox { Header = LocalizationService.Get("editor.field.arguments"), Text = existing?.Arguments ?? string.Empty };
@@ -288,6 +294,7 @@ public sealed partial class EditorWindow : Window
         var panel = new StackPanel { Spacing = 8 };
         panel.Children.Add(nameBox);
         panel.Children.Add(typeCombo);
+        panel.Children.Add(modeCombo);
         panel.Children.Add(pathBox);
         panel.Children.Add(argsBox);
         panel.Children.Add(workDirBox);
@@ -317,6 +324,7 @@ public sealed partial class EditorWindow : Window
             (MenuItemType)typeCombo.SelectedItem,
             pathBox.Text,
             string.IsNullOrWhiteSpace(argsBox.Text) ? null : argsBox.Text,
-            string.IsNullOrWhiteSpace(workDirBox.Text) ? null : workDirBox.Text);
+            string.IsNullOrWhiteSpace(workDirBox.Text) ? null : workDirBox.Text,
+            (ExecutionMode)modeCombo.SelectedItem);
     }
 }

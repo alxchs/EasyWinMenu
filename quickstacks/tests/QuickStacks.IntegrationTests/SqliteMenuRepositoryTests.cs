@@ -424,4 +424,23 @@ public class SqliteMenuRepositoryTests : IDisposable
         Assert.Equal(55, posicao.X);
         Assert.Equal(60, posicao.Y);
     }
+
+    [Fact]
+    public async Task ExecutionMode_RoundTrips_AndPersistsThroughUpdate()
+    {
+        var item = MenuItem.CreateShortcut("Admin Tool", null, MenuItemType.Executable, "tool.exe", 0);
+        item.ExecutionMode = ExecutionMode.Administrator;
+        await _repository.AddAsync(item);
+
+        var loaded = await _repository.GetByIdAsync(item.Id);
+        Assert.NotNull(loaded);
+        Assert.Equal(ExecutionMode.Administrator, loaded.ExecutionMode);
+
+        loaded.ExecutionMode = ExecutionMode.Minimized;
+        await _repository.UpdateAsync(loaded);
+
+        var updated = await _repository.GetByIdAsync(item.Id);
+        Assert.NotNull(updated);
+        Assert.Equal(ExecutionMode.Minimized, updated.ExecutionMode);
+    }
 }

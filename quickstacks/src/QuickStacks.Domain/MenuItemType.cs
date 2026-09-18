@@ -6,4 +6,5 @@ public enum MenuItemType
     Shortcut,
     Url,
     Executable,
+    Command,
 }

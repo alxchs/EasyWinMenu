@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using QuickStacks.Application;
 using QuickStacks.Domain;
+using QuickStacks.Infrastructure;
 using QuickStacks.Localization;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
@@ -466,6 +467,11 @@ public sealed partial class DesktopGroupWindow : Window, ICutVisualOwner
             _selectedTile = tile;
         };
 
+        if (entry.CanRunAsAdministrator || entry.HasFileTarget)
+        {
+            tile.ContextFlyout = BuildTileContextMenu(entry);
+        }
+
         if (!allowManualDrag)
         {
             return;
@@ -577,5 +583,50 @@ public sealed partial class DesktopGroupWindow : Window, ICutVisualOwner
         }
 
         await ReloadAsync();
+    }
+
+    private MenuFlyout BuildTileContextMenu(MenuEntryViewModel entry)
+    {
+        var flyout = new MenuFlyout();
+
+        if (entry.CanRunAsAdministrator)
+        {
+            var runAsAdminItem = new MenuFlyoutItem { Text = LocalizationService.Get("item.runAsAdmin") };
+            runAsAdminItem.Click += async (_, _) => await LaunchService.RunAsAdministratorAsync(_repository, entry);
+            flyout.Items.Add(runAsAdminItem);
+        }
+
+        if (entry.HasFileTarget)
+        {
+            var revealItem = new MenuFlyoutItem { Text = LocalizationService.Get("item.revealInExplorer") };
+            revealItem.Click += (_, _) => LaunchService.RevealInExplorer(entry);
+            flyout.Items.Add(revealItem);
+
+            var copyPathItem = new MenuFlyoutItem { Text = LocalizationService.Get("item.copyPath") };
+            copyPathItem.Click += (_, _) =>
+            {
+                var path = LaunchService.TryResolvePhysicalPath(entry) ?? entry.Path;
+                if (!string.IsNullOrWhiteSpace(path))
+                {
+                    var pkg = new Windows.ApplicationModel.DataTransfer.DataPackage();
+                    pkg.SetText(path);
+                    Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(pkg);
+                }
+            };
+            flyout.Items.Add(copyPathItem);
+
+            var propsItem = new MenuFlyoutItem { Text = LocalizationService.Get("item.properties") };
+            propsItem.Click += (_, _) =>
+            {
+                var path = LaunchService.TryResolvePhysicalPath(entry) ?? entry.Path;
+                if (!string.IsNullOrWhiteSpace(path))
+                {
+                    ShellHelper.ShowProperties(path);
+                }
+            };
+            flyout.Items.Add(propsItem);
+        }
+
+        return flyout;
     }
 }

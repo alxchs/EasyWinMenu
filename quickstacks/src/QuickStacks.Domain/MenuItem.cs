@@ -22,6 +22,9 @@ public sealed class MenuItem
 
     public string? WorkingDirectory { get; set; }
 
+    /// <summary>Modo de inicialização do item (Fase 18 - Normal, Minimized, Maximized, Administrator).</summary>
+    public ExecutionMode ExecutionMode { get; set; } = ExecutionMode.Normal;
+
     /// <summary>Icone customizado; quando nulo, a UI extrai o icone do alvo (<see cref="Path"/>).</summary>
     public string? Icon { get; set; }
 

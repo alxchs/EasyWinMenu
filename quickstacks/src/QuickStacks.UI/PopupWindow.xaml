@@ -69,6 +69,10 @@
                             <MenuFlyout Opening="ItemContextFlyout_Opening">
                                 <MenuFlyoutItem Click="ToggleFavorite_Click" />
                                 <MenuFlyoutItem Click="SetFolderColor_Click" Visibility="{x:Bind IsFolder}" />
+                                <MenuFlyoutItem Click="RunAsAdmin_Click" Visibility="{x:Bind CanRunAsAdministrator}" />
+                                <MenuFlyoutItem Click="RevealInExplorer_Click" Visibility="{x:Bind HasFileTarget}" />
+                                <MenuFlyoutItem Click="CopyPath_Click" Visibility="{x:Bind HasFileTarget}" />
+                                <MenuFlyoutItem Click="Properties_Click" Visibility="{x:Bind HasFileTarget}" />
                             </MenuFlyout>
                         </StackPanel.ContextFlyout>
                         <Grid HorizontalAlignment="Center">

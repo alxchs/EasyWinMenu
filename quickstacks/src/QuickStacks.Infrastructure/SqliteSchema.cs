@@ -24,7 +24,8 @@ public static class SqliteSchema
             LaunchCount     INTEGER NOT NULL DEFAULT 0,
             LastUsedUtc     TEXT NULL,
             CreatedAt       TEXT NOT NULL,
-            UpdatedAt       TEXT NOT NULL
+            UpdatedAt       TEXT NOT NULL,
+            ExecutionMode   INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE INDEX IF NOT EXISTS IX_MenuItems_ParentId ON MenuItems(ParentId);
@@ -76,6 +77,7 @@ public static class SqliteSchema
 
         EnsureColumn(connection, "FolderAppearance", "ThemeJson", "TEXT NULL");
         EnsureColumn(connection, "MenuItems", "IsDesktopGroup", "INTEGER NOT NULL DEFAULT 0");
+        EnsureColumn(connection, "MenuItems", "ExecutionMode", "INTEGER NOT NULL DEFAULT 0");
         EnsureColumn(connection, "DesktopGroupPlacement", "Arrangement", "TEXT NOT NULL DEFAULT 'None'");
     }
 

@@ -66,5 +66,10 @@
   "editor.field.type": "Tipo",
   "editor.field.path": "Caminho / URL",
   "editor.field.arguments": "Argumentos (opcional)",
-  "editor.field.workingDirectory": "Diretório de trabalho (opcional)"
+  "editor.field.workingDirectory": "Diretório de trabalho (opcional)",
+  "editor.field.executionMode": "Modo de execução",
+  "item.runAsAdmin": "Executar como administrador",
+  "item.revealInExplorer": "Abrir local do arquivo",
+  "item.copyPath": "Copiar caminho",
+  "item.properties": "Propriedades"
 }

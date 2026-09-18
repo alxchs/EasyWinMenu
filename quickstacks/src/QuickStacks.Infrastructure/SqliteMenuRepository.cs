@@ -98,10 +98,10 @@ public sealed class SqliteMenuRepository : IMenuRepository
         command.CommandText = """
             INSERT INTO MenuItems
                 (Id, ParentId, Name, Description, Type, Path, Arguments, WorkingDirectory, Icon,
-                 SortOrder, IsFavorite, LaunchCount, LastUsedUtc, CreatedAt, UpdatedAt, IsDesktopGroup)
+                 SortOrder, IsFavorite, LaunchCount, LastUsedUtc, CreatedAt, UpdatedAt, IsDesktopGroup, ExecutionMode)
             VALUES
                 (@Id, @ParentId, @Name, @Description, @Type, @Path, @Arguments, @WorkingDirectory, @Icon,
-                 @SortOrder, @IsFavorite, @LaunchCount, @LastUsedUtc, @CreatedAt, @UpdatedAt, @IsDesktopGroup);
+                 @SortOrder, @IsFavorite, @LaunchCount, @LastUsedUtc, @CreatedAt, @UpdatedAt, @IsDesktopGroup, @ExecutionMode);
             """;
         Bind(command, item);
         await command.ExecuteNonQueryAsync(ct);
@@ -118,7 +118,8 @@ public sealed class SqliteMenuRepository : IMenuRepository
                 ParentId = @ParentId, Name = @Name, Description = @Description, Type = @Type,
                 Path = @Path, Arguments = @Arguments, WorkingDirectory = @WorkingDirectory, Icon = @Icon,
                 SortOrder = @SortOrder, IsFavorite = @IsFavorite, LaunchCount = @LaunchCount,
-                LastUsedUtc = @LastUsedUtc, UpdatedAt = @UpdatedAt, IsDesktopGroup = @IsDesktopGroup
+                LastUsedUtc = @LastUsedUtc, UpdatedAt = @UpdatedAt, IsDesktopGroup = @IsDesktopGroup,
+                ExecutionMode = @ExecutionMode
             WHERE Id = @Id;
             """;
         Bind(command, item);
@@ -479,6 +480,7 @@ public sealed class SqliteMenuRepository : IMenuRepository
         command.Parameters.AddWithValue("@CreatedAt", item.CreatedAt.ToString("O"));
         command.Parameters.AddWithValue("@UpdatedAt", item.UpdatedAt.ToString("O"));
         command.Parameters.AddWithValue("@IsDesktopGroup", item.IsDesktopGroup ? 1 : 0);
+        command.Parameters.AddWithValue("@ExecutionMode", (int)item.ExecutionMode);
     }
 
     private static MenuItem Map(SqliteDataReader reader)
@@ -501,6 +503,9 @@ public sealed class SqliteMenuRepository : IMenuRepository
             CreatedAt = DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("CreatedAt"))),
             UpdatedAt = DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("UpdatedAt"))),
             IsDesktopGroup = reader.GetInt32(reader.GetOrdinal("IsDesktopGroup")) != 0,
+            ExecutionMode = reader.GetOrdinal("ExecutionMode") is var emOrd && !reader.IsDBNull(emOrd)
+                ? (ExecutionMode)reader.GetInt32(emOrd)
+                : ExecutionMode.Normal,
         };
     }
 

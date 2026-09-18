@@ -52,6 +52,7 @@ public sealed partial class EditorViewModel : ObservableObject
         string path,
         string? arguments,
         string? workingDirectory,
+        ExecutionMode executionMode,
         MenuTreeNodeViewModel? parent,
         CancellationToken ct = default)
     {
@@ -60,6 +61,7 @@ public sealed partial class EditorViewModel : ObservableObject
         var item = MenuItem.CreateShortcut(name, parentId, type, path, siblingCount);
         item.Arguments = arguments;
         item.WorkingDirectory = workingDirectory;
+        item.ExecutionMode = executionMode;
         await _repository.AddAsync(item, ct);
         await LoadAsync(ct);
         return item;
@@ -86,12 +88,14 @@ public sealed partial class EditorViewModel : ObservableObject
         string? path,
         string? arguments,
         string? workingDirectory,
+        ExecutionMode executionMode,
         CancellationToken ct = default)
     {
         node.Item.Name = name;
         node.Item.Path = path;
         node.Item.Arguments = arguments;
         node.Item.WorkingDirectory = workingDirectory;
+        node.Item.ExecutionMode = executionMode;
         await _repository.UpdateAsync(node.Item, ct);
         await LoadAsync(ct);
     }

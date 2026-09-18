@@ -66,5 +66,10 @@
   "editor.field.type": "Typ",
   "editor.field.path": "Pfad / URL",
   "editor.field.arguments": "Argumente (optional)",
-  "editor.field.workingDirectory": "Arbeitsverzeichnis (optional)"
+  "editor.field.workingDirectory": "Arbeitsverzeichnis (optional)",
+  "editor.field.executionMode": "Ausführungsmodus",
+  "item.runAsAdmin": "Als Administrator ausführen",
+  "item.revealInExplorer": "Dateispeicherort öffnen",
+  "item.copyPath": "Pfad kopieren",
+  "item.properties": "Eigenschaften"
 }

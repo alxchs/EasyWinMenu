@@ -821,6 +821,23 @@ Extração de ícones de alta resolução e cache persistente em PNG para arquiv
 - **Renderização WinUI 3**: nos ladrilhos do `PopupWindow` e `DesktopGroupWindow` (inclusive mosaicos de pastas), quando um ícone personalizado/extraído estiver em cache (`entry.HasCustomIcon && entry.IconPath != null`), o componente renderiza uma tag `Image` com `BitmapImage` da imagem PNG; caso contrário, mantém fallback imediato para o `FontIcon` de glifo Segoe Fluent Icons.
 - **Testes**: 3 testes de integração em `IconCacheServiceTests` validando extração real de executáveis (`cmd.exe`), cabeçalho PNG (`89 50 4E 47`) e reutilização de cache. Total de 33/33 testes de integração passando.
 
+## 6.21 Fase 18 — Execução de Itens: Paridade Completa com EasyWinMenu
+
+Paridade abrangente de execução de itens, parâmetros de processo, comandos de shell e resiliência:
+
+- **Modos de Execução (`ExecutionMode`)**: adicionado enum `ExecutionMode` (`Normal`, `Minimized`, `Maximized`, `Administrator`) persistido no SQLite na tabela `MenuItems` com coluna migrada automaticamente via `SqliteSchema.EnsureColumn`.
+- **Tipo Comando (`MenuItemType.Command`)**: suporte nativo a comandos arbitrários empacotados via `cmd.exe /c "<target>" [arguments]`.
+- **Planejamento Puro de Execução (`LaunchPlanner` & `LaunchPlan`)**: componente do domínio puro (`QuickStacks.Domain`) com expansão completa de variáveis de ambiente (`Environment.ExpandEnvironmentVariables`) nos caminhos, argumentos e diretório de trabalho; resolução de nomes de executáveis isolados via diretórios do `%PATH%`; detecção automática de diretório de trabalho quando omitido para arquivos e pastas físicos; e elevação com `Verb = "runas"`.
+- **Resiliência de Execução**: `LaunchService` captura e trata graciosamente recusas de prompt do UAC (`Win32Exception` com `NativeErrorCode == 1223`), arquivos inexistentes e falhas de processo sem desestabilizar a interface.
+- **Ações de Shell e Menu de Contexto**: tanto nos itens do `PopupWindow` quanto nos ladrilhos de `DesktopGroupWindow`, o menu de contexto oferece:
+  - "Executar como administrador"
+  - "Abrir local do arquivo" (`LaunchService.RevealInExplorer` com seleção do arquivo)
+  - "Copiar caminho" (para a área de transferência do Windows)
+  - "Propriedades" (janela de propriedades nativa do Windows via `ShellHelper.ShowProperties` / `ShellExecuteEx` com `SEE_MASK_INVOKEIDLIST`)
+  - Chaves localizadas em 4 idiomas (`pt-BR`, `en-US`, `es-ES`, `de-DE`).
+- **Editor de Itens (`EditorWindow`)**: adição de seletor de modo de execução e suporte a itens do tipo `Command`.
+- **Testes**: 9 novos testes unitários em `LaunchPlannerTests` cobrindo todas as variações de modos, expansões e resolução de PATH; 1 novo teste de integração em `SqliteMenuRepositoryTests` validando round-trip de persistência de `ExecutionMode`. Total de 49 testes unitários e 34 testes de integração passando (83 no total).
+
 ## 7. O que ainda não existe (roteiro, em ordem)
 
 Todas as fases do roteiro original (Fase 1 a Fase 7) foram implementadas, e o crash de
