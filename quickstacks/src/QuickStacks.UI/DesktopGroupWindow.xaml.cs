@@ -79,7 +79,12 @@ public sealed partial class DesktopGroupWindow : Window
             ? new SizeInt32((int)AppFolderTileWidth, (int)AppFolderTileHeight)
             : new SizeInt32((int)_placement.Width, (int)_placement.Height);
 
-        AppWindow.MoveAndResize(new RectInt32((int)_placement.X, (int)_placement.Y, size.Width, size.Height));
+        var displayArea = DisplayArea.GetFromPoint(new PointInt32((int)_placement.X, (int)_placement.Y), DisplayAreaFallback.Nearest);
+        var workArea = displayArea.WorkArea;
+        var x = Math.Max(workArea.X + 8, Math.Min((int)_placement.X, workArea.X + workArea.Width - size.Width - 8));
+        var y = Math.Max(workArea.Y + 8, Math.Min((int)_placement.Y, workArea.Y + workArea.Height - size.Height - 8));
+
+        AppWindow.MoveAndResize(new RectInt32(x, y, size.Width, size.Height));
     }
 
     private async Task ReloadAsync()
@@ -231,7 +236,8 @@ public sealed partial class DesktopGroupWindow : Window
         _sheetPopup ??= new PopupWindow(_repository);
         _ = _sheetPopup.NavigateToFolderAsync(_groupId, _groupName);
         _sheetPopup.Closed += (_, _) => _sheetPopup = null;
-        _sheetPopup.ActivateCentered();
+        var displayArea = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest);
+        _sheetPopup.ActivateCentered(displayArea);
     }
 
     private FrameworkElement BuildTile(MenuEntryViewModel entry)

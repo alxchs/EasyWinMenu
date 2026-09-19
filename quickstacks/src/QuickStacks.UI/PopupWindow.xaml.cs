@@ -110,23 +110,62 @@ public sealed partial class PopupWindow : Window
     {
         if (GetCursorPos(out var cursor))
         {
-            AppWindow.Move(new PointInt32(cursor.X, cursor.Y));
+            var cursorPoint = new PointInt32(cursor.X, cursor.Y);
+            var displayArea = DisplayArea.GetFromPoint(cursorPoint, DisplayAreaFallback.Nearest);
+            var workArea = displayArea.WorkArea;
+
+            var width = AppWindow.Size.Width > 0 ? AppWindow.Size.Width : DefaultWidth;
+            var height = AppWindow.Size.Height > 0 ? AppWindow.Size.Height : DefaultHeight;
+
+            // Se o cursor estiver na metade direita da tela (área de notificação/bandeja),
+            // posiciona a janela à esquerda do cursor para não atravessar para a outra tela.
+            int x = (cursor.X + width > workArea.X + workArea.Width)
+                ? cursor.X - width
+                : cursor.X;
+
+            // Se o cursor estiver na parte inferior (barra de tarefas padrão),
+            // posiciona a janela acima da barra de tarefas para não ficar cortada embaixo.
+            int y = (cursor.Y + height > workArea.Y + workArea.Height)
+                ? cursor.Y - height
+                : cursor.Y;
+
+            // Garante que a janela fique estritamente dentro do WorkArea do monitor ativo
+            x = Math.Max(workArea.X + 8, Math.Min(x, workArea.X + workArea.Width - width - 8));
+            y = Math.Max(workArea.Y + 8, Math.Min(y, workArea.Y + workArea.Height - height - 8));
+
+            AppWindow.Move(new PointInt32(x, y));
         }
 
         Activate();
     }
 
     /// <summary>
-    /// "Sheet" de navegacao do App Folder (Fase 10): centralizado na tela em vez de perto do
+    /// "Sheet" de navegacao do App Folder (Fase 10): centralizado na tela do grupo em vez de perto do
     /// cursor - o ladrilho fechado nao tem "onde o usuario clicou" como ponto de partida
     /// natural, ja' que ele mesmo e' um alvo fixo na area de trabalho.
     /// </summary>
-    public void ActivateCentered()
+    public void ActivateCentered(DisplayArea? targetDisplay = null)
     {
-        var displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(AppWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Primary);
+        DisplayArea displayArea;
+        if (targetDisplay is not null)
+        {
+            displayArea = targetDisplay;
+        }
+        else if (GetCursorPos(out var cursor))
+        {
+            displayArea = DisplayArea.GetFromPoint(new PointInt32(cursor.X, cursor.Y), DisplayAreaFallback.Nearest);
+        }
+        else
+        {
+            displayArea = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
+        }
+
         var workArea = displayArea.WorkArea;
-        var x = workArea.X + (workArea.Width - AppWindow.Size.Width) / 2;
-        var y = workArea.Y + (workArea.Height - AppWindow.Size.Height) / 2;
+        var width = AppWindow.Size.Width > 0 ? AppWindow.Size.Width : DefaultWidth;
+        var height = AppWindow.Size.Height > 0 ? AppWindow.Size.Height : DefaultHeight;
+
+        var x = workArea.X + (workArea.Width - width) / 2;
+        var y = workArea.Y + (workArea.Height - height) / 2;
         AppWindow.Move(new PointInt32(x, y));
 
         Activate();
