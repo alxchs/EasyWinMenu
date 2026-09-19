@@ -187,7 +187,7 @@ public sealed partial class DesktopGroupWindow : Window
                 Height = 20,
                 CornerRadius = new CornerRadius(10),
                 Padding = new Thickness(5, 0, 5, 0),
-                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xE5, 0x39, 0x35)),
+                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x00, 0x78, 0xD4)),
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Top,
                 Margin = new Thickness(0, -6, -6, 0),

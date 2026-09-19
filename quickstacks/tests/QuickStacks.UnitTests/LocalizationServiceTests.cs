@@ -27,6 +27,14 @@ public class LocalizationServiceTests
         Assert.Equal("chave.que.nao.existe", LocalizationService.GetForLanguage("en-US", "chave.que.nao.existe"));
     }
 
+    [Theory]
+    [InlineData("en-US", "tray.open", "Open")]
+    [InlineData("pt-BR", "tray.open", "Abrir")]
+    public void GetForLanguage_KnownKey_ReturnsRealTranslation_NotTheKeyItself(string languageCode, string key, string expected)
+    {
+        Assert.Equal(expected, LocalizationService.GetForLanguage(languageCode, key));
+    }
+
     [Fact]
     public void GetForLanguage_UnsupportedLanguage_FallsBackToDefault()
     {

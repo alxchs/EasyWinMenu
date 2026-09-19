@@ -7,19 +7,50 @@
     <RootNamespace>QuickStacks.UI</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Platforms>x86;x64;arm64</Platforms>
+    <Platform Condition="'$(Platform)' == '' or '$(Platform)' == 'AnyCPU'">x64</Platform>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
     <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
     <UseWinUI>true</UseWinUI>
     <!-- App nao empacotada (sem MSIX) por enquanto - mais simples de depurar; empacotamento
          entra na fase de distribuicao corporativa do plano. -->
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
-    <!-- Maquina de dev so tem o dotnet SDK (sem Visual Studio) - MrtCore.PriGen.targets
-         precisa de Microsoft.Build.Packaging.Pri.Tasks.dll, que so vem com o componente
-         "AppxPackage" do MSBuild da VS e nao existe aqui. Sem .resw/MRT assets nesta fase,
-         resources.pri nao faz falta; reavaliar se a fase de i18n (.resw) precisar dele -
-         nesse caso, builda numa maquina com Visual Studio + workload de Windows App SDK. -->
-    <EnableCoreMrtTooling>false</EnableCoreMrtTooling>
   </PropertyGroup>
+
+  <!--
+    MRT/PRI: sem o resources.pri gerado por esta etapa, nenhum 'ms-appx:///' resolve, o
+    dicionario Fluent (XamlControlsResources) nao pode ser mergeado no App.xaml, e todo
+    controle cujo estilo padrao mora nele derruba o processo com STATUS_STOWED_EXCEPTION -
+    inclusive a TreeView do editor, que sem isto quebra ao abrir.
+
+    MrtCore.PriGen.targets procura Microsoft.Build.Packaging.Pri.Tasks.dll em
+    $(AppxMSBuildToolsPath), cujo padrao aponta para dentro do SDK do dotnet - onde ela
+    nunca esta. A DLL vem do componente "AppxPackage" do MSBuild do Visual Studio. Em vez
+    de fixar um caminho de maquina, procuramos a instalacao real; quando nao houver
+    nenhuma, a build volta ao modo degradado de antes em vez de quebrar.
+  -->
+  <PropertyGroup>
+    <_AppxTail>MSBuild\Microsoft\VisualStudio</_AppxTail>
+    <_AppxProbe1>$(ProgramW6432)\Microsoft Visual Studio\2022\Enterprise\$(_AppxTail)\v17.0\AppxPackage\</_AppxProbe1>
+    <_AppxProbe2>$(ProgramW6432)\Microsoft Visual Studio\2022\Professional\$(_AppxTail)\v17.0\AppxPackage\</_AppxProbe2>
+    <_AppxProbe3>$(ProgramW6432)\Microsoft Visual Studio\2022\Community\$(_AppxTail)\v17.0\AppxPackage\</_AppxProbe3>
+    <_AppxProbe4>$(ProgramW6432)\Microsoft Visual Studio\2022\BuildTools\$(_AppxTail)\v17.0\AppxPackage\</_AppxProbe4>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <AppxMSBuildToolsPath Condition="'$(AppxMSBuildToolsPath)' == '' and Exists('$(_AppxProbe1)Microsoft.Build.Packaging.Pri.Tasks.dll')">$(_AppxProbe1)</AppxMSBuildToolsPath>
+    <AppxMSBuildToolsPath Condition="'$(AppxMSBuildToolsPath)' == '' and Exists('$(_AppxProbe2)Microsoft.Build.Packaging.Pri.Tasks.dll')">$(_AppxProbe2)</AppxMSBuildToolsPath>
+    <AppxMSBuildToolsPath Condition="'$(AppxMSBuildToolsPath)' == '' and Exists('$(_AppxProbe3)Microsoft.Build.Packaging.Pri.Tasks.dll')">$(_AppxProbe3)</AppxMSBuildToolsPath>
+    <AppxMSBuildToolsPath Condition="'$(AppxMSBuildToolsPath)' == '' and Exists('$(_AppxProbe4)Microsoft.Build.Packaging.Pri.Tasks.dll')">$(_AppxProbe4)</AppxMSBuildToolsPath>
+
+    <EnableCoreMrtTooling>false</EnableCoreMrtTooling>
+    <EnableCoreMrtTooling Condition="Exists('$(AppxMSBuildToolsPath)Microsoft.Build.Packaging.Pri.Tasks.dll')">true</EnableCoreMrtTooling>
+  </PropertyGroup>
+
+  <Target Name="ReportMrtToolingState" BeforeTargets="BeforeBuild">
+    <Message Importance="high" Condition="'$(EnableCoreMrtTooling)' == 'true'" Text="[QuickStacks] MRT/PRI ligado - ferramenta AppxPackage em $(AppxMSBuildToolsPath)" />
+    <Warning Condition="'$(EnableCoreMrtTooling)' != 'true'" Text="[QuickStacks] Ferramenta AppxPackage do MSBuild nao encontrada: sem resources.pri, o dicionario Fluent nao carrega e controles como TreeView derrubam o app." />
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250228001" />
@@ -39,14 +70,16 @@
     </Content>
   </ItemGroup>
 
-  <!-- EnableCoreMrtTooling=false (acima) tambem desliga o passo que copiaria os .xbf (XAML
-       compilado) pro output publicado - ficam parados so' no obj/, e o app publicado falha
-       com XamlParseException("XAML parsing failed.") ao tentar montar QUALQUER janela, ja' na
-       primeira (TrayIconWindow), porque LoadComponent nao acha o .xbf correspondente. `dotnet
-       build` (Debug) nao sofre disso porque copia o obj/ inteiro pro bin/ por outro caminho;
-       so' `dotnet publish` filtra por @(ResolvedFileToPublish). Fix: incluir os .xbf gerados
-       nessa lista a mao. -->
-  <Target Name="IncludeXbfInPublishOutput" BeforeTargets="AssignTargetPaths;ComputeFilesToPublish">
+  <!-- `dotnet publish` filtra a saida por @(ResolvedFileToPublish), e nem o XAML compilado
+       (.xbf) nem o .pri gerado entram nessa lista sozinhos. Sem os .xbf, o app publicado
+       falha com XamlParseException ja' na primeira janela; sem o .pri, nenhum 'ms-appx:///'
+       resolve e o dicionario Fluent nao carrega. `dotnet build` (Debug) nao sofre disso
+       porque copia por outro caminho. Com o MRT ligado o compilador XAML tambem emite os
+       .xbf em obj\...\embed\, entao esse contorno so' vale no modo degradado (senao colide
+       consigo mesmo, NETSDK1152). -->
+  <Target Name="IncludeXbfInPublishOutput"
+          BeforeTargets="AssignTargetPaths;ComputeFilesToPublish"
+          Condition="'$(EnableCoreMrtTooling)' != 'true'">
     <ItemGroup>
       <_GeneratedXbf Include="$(IntermediateOutputPath)**\*.xbf" />
       <None Include="@(_GeneratedXbf)">
@@ -54,6 +87,24 @@
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       </None>
+    </ItemGroup>
+  </Target>
+
+  <!-- O .pri so' existe depois que a etapa de MRT roda, entao entra na lista de publicacao
+       direto. Publicado tambem como resources.pri: desempacotado, e' esse o nome que o MRT
+       Core procura na pasta do exe. -->
+  <Target Name="IncludeProjectPriInPublishOutput"
+          AfterTargets="ComputeResolvedFilesToPublishList"
+          Condition="'$(EnableCoreMrtTooling)' == 'true' and Exists('$(ProjectPriFullPath)')">
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(ProjectPriFullPath)">
+        <RelativePath>$(ProjectPriFileName)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(ProjectPriFullPath)">
+        <RelativePath>resources.pri</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
     </ItemGroup>
   </Target>
 

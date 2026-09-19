@@ -53,5 +53,15 @@ public partial class App : Microsoft.UI.Xaml.Application
         // Window com {ThemeResource} for construida antes da primeira janela do processo
         // ser ativada - so' que aqui nao usamos mais ThemeResource nenhum, e' so' por cautela).
         _trayIconWindow.OpenDesktopGroupsIfFull();
+
+        var cmdArgs = Environment.GetCommandLineArgs();
+        if (cmdArgs.Contains("--open-editor"))
+        {
+            _trayIconWindow.OpenEditorCommand.Execute(null);
+        }
+        else if (cmdArgs.Contains("--open-popup"))
+        {
+            _trayIconWindow.ShowPopupCommand.Execute(null);
+        }
     }
 }

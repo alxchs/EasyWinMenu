@@ -63,11 +63,45 @@ public static class SqliteSchema
         );
         """;
 
+    /// <summary>
+    /// Tempo que uma conexao espera por um lock antes de desistir com SQLITE_BUSY. O modo
+    /// Full abre varias janelas (popup, editor, uma por grupo solto), cada uma com seu
+    /// proprio repositorio contra o mesmo arquivo; sem isto, escrita concorrente estoura
+    /// "database is locked" na cara do usuario.
+    /// </summary>
+    private const int BusyTimeoutMilliseconds = 5000;
+
+    /// <summary>
+    /// Abre uma conexao com os PRAGMAs que precisam ser reaplicados a cada conexao
+    /// (<c>foreign_keys</c> e <c>busy_timeout</c> nao sao persistidos no arquivo).
+    /// </summary>
+    public static SqliteConnection OpenConnection(string connectionString)
+    {
+        var connection = new SqliteConnection(connectionString);
+        connection.Open();
+
+        using var pragma = connection.CreateCommand();
+        pragma.CommandText = $"PRAGMA foreign_keys = ON; PRAGMA busy_timeout = {BusyTimeoutMilliseconds};";
+        pragma.ExecuteNonQuery();
+
+        return connection;
+    }
+
     public static void EnsureCreated(SqliteConnection connection)
     {
         using var pragma = connection.CreateCommand();
         pragma.CommandText = "PRAGMA foreign_keys = ON;";
         pragma.ExecuteNonQuery();
+
+        // WAL fica gravado no proprio arquivo - leitor e escritor deixam de se bloquear,
+        // que e' o padrao de acesso real deste app (varias janelas, mesmo arquivo).
+        using var journal = connection.CreateCommand();
+        journal.CommandText = "PRAGMA journal_mode = WAL;";
+        journal.ExecuteScalar();
+
+        using var sync = connection.CreateCommand();
+        sync.CommandText = "PRAGMA synchronous = NORMAL;";
+        sync.ExecuteNonQuery();
 
         using var command = connection.CreateCommand();
         command.CommandText = CreateTableSql;
