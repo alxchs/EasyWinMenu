@@ -24,7 +24,11 @@ public sealed partial class HelpWindow : Window
         AppWindow.Resize(new SizeInt32(720, 580));
         try
         {
-            AppWindow.SetIcon("Assets\\quickstacks.ico");
+            var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "quickstacks.ico");
+            if (System.IO.File.Exists(iconPath))
+            {
+                AppWindow.SetIcon(iconPath);
+            }
         }
         catch
         {

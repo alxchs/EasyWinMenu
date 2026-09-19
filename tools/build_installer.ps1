@@ -64,3 +64,4 @@ if ($iscc) {
 } else {
     Write-Host "ISCC.exe (Inno Setup) nao localizado localmente - executavel portavel disponivel na pasta publish/win-x64." -ForegroundColor Gray
 }
+

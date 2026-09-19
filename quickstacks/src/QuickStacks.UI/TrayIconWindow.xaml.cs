@@ -314,15 +314,22 @@ public sealed partial class TrayIconWindow : Window
     /// </summary>
     private async Task OpenAllDesktopGroupsAsync()
     {
-        CloseAllDesktopGroups();
-
-        var app = (App)Microsoft.UI.Xaml.Application.Current;
-        var groups = await app.MenuRepository.GetDesktopGroupsAsync();
-        foreach (var group in groups)
+        try
         {
-            var window = new DesktopGroupWindow(app.MenuRepository, group);
-            _desktopGroupWindows.Add(window);
-            window.Activate();
+            CloseAllDesktopGroups();
+
+            var app = (App)Microsoft.UI.Xaml.Application.Current;
+            var groups = await app.MenuRepository.GetDesktopGroupsAsync();
+            foreach (var group in groups)
+            {
+                var window = new DesktopGroupWindow(app.MenuRepository, group);
+                _desktopGroupWindows.Add(window);
+                window.Activate();
+            }
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[TrayIconWindow] Erro ao abrir DesktopGroups: {ex}");
         }
     }
 

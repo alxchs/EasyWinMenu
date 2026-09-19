@@ -73,15 +73,22 @@ public sealed partial class DesktopGroupWindow : Window, ICutVisualOwner
 
     private async Task InitializeAsync()
     {
-        _placement = await _repository.GetDesktopGroupPlacementAsync(_groupId)
-            ?? DesktopGroupPlacement.CreateDefault(_groupId, 80, 80);
+        try
+        {
+            _placement = await _repository.GetDesktopGroupPlacementAsync(_groupId)
+                ?? DesktopGroupPlacement.CreateDefault(_groupId, 80, 80);
 
-        await RescueIfUnreachableAsync();
+            await RescueIfUnreachableAsync();
 
-        RefreshTexts();
-        ApplyDisplayModeChrome();
-        ResizeForCurrentMode();
-        await ReloadAsync();
+            RefreshTexts();
+            ApplyDisplayModeChrome();
+            ResizeForCurrentMode();
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[DesktopGroupWindow] Falha ao inicializar grupo '{_groupId}': {ex}");
+        }
     }
 
     /// <summary>
@@ -205,63 +212,72 @@ public sealed partial class DesktopGroupWindow : Window, ICutVisualOwner
 
     private void ResizeForCurrentMode()
     {
+        var width = Math.Max(100, (int)_placement.Width);
+        var height = Math.Max(100, (int)_placement.Height);
         var size = _placement.DisplayMode == DesktopGroupDisplayMode.AppFolder
             ? new SizeInt32((int)AppFolderTileWidth, (int)AppFolderTileHeight)
-            : new SizeInt32((int)_placement.Width, (int)_placement.Height);
+            : new SizeInt32(width, height);
 
         AppWindow.MoveAndResize(new RectInt32((int)_placement.X, (int)_placement.Y, size.Width, size.Height));
     }
 
     public async Task ReloadAsync()
     {
-        var children = await _repository.GetChildrenAsync(_groupId);
-
-        if (_placement.DisplayMode == DesktopGroupDisplayMode.AppFolder)
+        try
         {
-            BuildAppFolderTile(children);
-            return;
+            var children = await _repository.GetChildrenAsync(_groupId);
+
+            if (_placement.DisplayMode == DesktopGroupDisplayMode.AppFolder)
+            {
+                BuildAppFolderTile(children);
+                return;
+            }
+
+            _tilesByEntry.Clear();
+            IconCanvas.Children.Clear();
+
+            // Fase 11: organizacao automatica "viva" - com um modo de arranjo ativo, a posicao
+            // salva de cada icone (DesktopIconPosition) e' ignorada e a grade e' recalculada aqui
+            // sempre que o conteudo/geometria muda; None e' o unico modo onde o usuario controla
+            // a posicao pelo arrastar-e-soltar.
+            var allowManualDrag = _placement.Arrangement == DesktopIconArrangement.None;
+            var ordered = _placement.Arrangement switch
+            {
+                DesktopIconArrangement.ByName => children.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase),
+                DesktopIconArrangement.ByType => children.OrderBy(c => c.Type).ThenBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase),
+                DesktopIconArrangement.Grid => children.OrderBy(c => c.SortOrder),
+                _ => children.OrderBy(c => c.SortOrder),
+            };
+
+            var positions = allowManualDrag ? await _repository.GetDesktopIconPositionsAsync(_groupId) : null;
+
+            var cascade = 0;
+            foreach (var child in ordered)
+            {
+                var entry = new MenuEntryViewModel(child, App.IconCache);
+                var tile = BuildTile(entry, allowManualDrag);
+
+                _tilesByEntry[child.Id] = tile;
+                tile.Opacity = ClipboardService.Coordinator.IsCutPending(child.Id) ? 0.5 : 1.0;
+
+                if (positions is not null && positions.TryGetValue(child.Id, out var position))
+                {
+                    Canvas.SetLeft(tile, position.X);
+                    Canvas.SetTop(tile, position.Y);
+                }
+                else
+                {
+                    Canvas.SetLeft(tile, 16 + (cascade % 4) * 84);
+                    Canvas.SetTop(tile, 16 + (cascade / 4) * 96);
+                    cascade++;
+                }
+
+                IconCanvas.Children.Add(tile);
+            }
         }
-
-        _tilesByEntry.Clear();
-        IconCanvas.Children.Clear();
-
-        // Fase 11: organizacao automatica "viva" - com um modo de arranjo ativo, a posicao
-        // salva de cada icone (DesktopIconPosition) e' ignorada e a grade e' recalculada aqui
-        // sempre que o conteudo/geometria muda; None e' o unico modo onde o usuario controla
-        // a posicao pelo arrastar-e-soltar.
-        var allowManualDrag = _placement.Arrangement == DesktopIconArrangement.None;
-        var ordered = _placement.Arrangement switch
+        catch (Exception ex)
         {
-            DesktopIconArrangement.ByName => children.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase),
-            DesktopIconArrangement.ByType => children.OrderBy(c => c.Type).ThenBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase),
-            DesktopIconArrangement.Grid => children.OrderBy(c => c.SortOrder),
-            _ => children.OrderBy(c => c.SortOrder),
-        };
-
-        var positions = allowManualDrag ? await _repository.GetDesktopIconPositionsAsync(_groupId) : null;
-
-        var cascade = 0;
-        foreach (var child in ordered)
-        {
-            var entry = new MenuEntryViewModel(child, App.IconCache);
-            var tile = BuildTile(entry, allowManualDrag);
-
-            _tilesByEntry[child.Id] = tile;
-            tile.Opacity = ClipboardService.Coordinator.IsCutPending(child.Id) ? 0.5 : 1.0;
-
-            if (positions is not null && positions.TryGetValue(child.Id, out var position))
-            {
-                Canvas.SetLeft(tile, position.X);
-                Canvas.SetTop(tile, position.Y);
-            }
-            else
-            {
-                Canvas.SetLeft(tile, 16 + (cascade % 4) * 84);
-                Canvas.SetTop(tile, 16 + (cascade / 4) * 96);
-                cascade++;
-            }
-
-            IconCanvas.Children.Add(tile);
+            App.Log($"[DesktopGroupWindow] Falha ao recarregar itens do grupo '{_groupId}': {ex}");
         }
     }
 
@@ -312,11 +328,12 @@ public sealed partial class DesktopGroupWindow : Window, ICutVisualOwner
         {
             var entry = new MenuEntryViewModel(child, App.IconCache);
             FrameworkElement cell;
-            if (entry.HasCustomIcon && !string.IsNullOrEmpty(entry.IconPath))
+            var bitmap = IconImageLoader.GetBitmap(entry.IconPath);
+            if (entry.HasCustomIcon && bitmap is not null)
             {
                 cell = new Image
                 {
-                    Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(entry.IconPath)),
+                    Source = bitmap,
                     Width = plateSize * 0.22,
                     Height = plateSize * 0.22,
                     Margin = new Thickness(1.5),
@@ -419,11 +436,12 @@ public sealed partial class DesktopGroupWindow : Window, ICutVisualOwner
             Padding = new Thickness(4),
             Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), // area clicavel/arrastavel inclui o espaco vazio ao redor do texto
         };
-        if (entry.HasCustomIcon && !string.IsNullOrEmpty(entry.IconPath))
+        var bitmap = IconImageLoader.GetBitmap(entry.IconPath);
+        if (entry.HasCustomIcon && bitmap is not null)
         {
             stack.Children.Add(new Image
             {
-                Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(entry.IconPath)),
+                Source = bitmap,
                 Width = 28,
                 Height = 28,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -537,6 +555,11 @@ public sealed partial class DesktopGroupWindow : Window, ICutVisualOwner
     private void AppWindow_Changed(AppWindow sender, AppWindowChangedEventArgs args)
     {
         if (!args.DidPositionChange && !args.DidSizeChange)
+        {
+            return;
+        }
+
+        if (sender.Size.Width <= 0 || sender.Size.Height <= 0)
         {
             return;
         }

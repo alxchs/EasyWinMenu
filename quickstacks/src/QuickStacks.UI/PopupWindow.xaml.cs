@@ -574,6 +574,14 @@ public sealed partial class PopupWindow : Window, ICutVisualOwner
         }
     }
 
+    private void IconImage_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Image { DataContext: MenuEntryViewModel { HasCustomIcon: true, IconPath: { } path } } image)
+        {
+            image.Source = IconImageLoader.GetBitmap(path);
+        }
+    }
+
     private static bool IsKeyDown(VirtualKey key) =>
         Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
 

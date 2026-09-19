@@ -78,7 +78,7 @@
                         </StackPanel.ContextFlyout>
                         <Grid HorizontalAlignment="Center">
                             <Image
-                                Source="{x:Bind IconPath}"
+                                Loaded="IconImage_Loaded"
                                 Width="32"
                                 Height="32"
                                 Visibility="{x:Bind HasCustomIcon}" />
