@@ -38,6 +38,10 @@ public sealed partial class PopupWindow : Window, ICutVisualOwner
     {
         InitializeComponent();
 
+        // Sem isto a janela herda o titulo padrao do template ("WinUI Desktop") na barra de
+        // titulo, no Alt+Tab e na barra de tarefas.
+        Title = LocalizationService.Get("app.name");
+
         ViewModel = new FolderNavigationViewModel(repository, iconCache ?? App.IconCache);
         Repository = repository;
 

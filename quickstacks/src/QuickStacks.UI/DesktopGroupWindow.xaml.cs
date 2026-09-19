@@ -49,6 +49,7 @@ public sealed partial class DesktopGroupWindow : Window, ICutVisualOwner
         _groupId = group.Id;
         _groupName = group.Name;
         TitleText.Text = group.Name;
+        Title = $"{group.Name} - {LocalizationService.Get("app.name")}";
 
         ThemeService.Register(RootGrid);
         ClipboardService.RegisterOwner(this);

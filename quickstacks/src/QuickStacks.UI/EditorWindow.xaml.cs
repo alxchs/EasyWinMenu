@@ -19,6 +19,8 @@ public sealed partial class EditorWindow : Window
     {
         InitializeComponent();
 
+        Title = LocalizationService.Get("editor.windowTitle");
+
         _repository = repository;
         ViewModel = new EditorViewModel(repository, exportService, lnkImportService);
         ThemeService.Register(RootGrid);
@@ -59,9 +61,17 @@ public sealed partial class EditorWindow : Window
         await ViewModel.LoadAsync();
     }
 
-    private void Tree_SelectionChanged(TreeView sender, TreeViewSelectionChangedEventArgs args)
+    private void Tree_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        ViewModel.SelectedNode = sender.SelectedItem as MenuTreeNodeViewModel;
+        ViewModel.SelectedNode = Tree.SelectedItem as MenuTreeNodeViewModel;
+    }
+
+    private void Expander_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: MenuTreeNodeViewModel node })
+        {
+            ViewModel.ToggleExpanded(node);
+        }
     }
 
     // ---- CRUD ----
@@ -216,30 +226,81 @@ public sealed partial class EditorWindow : Window
         }
     }
 
-    // ---- Drag-and-drop (reparentar dentro da arvore) ----
+    // ---- Drag-and-drop (reparentar e reordenar dentro da arvore) ----
 
-    private void Tree_DragItemsStarting(TreeView sender, TreeViewDragItemsStartingEventArgs args)
+    /// <summary>
+    /// Fatia de cima e de baixo da linha que significa "reordenar" em vez de "mover para
+    /// dentro" - mesma convencao do Explorer e do Solution Explorer.
+    /// </summary>
+    private const double ReorderEdgeFraction = 0.3;
+
+    private enum DropIntent
     {
-        if (args.Items.Count == 0 || args.Items[0] is not MenuTreeNodeViewModel node)
+        Into,
+        Before,
+        After,
+    }
+
+    private static DropIntent ResolveDropIntent(FrameworkElement row, MenuTreeNodeViewModel target, DragEventArgs e)
+    {
+        var height = row.ActualHeight;
+        if (height <= 0)
+        {
+            return target.IsFolder ? DropIntent.Into : DropIntent.After;
+        }
+
+        var y = e.GetPosition(row).Y;
+        if (y < height * ReorderEdgeFraction)
+        {
+            return DropIntent.Before;
+        }
+
+        if (y > height * (1 - ReorderEdgeFraction))
+        {
+            return DropIntent.After;
+        }
+
+        // No meio de um item que nao e' pasta nao existe "para dentro" - vira reordenar.
+        return target.IsFolder ? DropIntent.Into : DropIntent.After;
+    }
+
+    private void Tree_DragItemsStarting(object sender, DragItemsStartingEventArgs e)
+    {
+        if (e.Items.Count == 0 || e.Items[0] is not MenuTreeNodeViewModel node)
         {
             return;
         }
 
-        args.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
-        args.Data.SetData(DraggedItemFormat, node.Id);
+        e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+        e.Data.SetData(DraggedItemFormat, node.Id);
     }
 
     private void TreeItem_DragOver(object sender, DragEventArgs e)
     {
-        if (sender is FrameworkElement { DataContext: MenuTreeNodeViewModel { IsFolder: true } } && e.DataView.Contains(DraggedItemFormat))
+        if (sender is not FrameworkElement { DataContext: MenuTreeNodeViewModel target } row || !e.DataView.Contains(DraggedItemFormat))
         {
-            e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+            return;
         }
+
+        var intent = ResolveDropIntent(row, target, e);
+        e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+
+        // As tres zonas da linha sao invisiveis - sem esta legenda o usuario nao teria como
+        // saber se vai reparentar ou reordenar antes de soltar.
+        var captionKey = intent switch
+        {
+            DropIntent.Before => "editor.drop.beforeFormat",
+            DropIntent.After => "editor.drop.afterFormat",
+            _ => "editor.drop.intoFormat",
+        };
+
+        e.DragUIOverride.IsCaptionVisible = true;
+        e.DragUIOverride.Caption = string.Format(LocalizationService.Get(captionKey), target.Name);
     }
 
     private async void TreeItem_Drop(object sender, DragEventArgs e)
     {
-        if (sender is not FrameworkElement { DataContext: MenuTreeNodeViewModel { IsFolder: true } target })
+        if (sender is not FrameworkElement { DataContext: MenuTreeNodeViewModel target } row)
         {
             return;
         }
@@ -249,8 +310,18 @@ public sealed partial class EditorWindow : Window
             return;
         }
 
+        // A posicao tem de sair do evento antes do await - depois dele o DragEventArgs ja
+        // nao vale mais.
+        var intent = ResolveDropIntent(row, target, e);
+
         var draggedId = (string)await e.DataView.GetDataAsync(DraggedItemFormat);
-        await ViewModel.TryMoveAsync(draggedId, target.Id);
+        if (intent == DropIntent.Into)
+        {
+            await ViewModel.TryMoveAsync(draggedId, target.Id);
+            return;
+        }
+
+        await ViewModel.TryReorderAsync(draggedId, target.Id, insertAfter: intent == DropIntent.After);
     }
 
     // ---- Dialogos simples (sem XAML proprio - a Fase 2 prioriza funcionar; refinar visual e' polimento futuro) ----

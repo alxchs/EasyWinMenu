@@ -1,4 +1,6 @@
 {
+  "app.name": "QuickStacks",
+  "editor.windowTitle": "QuickStacks - Edit structure",
   "tray.open": "Open",
   "tray.editStructure": "Edit structure...",
   "tray.theme": "Theme",
@@ -49,6 +51,9 @@
   "editor.importLnkDialogTitle": "Import shortcuts",
   "editor.importLnkConfirmTextFormat": "Import {0} shortcut(s) into \"{1}\"?",
   "editor.rootLabel": "root",
+  "editor.drop.intoFormat": "Move into \"{0}\"",
+  "editor.drop.beforeFormat": "Place before \"{0}\"",
+  "editor.drop.afterFormat": "Place after \"{0}\"",
   "editor.toggleDesktopGroup": "Desktop group",
   "editor.newFolderDialogTitle": "New folder",
   "editor.folderNameLabel": "Folder name",

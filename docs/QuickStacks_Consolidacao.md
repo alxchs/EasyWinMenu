@@ -87,7 +87,7 @@ A solução foi estruturada em camadas rigorosamente desacopladas, com isolament
   - `EditorWindow`: Editor gráfico de estrutura com visualização em árvore.
   - `HelpWindow`: Central de ajuda nativa com abas organizadas e verificação de atualizações.
   - `TrayIconWindow`: Janela invisível que hospeda o ícone da bandeja (`H.NotifyIcon`), menus de contexto e orquestração de instâncias.
-  - `SingleInstanceCoordinator`: Controle de instância única via Named Pipes (`QuickStacks.SingleInstancePipe`).
+  - `SingleInstanceCoordinator`: Controle de instância única via `Mutex` nomeado (`QuickStacks.SingleInstance`) e Named Pipe de comandos (`QuickStacks.DesktopAction`).
   - `GlobalHotkeyService`: Registro de atalhos globais de teclado no Windows (`RegisterHotKey`).
   - `ThemeService`: Aplicação determinística de temas Claro, Escuro ou Sistema sem bloqueios por falta de dicionários Fluent desnecessários.
 
@@ -126,7 +126,8 @@ A solução foi estruturada em camadas rigorosamente desacopladas, com isolament
 | **18** | Paridade Completa de Execução: ExecutionMode, Command, Shell | `refactory/fase18` | `3f16346` | 49 unitários + 34 integração |
 | **19** | Menu de Contexto Nativo Shell COM (IContextMenu2/3) | `refactory/fase19` | `5b5e480` | 49 unitários + 38 integração |
 | **20** | Identidade Visual, Central de Ajuda Integrada (F1) e Inno Setup | `refactory/fase20` | `426965d` | 49 unitários + 38 integração |
-| **Final** | Auto-Atualização em Domínio Privado, CI/CD e Consolidação | `refactory/final` | *em curso* | **49 unitários + 48 integração (97 total)** |
+| **Final** | Auto-Atualização em Domínio Privado, CI/CD e Consolidação | `refactory/final` | `70a61c4` | 49 unitários + 48 integração (97 total) |
+| **Fechamento** | Reordenar por arraste (pendência da Fase 2), WAL/`busy_timeout` reais e auditoria plano×código | `refactory/final` | *este commit* | **49 unitários + 60 integração (109 total)** |
 
 ---
 
@@ -137,46 +138,63 @@ O banco de dados SQLite local reside em `%LocalAppData%\QuickStacks\quickstacks.
 ### 4.1. Estrutura das Tabelas
 
 ```sql
--- Itens de menu, pastas e comandos executaveis
+-- Itens de menu, pastas e comandos executaveis.
+-- Type e' gravado como TEXTO (o nome do enum MenuItemType: Folder, Shortcut, Url,
+-- Executable, Command) - nao como inteiro.
 CREATE TABLE IF NOT EXISTS MenuItems (
-    Id TEXT PRIMARY KEY NOT NULL,
-    ParentId TEXT NULL,
-    Name TEXT NOT NULL,
-    Type INTEGER NOT NULL,            -- 0=Folder, 1=Link, 2=Command
-    Path TEXT NULL,
-    Arguments TEXT NULL,
+    Id               TEXT PRIMARY KEY,
+    ParentId         TEXT NULL REFERENCES MenuItems(Id) ON DELETE CASCADE,
+    Name             TEXT NOT NULL,
+    Description      TEXT NULL,
+    Type             TEXT NOT NULL,
+    Path             TEXT NULL,
+    Arguments        TEXT NULL,
     WorkingDirectory TEXT NULL,
-    SortOrder INTEGER NOT NULL,
-    IsFavorite INTEGER NOT NULL DEFAULT 0,
-    UseCount INTEGER NOT NULL DEFAULT 0,
-    LastUsedUtc TEXT NULL,
-    IsDesktopGroup INTEGER NOT NULL DEFAULT 0,
-    ExecutionMode INTEGER NOT NULL DEFAULT 0, -- 0=Normal, 1=Minimized, 2=Maximized, 3=Admin
-    FOREIGN KEY(ParentId) REFERENCES MenuItems(Id) ON DELETE CASCADE
+    Icon             TEXT NULL,
+    SortOrder        INTEGER NOT NULL DEFAULT 0,
+    IsFavorite       INTEGER NOT NULL DEFAULT 0,
+    LaunchCount      INTEGER NOT NULL DEFAULT 0,
+    LastUsedUtc      TEXT NULL,
+    CreatedAt        TEXT NOT NULL,
+    UpdatedAt        TEXT NOT NULL,
+    ExecutionMode    INTEGER NOT NULL DEFAULT 0  -- 0=Normal, 1=Minimized, 2=Maximized, 3=Administrator
 );
+-- IsDesktopGroup INTEGER NOT NULL DEFAULT 0 entra por EnsureColumn (ver 4.2), nao no CREATE.
 
--- Geometria e posicionamento persistente de grupos de area de trabalho
-CREATE TABLE IF NOT EXISTS DesktopGroupPlacements (
-    GroupId TEXT PRIMARY KEY NOT NULL,
-    X INTEGER NOT NULL,
-    Y INTEGER NOT NULL,
-    Width INTEGER NOT NULL,
-    Height INTEGER NOT NULL,
-    DisplayMode INTEGER NOT NULL DEFAULT 0, -- 0=Panel, 1=AppFolder
-    FOREIGN KEY(GroupId) REFERENCES MenuItems(Id) ON DELETE CASCADE
-);
-
--- Cores customizadas por pasta para identificacao visual
-CREATE TABLE IF NOT EXISTS FolderBackgroundColors (
-    FolderId TEXT PRIMARY KEY NOT NULL,
-    ColorHex TEXT NOT NULL,
-    FOREIGN KEY(FolderId) REFERENCES MenuItems(Id) ON DELETE CASCADE
-);
+CREATE INDEX IF NOT EXISTS IX_MenuItems_ParentId ON MenuItems(ParentId);
 
 -- Configuracoes chave-valor da aplicacao
 CREATE TABLE IF NOT EXISTS Settings (
-    Key TEXT PRIMARY KEY NOT NULL,
+    Key   TEXT PRIMARY KEY,
     Value TEXT NOT NULL
+);
+
+-- Tema por pasta (Fase 4/8): so' existe linha aqui quando a pasta foi customizada.
+CREATE TABLE IF NOT EXISTS FolderAppearance (
+    FolderId           TEXT PRIMARY KEY REFERENCES MenuItems(Id) ON DELETE CASCADE,
+    BackgroundColorHex TEXT NULL,
+    ThemeJson          TEXT NULL
+);
+
+-- Geometria da janela solta de um grupo (Fase 9). Coordenadas em REAL, nao INTEGER,
+-- e DisplayMode/Arrangement gravados como texto do enum.
+CREATE TABLE IF NOT EXISTS DesktopGroupPlacement (
+    GroupId     TEXT PRIMARY KEY REFERENCES MenuItems(Id) ON DELETE CASCADE,
+    X           REAL NOT NULL,
+    Y           REAL NOT NULL,
+    Width       REAL NOT NULL,
+    Height      REAL NOT NULL,
+    DisplayMode TEXT NOT NULL,          -- Panel | AppFolder
+    IconScale   REAL NOT NULL,
+    IsCollapsed INTEGER NOT NULL DEFAULT 0,
+    Arrangement TEXT NOT NULL DEFAULT 'None'
+);
+
+-- Posicao livre de cada item pinado no canvas do grupo que o contem (Fase 9, modo Panel).
+CREATE TABLE IF NOT EXISTS DesktopIconPosition (
+    ItemId TEXT PRIMARY KEY REFERENCES MenuItems(Id) ON DELETE CASCADE,
+    X      REAL NOT NULL,
+    Y      REAL NOT NULL
 );
 ```
 
@@ -200,7 +218,18 @@ Durante as 20 fases de engenharia reversa e reescrita, diversas decisões de bai
    - Utilizou-se a API `SetWindowSubclass` da biblioteca nativa `comctl32.dll` com ponteiros estáticos de callback, permitindo que extensões de terceiros (ex: 7-Zip, Git, antivírus, editores de código) desenhem seus itens proprietários e processem submenus dinâmicos com perfeição.
 4. **Resiliência a Elevação UAC**:
    - Ao executar um aplicativo com solicitação de privilégios de administrador (`Verb = "runas"`), a recusa do usuário no diálogo UAC gera nativamente `Win32Exception` com código de erro `1223` (`ERROR_CANCELLED`). O `LaunchService` captura e trata essa exceção de forma transparente, mantendo a aplicação viva e sem popups de erro intrusivos.
-5. **Prevenção de Falhas Críticas com Named Pipes e DispatcherQueue**:
+5. **WAL e `busy_timeout` são por arquivo e por conexão — e precisam ser ligados explicitamente**:
+   - O `Microsoft.Data.Sqlite` abre em `journal_mode=delete` por padrão, e o padrão de acesso
+     real do modo Full (popup + editor + uma `DesktopGroupWindow` por grupo, cada um com seu
+     próprio `SqliteMenuRepository` contra o mesmo arquivo) transformava isso em
+     `SQLite Error 5: 'database is locked'` sob escrita concorrente.
+   - `journal_mode=WAL` e `synchronous=NORMAL` ficam gravados no arquivo e são ligados uma vez
+     em `SqliteSchema.EnsureCreated`. Já `foreign_keys` e `busy_timeout` **não** são
+     persistidos: valem por conexão, e por isso toda abertura passa por
+     `SqliteSchema.OpenConnection` — o ponto único que os reaplica.
+   - Regressão coberta por `SqliteConcurrencyStressTests` (seção 7.2), que falhava com 17
+     exceções de lock antes da correção.
+6. **Prevenção de Falhas Críticas com Named Pipes e DispatcherQueue**:
    - Exceções gerenciadas não capturadas dentro de delegates do `DispatcherQueue.TryEnqueue` levam o runtime do Windows App SDK a encerrar o processo com `STATUS_STOWED_EXCEPTION`. A infraestrutura do `SingleInstanceCoordinator` isola todas as chamadas de dispatch em blocos protegidos com logging preventivo.
 
 ---
@@ -218,7 +247,7 @@ Para permitir que a aplicação se mantenha atualizada de forma autônoma sem de
                    ┌─────────────────────────────────────────┐
                    │          GitHub Actions CI/CD           │
                    │  1. Restaura e compila solução .NET 8   │
-                   │  2. Executa 97 testes unit/integration  │
+                   │  2. Executa 109 testes unit/integration │
                    │  3. Publica binário self-contained x64  │
                    │  4. Gera instalador Inno Setup (.exe)   │
                    │  5. Calcula SHA256 do instalador        │
@@ -284,10 +313,14 @@ mkfile p
 # Executa os 49 testes unitários puros de Domínio e Localização
 dotnet test quickstacks/tests/QuickStacks.UnitTests
 
-# Executa os 48 testes de integração com SQLite, Shell COM e UpdateService
+# Executa os 60 testes de integração com SQLite, Shell COM, UpdateService,
+# reordenação do editor e stress de concorrência
 dotnet test quickstacks/tests/QuickStacks.IntegrationTests
+
+# Só os testes de stress de concorrência (WAL, escritores/leitores simultâneos)
+dotnet test quickstacks/tests/QuickStacks.IntegrationTests --filter "FullyQualifiedName~SqliteConcurrencyStressTests"
 ```
-*Status:* **97 testes passando com 100% de sucesso.**
+*Status:* **109 testes passando com 100% de sucesso.**
 
 ### 7.3. Publicação e Geração do Instalador
 ```powershell
@@ -297,7 +330,14 @@ dotnet publish quickstacks/src/QuickStacks.UI/QuickStacks.UI.csproj -c Release -
 # 2. Compilar instalador standalone com Inno Setup 6
 & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" tools/QuickStacks.iss /DMyAppVersion=1.1.0
 ```
-O executável final do instalador será gerado no diretório `dist/QuickStacks-Setup-v1.1.0-x64.exe`.
+O executável final do instalador é gerado em `dist/QuickStacks-Setup-v1.1.0-x64.exe`.
+
+> **Estado real nesta máquina:** o passo 1 (publicação self-contained) roda e produz
+> `quickstacks/publish/win-x64/QuickStacks.UI.exe`. O passo 2 **não** roda aqui: o Inno Setup 6
+> não está instalado nesta estação, então `dist/` ainda não contém nenhum instalador do
+> QuickStacks (o `EasyWinMenuSetup-1.1.0.1.exe` que está lá é do produto antigo). Quem gera o
+> instalador hoje é o workflow do GitHub Actions, que instala o Inno Setup via `choco` antes de
+> chamar o `ISCC.exe`. O `tools/build_installer.ps1` detecta a ausência e avisa, em vez de falhar.
 
 ---
 

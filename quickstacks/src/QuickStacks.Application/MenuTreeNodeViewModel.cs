@@ -20,6 +20,24 @@ public sealed partial class MenuTreeNodeViewModel : ObservableObject
 
     public bool IsFolder => Item.IsFolder;
 
+    /// <summary>Nivel na arvore (0 = raiz), usado para indentar na lista achatada do editor.</summary>
+    public int Depth { get; set; }
+
+    public bool HasChildren => Children.Count > 0;
+
+    /// <summary>Espaco no lugar da seta, para os nomes de quem nao tem filhos alinharem com os que tem.</summary>
+    public bool HasNoChildren => !HasChildren;
+
+    /// <summary>Espaco reservado para a seta de expandir, mesmo em quem nao tem filhos, para os nomes alinharem.</summary>
+    public double Indent => Depth * 20;
+
+    [ObservableProperty]
+    private bool _isExpanded;
+
+    public string ExpanderGlyph => IsExpanded ? "" : "";
+
+    partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(ExpanderGlyph));
+
     public string Glyph => Item.Type switch
     {
         MenuItemType.Folder => "",
@@ -50,6 +68,20 @@ public sealed partial class MenuTreeNodeViewModel : ObservableObject
             }
         }
 
+        foreach (var root in roots)
+        {
+            AssignDepth(root, 0);
+        }
+
         return roots;
+    }
+
+    private static void AssignDepth(MenuTreeNodeViewModel node, int depth)
+    {
+        node.Depth = depth;
+        foreach (var child in node.Children)
+        {
+            AssignDepth(child, depth + 1);
+        }
     }
 }

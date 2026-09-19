@@ -875,14 +875,95 @@ o detalhe de cada uma está no plano local, não duplicado aqui.
 
 Trabalho menor, sem fase própria ainda:
 
-- Reordenar itens dentro do mesmo nível por arraste, com persistência de `SortOrder` em lote
-  (pendência anotada na Fase 2 — `IMenuRepository.ReorderChildrenAsync` já existe e tem
-  teste, só falta o gesto de arraste na `TreeView`/`GridView`).
+- ~~Reordenar itens dentro do mesmo nível por arraste~~ — **feito** (ver 6.24).
 - Empacotamento MSIX de verdade (seção 6.9) — precisa de uma máquina com Visual Studio.
 - Verificação interativa completa (seção 6.10 confirmou que o app abre e fica de pé, mas não
   cada recurso individualmente): clicar no ícone da bandeja, o popup abrindo de verdade,
   navegar pelas pastas, o drag-and-drop para o Explorer, redimensionamento visual, os
   submenus (agora todos `ToggleMenuFlyoutItem`) marcando/desmarcando corretamente.
+- Ícone próprio: `Assets/quickstacks.ico` é byte a byte igual ao
+  `quickstacks-placeholder.ico`. A Fase 20 ligou o ícone em todos os lugares certos
+  (`<ApplicationIcon>`, `TrayIcon`, `AppWindow.SetIcon`), mas a arte definitiva nunca
+  substituiu o marcador — trocar o arquivo basta, nenhum código muda.
+- Causa-raiz do dicionário Fluent (6.25) segue de pé: a app continua restrita aos controles
+  que funcionam sem ele. Resolver de verdade exige `resources.pri`, que exige a task de PRI do
+  Visual Studio.
+
+## 6.25 A `EditorWindow` derrubava o app ao abrir — causa-raiz e correção
+
+Encontrado na verificação interativa (o item que a seção 7 listava como nunca feito). Abrir o
+editor — pela bandeja ou por `QuickStacks.UI.exe --desktop-action=open-editor` — mata o
+processo inteiro com `0xC000027B` (`STATUS_STOWED_EXCEPTION`) em `Microsoft.UI.Xaml.dll`.
+Reproduzido de forma determinística, e **confirmado como anterior a qualquer mudança desta
+fase de fechamento** (o mesmo teste derruba o código da Fase 20 sem nenhuma alteração).
+
+Ou seja: a Fase 2 / RF14 está documentada como concluída e aprovada, mas o editor nunca foi
+aberto de verdade — os testes que existem cobrem o `EditorViewModel`, nunca a janela.
+
+**Cadeia de causa, confirmada por experimento:**
+
+1. Esta máquina não tem Visual Studio, logo não tem
+   `Microsoft.Build.Packaging.Pri.Tasks.dll` (fornecida pelo componente "AppxPackage" do
+   MSBuild; `MrtCore.PriGen.targets` a procura em `$(AppxMSBuildToolsPath)`). Por isso a
+   seção 4 fixou `<EnableCoreMrtTooling>false</EnableCoreMrtTooling>`.
+2. Sem essa etapa, a app não gera `resources.pri` próprio e nenhum `ms-appx:///` resolve —
+   mesmo com `Microsoft.UI.Xaml.Controls.pri` presente na pasta de publicação.
+3. Sem `ms-appx:///`, o `XamlControlsResources` (dicionário Fluent) não pode ser mergeado no
+   `App.xaml`. Tentar mergear troca o sintoma de lugar: o app deixa de abrir, com
+   `XamlParseException: Cannot locate resource from
+   'ms-appx:///Microsoft.UI.Xaml/Themes/themeresources.xaml'` (testado e revertido).
+4. Sem o dicionário Fluent, todo controle cujo estilo padrão mora nele derruba o processo ao
+   ser aplicado. É a mesma causa dos contornos anteriores, que foram tratados um a um como
+   bugs isolados: `RadioMenuFlyoutItem` → `ToggleMenuFlyoutItem` (seção 5.2 da consolidação) e
+   `BreadcrumbBar` → `StackPanel` à mão (Fase 14). A `TreeView` do editor é o caso que nunca
+   foi contornado.
+
+**Correção aplicada** — seguiu-se o precedente do projeto (mesma saída do `BreadcrumbBar` na
+Fase 14): a `TreeView` saiu e a árvore passou a ser uma `ListView` achatada com indentação e
+seta de expandir feitas à mão. O `GridView` do popup já era a prova de que `ListViewBase`
+funciona sem o dicionário Fluent.
+
+- `MenuTreeNodeViewModel` ganhou `Depth`, `Indent`, `IsExpanded`, `HasChildren`/`HasNoChildren`
+  e `ExpanderGlyph`.
+- `EditorViewModel.VisibleNodes` é a árvore achatada respeitando quem está expandido;
+  `ToggleExpanded` a reconstrói. Um `HashSet` de ids abertos faz o estado de expansão
+  sobreviver a cada `LoadAsync` (que recria a árvore inteira do banco).
+- Os alvos de arraste continuam sendo a linha inteira, então a reordenação de 6.24 vale igual
+  na lista nova.
+
+Verificado de ponta a ponta com o app real: o editor abre, renderiza a hierarquia, a seta
+expande/recolhe e o processo sobrevive — o que antes era impossível.
+
+**A causa-raiz continua de pé, e vale registrar:** enquanto não houver `resources.pri`, todo
+controle novo cujo estilo padrão more no dicionário Fluent vai derrubar o processo do mesmo
+jeito. A alternativa descartada era gerar o PRI à mão com `makepri.exe` (existe nesta máquina,
+no Windows Kits e no pacote `Microsoft.Windows.SDK.BuildTools`), reproduzindo uma etapa de
+build que hoje pertence à task ausente do MSBuild e mantendo-a viva também no CI — conserta a
+classe inteira de bugs, mas troca um problema contido por uma etapa de build caseira.
+
+## 6.24 Fechamento — reordenar por arraste, WAL real e auditoria plano × código
+
+Varredura do que a consolidação afirmava contra o que o código fazia, e fechamento das
+divergências encontradas:
+
+- **Reordenar irmãos por arraste (pendência da Fase 2)**: a `TreeView` do editor só
+  reparentava (soltar sobre uma pasta). Agora a linha inteira é alvo de soltar e a posição
+  vertical do ponteiro decide a ação, na convenção do Explorer: 30% de cima insere antes, 30%
+  de baixo insere depois, e o miolo continua reparentando quando o alvo é pasta (num item que
+  não é pasta, o miolo vira "inserir depois"). `EditorViewModel.TryReorderAsync` regrava o
+  `SortOrder` do nível inteiro por `IMenuRepository.ReorderChildrenAsync`, reparentando antes
+  quando o item arrastado vem de outro nível. O alvo do `Drop` é a linha (um `Border`), não o
+  `TreeViewItem`: a altura do `TreeViewItem` inclui a subárvore inteira quando expandida, o
+  que tornaria a divisão em zonas sem sentido. Uma legenda localizada no cursor
+  (`editor.drop.*`, nos 4 idiomas) diz qual das três ações vai acontecer, já que as zonas são
+  invisíveis. Coberto por `EditorReorderTests` (6 testes).
+- **Modo WAL — afirmado desde a Fase 2, nunca ligado**: o banco rodava em
+  `journal_mode=delete` e sem `busy_timeout`. Ver seção 5.5 da consolidação para a correção e
+  a razão; `SqliteConcurrencyStressTests` cobre a regressão.
+- **Documentação corrigida**: o esquema SQL da consolidação (§4.1) descrevia tabelas e colunas
+  que nunca existiram com aqueles nomes/tipos, e o diagrama de classes usava membros
+  inexistentes (`UseCount`, `CreateLink`, `RecordUsageAsync`). Ambos passaram a refletir o
+  código.
 
 ## 8. Testes automatizados
 

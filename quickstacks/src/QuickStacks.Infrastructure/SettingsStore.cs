@@ -15,15 +15,15 @@ public sealed class SettingsStore
     {
         _connectionString = connectionString ?? DatabasePathProvider.GetConnectionString();
 
-        using var connection = new SqliteConnection(_connectionString);
-        connection.Open();
+        using var connection = Open();
         SqliteSchema.EnsureCreated(connection);
     }
 
+    private SqliteConnection Open() => SqliteSchema.OpenConnection(_connectionString);
+
     public string? Get(string key)
     {
-        using var connection = new SqliteConnection(_connectionString);
-        connection.Open();
+        using var connection = Open();
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT Value FROM Settings WHERE Key = @key;";
         command.Parameters.AddWithValue("@key", key);
@@ -32,8 +32,7 @@ public sealed class SettingsStore
 
     public void Set(string key, string value)
     {
-        using var connection = new SqliteConnection(_connectionString);
-        connection.Open();
+        using var connection = Open();
         using var command = connection.CreateCommand();
         command.CommandText = """
             INSERT INTO Settings (Key, Value) VALUES (@key, @value)

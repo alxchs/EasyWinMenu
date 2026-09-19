@@ -12,6 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\QuickStacks.Application\QuickStacks.Application.csproj" />
     <ProjectReference Include="..\..\src\QuickStacks.Domain\QuickStacks.Domain.csproj" />
     <ProjectReference Include="..\..\src\QuickStacks.Infrastructure\QuickStacks.Infrastructure.csproj" />
   </ItemGroup>

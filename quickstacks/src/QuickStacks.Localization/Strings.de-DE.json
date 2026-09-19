@@ -1,4 +1,6 @@
 {
+  "app.name": "QuickStacks",
+  "editor.windowTitle": "QuickStacks - Struktur bearbeiten",
   "tray.open": "Öffnen",
   "tray.editStructure": "Struktur bearbeiten...",
   "tray.theme": "Design",
@@ -49,6 +51,9 @@
   "editor.importLnkDialogTitle": "Verknüpfungen importieren",
   "editor.importLnkConfirmTextFormat": "{0} Verknüpfung(en) in \"{1}\" importieren?",
   "editor.rootLabel": "Stamm",
+  "editor.drop.intoFormat": "In \"{0}\" verschieben",
+  "editor.drop.beforeFormat": "Vor \"{0}\" einfügen",
+  "editor.drop.afterFormat": "Nach \"{0}\" einfügen",
   "editor.toggleDesktopGroup": "Desktopgruppe",
   "editor.newFolderDialogTitle": "Neuer Ordner",
   "editor.folderNameLabel": "Ordnername",

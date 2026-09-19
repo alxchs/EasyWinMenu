@@ -24,7 +24,16 @@ public sealed partial class EditorViewModel : ObservableObject
         _lnkImportService = lnkImportService;
     }
 
+    /// <summary>Ids das pastas abertas, para o estado de expansao sobreviver a cada LoadAsync.</summary>
+    private readonly HashSet<string> _expandedIds = [];
+
     public ObservableCollection<MenuTreeNodeViewModel> RootNodes { get; private set; } = [];
+
+    /// <summary>
+    /// A arvore achatada em uma lista, respeitando quem esta expandido - e' o que a lista do
+    /// editor consome. Ver EditorWindow.xaml para por que nao e' uma TreeView.
+    /// </summary>
+    public ObservableCollection<MenuTreeNodeViewModel> VisibleNodes { get; } = [];
 
     [ObservableProperty]
     private MenuTreeNodeViewModel? _selectedNode;
@@ -34,6 +43,56 @@ public sealed partial class EditorViewModel : ObservableObject
         var all = await _repository.GetAllAsync(ct);
         RootNodes = MenuTreeNodeViewModel.BuildTree(all);
         OnPropertyChanged(nameof(RootNodes));
+        RebuildVisibleNodes();
+    }
+
+    public void ToggleExpanded(MenuTreeNodeViewModel node)
+    {
+        if (!node.HasChildren)
+        {
+            return;
+        }
+
+        node.IsExpanded = !node.IsExpanded;
+        if (node.IsExpanded)
+        {
+            _expandedIds.Add(node.Id);
+        }
+        else
+        {
+            _expandedIds.Remove(node.Id);
+        }
+
+        RebuildVisibleNodes();
+    }
+
+    private void RebuildVisibleNodes()
+    {
+        var selectedId = SelectedNode?.Id;
+
+        VisibleNodes.Clear();
+        foreach (var root in RootNodes)
+        {
+            AppendVisible(root);
+        }
+
+        SelectedNode = selectedId is null ? null : VisibleNodes.FirstOrDefault(n => n.Id == selectedId);
+    }
+
+    private void AppendVisible(MenuTreeNodeViewModel node)
+    {
+        node.IsExpanded = _expandedIds.Contains(node.Id);
+        VisibleNodes.Add(node);
+
+        if (!node.IsExpanded)
+        {
+            return;
+        }
+
+        foreach (var child in node.Children)
+        {
+            AppendVisible(child);
+        }
     }
 
     public async Task<MenuItem> AddFolderAsync(string name, MenuTreeNodeViewModel? parent, CancellationToken ct = default)
@@ -124,6 +183,56 @@ public sealed partial class EditorViewModel : ObservableObject
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Coloca <paramref name="draggedItemId"/> imediatamente antes (ou depois, com
+    /// <paramref name="insertAfter"/>) de <paramref name="targetItemId"/> no nivel do alvo,
+    /// gravando o SortOrder de todos os irmaos em lote. Quando o item arrastado vem de outro
+    /// nivel, ele e' reparentado para o nivel do alvo antes de reordenar.
+    /// </summary>
+    public async Task<bool> TryReorderAsync(string draggedItemId, string targetItemId, bool insertAfter, CancellationToken ct = default)
+    {
+        if (draggedItemId == targetItemId)
+        {
+            return false;
+        }
+
+        var target = await _repository.GetByIdAsync(targetItemId, ct);
+        var dragged = await _repository.GetByIdAsync(draggedItemId, ct);
+        if (target is null || dragged is null)
+        {
+            return false;
+        }
+
+        if (dragged.ParentId != target.ParentId)
+        {
+            try
+            {
+                await _repository.MoveAsync(draggedItemId, target.ParentId, ct);
+            }
+            catch (InvalidOperationException)
+            {
+                // Destino dentro do proprio item arrastado - o repositorio barra o ciclo.
+                return false;
+            }
+        }
+
+        var siblings = await _repository.GetChildrenAsync(target.ParentId, ct);
+        var orderedIds = siblings.Select(s => s.Id).ToList();
+        orderedIds.Remove(draggedItemId);
+
+        var targetIndex = orderedIds.IndexOf(targetItemId);
+        if (targetIndex < 0)
+        {
+            return false;
+        }
+
+        orderedIds.Insert(insertAfter ? targetIndex + 1 : targetIndex, draggedItemId);
+
+        await _repository.ReorderChildrenAsync(target.ParentId, orderedIds, ct);
+        await LoadAsync(ct);
+        return true;
     }
 
     public Task ExportAsync(string filePath, CancellationToken ct = default) => _exportService.ExportAsync(filePath, ct);

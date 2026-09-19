@@ -58,10 +58,14 @@
             KeyDown="ItemsGrid_KeyDown">
             <GridView.ItemTemplate>
                 <DataTemplate x:DataType="app:MenuEntryViewModel">
+                    <!-- Sem AutomationProperties.Name o item se anuncia pelo ToString() do
+                         view model ("QuickStacks.Application.MenuEntryViewModel") para
+                         leitores de tela e para qualquer verificacao por UI Automation. -->
                     <StackPanel
                         Width="96"
                         Padding="10,12"
                         Spacing="6"
+                        AutomationProperties.Name="{x:Bind Name}"
                         AllowDrop="True"
                         DragOver="ItemContainer_DragOver"
                         Drop="ItemContainer_Drop">
@@ -94,12 +98,21 @@
                                 VerticalAlignment="Top"
                                 Visibility="{x:Bind IsFavorite}" />
                         </Grid>
+                        <!-- O ItemsWrapGrid do GridView da a TODOS os ladrilhos o tamanho
+                             desejado do primeiro item realizado. Sem uma altura fixa aqui, um
+                             nome curto ("Utilitarios") definia um ladrilho de uma linha e
+                             qualquer nome que quebrasse em duas ("Documentos") saia cortado.
+                             40px = duas linhas na altura natural da fonte padrao; nao forcar
+                             LineHeight aqui, porque um valor menor que a linha real da fonte
+                             faz a segunda linha nao caber e o texto voltar a ser truncado. -->
                         <TextBlock
                             Text="{x:Bind Name}"
                             HorizontalAlignment="Center"
                             TextAlignment="Center"
                             TextWrapping="Wrap"
                             MaxLines="2"
+                            Height="40"
+                            VerticalAlignment="Top"
                             TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                 </DataTemplate>

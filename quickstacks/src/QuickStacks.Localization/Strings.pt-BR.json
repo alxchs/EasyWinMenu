@@ -1,4 +1,6 @@
 {
+  "app.name": "QuickStacks",
+  "editor.windowTitle": "QuickStacks - Editar estrutura",
   "tray.open": "Abrir",
   "tray.editStructure": "Editar estrutura...",
   "tray.theme": "Tema",
@@ -49,6 +51,9 @@
   "editor.importLnkDialogTitle": "Importar atalhos",
   "editor.importLnkConfirmTextFormat": "Importar {0} atalho(s) para dentro de \"{1}\"?",
   "editor.rootLabel": "raiz",
+  "editor.drop.intoFormat": "Mover para dentro de \"{0}\"",
+  "editor.drop.beforeFormat": "Colocar antes de \"{0}\"",
+  "editor.drop.afterFormat": "Colocar depois de \"{0}\"",
   "editor.toggleDesktopGroup": "Grupo de area de trabalho",
   "editor.newFolderDialogTitle": "Nova pasta",
   "editor.folderNameLabel": "Nome da pasta",

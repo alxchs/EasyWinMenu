@@ -16,20 +16,11 @@ public sealed class SqliteMenuRepository : IMenuRepository
         SqliteSchema.EnsureCreated(connection);
     }
 
-    private static SqliteConnection Open(string connectionString)
-    {
-        var connection = new SqliteConnection(connectionString);
-        connection.Open();
-
-        // 'foreign_keys' e' uma configuracao por conexao, nao persistida no arquivo - sem
-        // isto aqui, ON DELETE CASCADE nunca seria aplicado de verdade em nenhuma operacao
-        // normal (so a conexao descartavel do EnsureCreated no construtor tinha isto ligado).
-        using var pragma = connection.CreateCommand();
-        pragma.CommandText = "PRAGMA foreign_keys = ON;";
-        pragma.ExecuteNonQuery();
-
-        return connection;
-    }
+    // 'foreign_keys' e 'busy_timeout' sao configuracoes por conexao, nao persistidas no
+    // arquivo - sem isto aqui, ON DELETE CASCADE nunca seria aplicado de verdade em nenhuma
+    // operacao normal (so a conexao descartavel do EnsureCreated no construtor tinha isto
+    // ligado), e escritas concorrentes falhariam de imediato com "database is locked".
+    private static SqliteConnection Open(string connectionString) => SqliteSchema.OpenConnection(connectionString);
 
     private SqliteConnection Open() => Open(_connectionString);
 

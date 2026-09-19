@@ -27,15 +27,19 @@ classDiagram
             +string? Path
             +string? Arguments
             +string? WorkingDirectory
+            +string? Icon
             +int SortOrder
             +bool IsFavorite
-            +int UseCount
-            +DateTime? LastUsedUtc
+            +int LaunchCount
+            +DateTimeOffset? LastUsedUtc
+            +DateTimeOffset CreatedAt
+            +DateTimeOffset UpdatedAt
             +bool IsDesktopGroup
             +ExecutionMode ExecutionMode
+            +bool IsFolder
             +CreateFolder(name, parentId, sortOrder)$ MenuItem
-            +CreateLink(name, path, parentId, sortOrder)$ MenuItem
-            +CreateCommand(name, command, parentId, sortOrder)$ MenuItem
+            +CreateShortcut(name, parentId, type, path, sortOrder)$ MenuItem
+            +RegisterLaunch() void
         }
 
         class MenuItemType {
@@ -501,7 +505,7 @@ sequenceDiagram
     LaunchSvc->>OS: Process.Start(ProcessStartInfo)
     alt Sucesso
         OS-->>LaunchSvc: Processo Criado
-        LaunchSvc->>Repo: RecordUsageAsync(item.Id) [Incrementa UseCount & LastUsedUtc]
+        LaunchSvc->>Repo: RegisterLaunchAsync(item.Id) [Incrementa LaunchCount & LastUsedUtc]
     else Usuário Recusa Diálogo UAC (NativeErrorCode == 1223)
         OS-->>LaunchSvc: Win32Exception (ERROR_CANCELLED)
         LaunchSvc->>LaunchSvc: Trata graciosamente (sem crash, sem diálogo de erro)

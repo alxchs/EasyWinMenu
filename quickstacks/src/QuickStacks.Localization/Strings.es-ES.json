@@ -1,4 +1,6 @@
 {
+  "app.name": "QuickStacks",
+  "editor.windowTitle": "QuickStacks - Editar estructura",
   "tray.open": "Abrir",
   "tray.editStructure": "Editar estructura...",
   "tray.theme": "Tema",
@@ -49,6 +51,9 @@
   "editor.importLnkDialogTitle": "Importar accesos directos",
   "editor.importLnkConfirmTextFormat": "¿Importar {0} acceso(s) directo(s) dentro de \"{1}\"?",
   "editor.rootLabel": "raíz",
+  "editor.drop.intoFormat": "Mover dentro de \"{0}\"",
+  "editor.drop.beforeFormat": "Colocar antes de \"{0}\"",
+  "editor.drop.afterFormat": "Colocar después de \"{0}\"",
   "editor.toggleDesktopGroup": "Grupo de escritorio",
   "editor.newFolderDialogTitle": "Nueva carpeta",
   "editor.folderNameLabel": "Nombre de la carpeta",
