@@ -24,52 +24,40 @@
             <AppBarButton x:Name="ToggleDesktopGroupButton" Icon="Pin" Click="ToggleDesktopGroup_Click" />
         </CommandBar>
 
-        <!-- Arvore achatada em ListView, com indentacao e seta de expandir feitas a mao.
-             NAO usar TreeView aqui: o estilo padrao dela mora no dicionario Fluent, que esta
-             app (desempacotada, com EnableCoreMrtTooling=false por falta da task de PRI do
-             Visual Studio) nao consegue mergear - aplicar a TreeView derrubava o processo
-             inteiro com STATUS_STOWED_EXCEPTION ao abrir o editor. Mesmo precedente do
-             BreadcrumbBar (Fase 14) e do RadioMenuFlyoutItem (Fase 6). Ver secao 6.25 da
-             especificacao tecnica. O GridView do popup ja provava que ListViewBase funciona
-             sem o dicionario. -->
-        <ListView
+        <!-- Padrao oficial do WinUI 3 para dados hierarquicos: um TreeViewItem aninhado no
+             proprio DataTemplate, com ItemsSource apontando para os filhos do no. So' e'
+             possivel porque o App.xaml agora consegue mergear o dicionario Fluent - ver
+             secao 6.25 da especificacao tecnica. -->
+        <TreeView
             x:Name="Tree"
             Grid.Row="1"
             Margin="8"
-            SelectionMode="Single"
             CanDragItems="True"
             AllowDrop="True"
             SelectionChanged="Tree_SelectionChanged"
             DragItemsStarting="Tree_DragItemsStarting"
-            ItemsSource="{x:Bind ViewModel.VisibleNodes}">
-            <ListView.ItemTemplate>
+            ItemsSource="{x:Bind ViewModel.RootNodes}">
+            <TreeView.ItemTemplate>
                 <DataTemplate x:DataType="app:MenuTreeNodeViewModel">
-                    <!-- O alvo de soltar e' a linha inteira: a posicao vertical do ponteiro
-                         dentro dela decide entre reordenar (bordas) e reparentar (meio). -->
-                    <Border
-                        Background="Transparent"
-                        AutomationProperties.Name="{x:Bind Name}"
-                        AllowDrop="True"
-                        DragOver="TreeItem_DragOver"
-                        Drop="TreeItem_Drop">
-                        <StackPanel Orientation="Horizontal" Spacing="8" Padding="0,4">
-                            <Border Width="{x:Bind Indent}" />
-                            <Button
-                                Click="Expander_Click"
-                                Background="Transparent"
-                                BorderThickness="0"
-                                Padding="4"
-                                MinWidth="24"
-                                Visibility="{x:Bind HasChildren}">
-                                <FontIcon Glyph="{x:Bind ExpanderGlyph, Mode=OneWay}" FontSize="10" />
-                            </Button>
-                            <Border Width="24" Visibility="{x:Bind HasNoChildren}" />
-                            <FontIcon Glyph="{x:Bind Glyph}" FontSize="16" />
-                            <TextBlock Text="{x:Bind Name}" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Border>
+                    <TreeViewItem ItemsSource="{x:Bind Children}">
+                        <!-- O alvo de soltar e' esta linha, nao o TreeViewItem: a altura do
+                             TreeViewItem inclui a subarvore inteira quando expandida, e a
+                             posicao vertical do ponteiro dentro dela e' o que decide entre
+                             reordenar (bordas) e reparentar (meio). -->
+                        <Border
+                            Background="Transparent"
+                            AutomationProperties.Name="{x:Bind Name}"
+                            AllowDrop="True"
+                            DragOver="TreeItem_DragOver"
+                            Drop="TreeItem_Drop">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="{x:Bind Glyph}" FontSize="16" />
+                                <TextBlock Text="{x:Bind Name}" />
+                            </StackPanel>
+                        </Border>
+                    </TreeViewItem>
                 </DataTemplate>
-            </ListView.ItemTemplate>
-        </ListView>
+            </TreeView.ItemTemplate>
+        </TreeView>
     </Grid>
 </Window>

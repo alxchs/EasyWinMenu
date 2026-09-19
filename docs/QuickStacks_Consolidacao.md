@@ -211,8 +211,9 @@ Durante as 20 fases de engenharia reversa e reescrita, diversas decisões de bai
    - Em máquinas de compilação sem as ferramentas legadas do Visual Studio, desabilitou-se o MRT Core (`<EnableCoreMrtTooling>false</EnableCoreMrtTooling>`).
    - Para evitar que o `dotnet publish` ignorasse o XAML compilado (`.xbf`), implementou-se o target MSBuild customizado `IncludeXbfInPublishOutput`, que mapeia deterministamente todos os binários XAML para a raiz do pacote de saída.
 2. **Substituição de `RadioMenuFlyoutItem` por `ToggleMenuFlyoutItem`**:
-   - Descobriu-se que o componente `RadioMenuFlyoutItem` do WinUI 3 provocava encerramento abrupto do processo (`STATUS_FAIL_FAST_EXCEPTION` 0xC0000409) em builds desempacotadas sem dicionários Fluent mergeados no `App.xaml`.
-   - A solução elegante e estável adotou `ToggleMenuFlyoutItem` com exclusividade mútua gerenciada via código (`SetCheckedExclusive`), garantindo comportamento 100% idêntico sem instabilidades.
+   - Descobriu-se que o componente `RadioMenuFlyoutItem` do WinUI 3 provocava encerramento abrupto do processo em builds desempacotadas sem dicionários Fluent mergeados no `App.xaml`.
+   - Adotou-se `ToggleMenuFlyoutItem` com exclusividade mútua gerenciada via código (`SetCheckedExclusive`), com comportamento equivalente.
+   - **Atualização (fase de fechamento):** isto era um contorno, não a correção. A causa real era o `App.xaml` não conseguir mergear o dicionário Fluent por falta de `resources.pri` — hoje resolvida na raiz (seção 6.25 da especificação técnica). O contorno segue no código porque funciona, mas deixou de ser necessário.
 3. **Subclassing com `SetWindowSubclass` para Menus de Contexto COM**:
    - Para hospedar menus de contexto nativos do Windows Explorer (`IContextMenu2` e `IContextMenu3`), mensagens Win32 fundamentais como `WM_INITMENUPOPUP`, `WM_DRAWITEM`, `WM_MEASUREITEM` e `WM_MENUCHAR` precisavam ser interceptadas antes do framework gráfico.
    - Utilizou-se a API `SetWindowSubclass` da biblioteca nativa `comctl32.dll` com ponteiros estáticos de callback, permitindo que extensões de terceiros (ex: 7-Zip, Git, antivírus, editores de código) desenhem seus itens proprietários e processem submenus dinâmicos com perfeição.

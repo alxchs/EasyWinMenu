@@ -61,17 +61,9 @@ public sealed partial class EditorWindow : Window
         await ViewModel.LoadAsync();
     }
 
-    private void Tree_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void Tree_SelectionChanged(TreeView sender, TreeViewSelectionChangedEventArgs args)
     {
-        ViewModel.SelectedNode = Tree.SelectedItem as MenuTreeNodeViewModel;
-    }
-
-    private void Expander_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is FrameworkElement { DataContext: MenuTreeNodeViewModel node })
-        {
-            ViewModel.ToggleExpanded(node);
-        }
+        ViewModel.SelectedNode = sender.SelectedItem as MenuTreeNodeViewModel;
     }
 
     // ---- CRUD ----
@@ -264,15 +256,15 @@ public sealed partial class EditorWindow : Window
         return target.IsFolder ? DropIntent.Into : DropIntent.After;
     }
 
-    private void Tree_DragItemsStarting(object sender, DragItemsStartingEventArgs e)
+    private void Tree_DragItemsStarting(TreeView sender, TreeViewDragItemsStartingEventArgs args)
     {
-        if (e.Items.Count == 0 || e.Items[0] is not MenuTreeNodeViewModel node)
+        if (args.Items.Count == 0 || args.Items[0] is not MenuTreeNodeViewModel node)
         {
             return;
         }
 
-        e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
-        e.Data.SetData(DraggedItemFormat, node.Id);
+        args.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+        args.Data.SetData(DraggedItemFormat, node.Id);
     }
 
     private void TreeItem_DragOver(object sender, DragEventArgs e)

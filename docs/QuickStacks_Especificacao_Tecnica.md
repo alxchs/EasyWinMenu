@@ -70,24 +70,34 @@ escopado só a essa subárvore — NuGet usa o config mais próximo na árvore d
 não altera o restore do EasyWinMenu.App/Core). Numa máquina com um `NuGet.Config` de usuário
 sem essa restrição, este arquivo é inofensivo (só amplia o que já seria permitido).
 
-Um segundo obstáculo, mais sério: esta máquina só tem o **dotnet SDK puro**, sem Visual
-Studio instalado. O alvo WinUI 3 depende de uma ferramenta de geração de recursos (PRI/MRT —
-`Microsoft.Build.Packaging.Pri.Tasks.dll`) que só é distribuída junto com o componente
-"AppxPackage" do MSBuild da Visual Studio — **esse arquivo não existe em lugar nenhum desta
-instalação do dotnet SDK** (confirmado por busca no disco). Como o app não é empacotado
-(`WindowsPackageType=None`) e ainda não usa nenhum recurso `.resw`/MRT, a build do
-`QuickStacks.UI.csproj` define:
+Um segundo obstáculo, mais sério: o alvo WinUI 3 depende de uma ferramenta de geração de
+recursos (PRI/MRT — `Microsoft.Build.Packaging.Pri.Tasks.dll`) distribuída junto com o
+componente "AppxPackage" do MSBuild do Visual Studio. Por não ser encontrada, a build do
+`QuickStacks.UI.csproj` definia `<EnableCoreMrtTooling>false</EnableCoreMrtTooling>` e pulava
+a etapa inteira.
 
-```xml
-<EnableCoreMrtTooling>false</EnableCoreMrtTooling>
-```
+> **CORREÇÃO (fase de fechamento).** A afirmação que estava aqui — "esta máquina só tem o
+> dotnet SDK puro, sem Visual Studio instalado, confirmado por busca no disco" — **era falsa**.
+> O Visual Studio 2022 Community está instalado, com o componente AppxPackage, e a DLL sempre
+> esteve em
+> `C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Microsoft\VisualStudio\v17.0\AppxPackage\`.
+>
+> O que acontecia de verdade: `MrtCore.PriGen.targets` procura a DLL em
+> `$(AppxMSBuildToolsPath)`, cujo padrão é
+> `$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\AppxPackage\`. Sob
+> `dotnet build`, `MSBuildExtensionsPath` aponta para dentro do **SDK do dotnet**, e
+> `VisualStudioVersion` resolve para `v18.0` — dois motivos para nunca achar a instalação real.
+> O diagnóstico original leu "o MSBuild não acha" como "não existe na máquina", e essa
+> conclusão errada custou quatro contornos ao longo das fases seguintes (ver 6.25).
+>
+> Hoje o `QuickStacks.UI.csproj` localiza a instalação real e liga o MRT de verdade. Quando
+> nenhuma instalação é encontrada, a build **avisa** (`warning`) e cai no modo degradado, em vez
+> de degradar em silêncio.
 
-para pular essa etapa inteira. **Decisão tomada na Fase 5**: em vez de contornar isso para
-poder usar `.resw`, a internacionalização foi implementada com **JSON puro embutido como
-recurso do assembly** (`QuickStacks.Localization`, sem nenhuma dependência de MRT/PRI) — ver
-seção 6.7. `EnableCoreMrtTooling=false` continua valendo e não precisa mais ser revisto por
-causa de i18n; só voltaria à mesa se algum recurso futuro exigir MRT de verdade (ex.:
-empacotamento MSIX na Fase 7, que aí sim precisa rodar numa máquina com Visual Studio).
+Independente disso, a **decisão da Fase 5 continua válida**: a internacionalização é feita com
+JSON puro embutido como recurso do assembly (`QuickStacks.Localization`), sem depender de
+`.resw`/MRT — ver seção 6.7. Ter o MRT funcionando não a torna obsoleta; só remove a
+fragilidade que existia por baixo.
 
 **Como compilar cada projeto** (a solução `.slnx` inteira falha com plataforma "Any CPU"
 default — o projeto de UI só aceita x86/x64/arm64):
@@ -885,9 +895,8 @@ Trabalho menor, sem fase própria ainda:
   `quickstacks-placeholder.ico`. A Fase 20 ligou o ícone em todos os lugares certos
   (`<ApplicationIcon>`, `TrayIcon`, `AppWindow.SetIcon`), mas a arte definitiva nunca
   substituiu o marcador — trocar o arquivo basta, nenhum código muda.
-- Causa-raiz do dicionário Fluent (6.25) segue de pé: a app continua restrita aos controles
-  que funcionam sem ele. Resolver de verdade exige `resources.pri`, que exige a task de PRI do
-  Visual Studio.
+- Reverter (ou não) os contornos que a correção de 6.25 tornou desnecessários:
+  `RadioMenuFlyoutItem` → `ToggleMenuFlyoutItem` e `BreadcrumbBar` → `StackPanel`.
 
 ## 6.25 A `EditorWindow` derrubava o app ao abrir — causa-raiz e correção
 
@@ -918,28 +927,40 @@ aberto de verdade — os testes que existem cobrem o `EditorViewModel`, nunca a 
    `BreadcrumbBar` → `StackPanel` à mão (Fase 14). A `TreeView` do editor é o caso que nunca
    foi contornado.
 
-**Correção aplicada** — seguiu-se o precedente do projeto (mesma saída do `BreadcrumbBar` na
-Fase 14): a `TreeView` saiu e a árvore passou a ser uma `ListView` achatada com indentação e
-seta de expandir feitas à mão. O `GridView` do popup já era a prova de que `ListViewBase`
-funciona sem o dicionário Fluent.
+**Correção aplicada: a raiz, não o sintoma.** A ferramenta de PRI sempre esteve nesta máquina
+— o que faltava era o MSBuild encontrá-la (ver a correção na seção 4). Com isso resolvido, a
+cadeia inteira se desfaz de cima para baixo:
 
-- `MenuTreeNodeViewModel` ganhou `Depth`, `Indent`, `IsExpanded`, `HasChildren`/`HasNoChildren`
-  e `ExpanderGlyph`.
-- `EditorViewModel.VisibleNodes` é a árvore achatada respeitando quem está expandido;
-  `ToggleExpanded` a reconstrói. Um `HashSet` de ids abertos faz o estado de expansão
-  sobreviver a cada `LoadAsync` (que recria a árvore inteira do banco).
-- Os alvos de arraste continuam sendo a linha inteira, então a reordenação de 6.24 vale igual
-  na lista nova.
+1. `QuickStacks.UI.csproj` localiza o `AppxPackage` do Visual Studio numa cadeia explícita de
+   candidatos e liga `EnableCoreMrtTooling`. A busca é por propriedade (`Exists(...)`), não por
+   item: `MrtCore.PriGen.targets` lê `AppxMSBuildToolsPath` fora de qualquer `Target` e já o usa
+   no `UsingTask`, então definir isso dentro de um `Target` seria tarde demais. Quem estiver
+   fora do layout padrão passa `-p:AppxMSBuildToolsPath=...`.
+2. A build passa a gerar `QuickStacks.UI.pri`. Como `dotnet publish` filtra a saída por
+   `@(ResolvedFileToPublish)`, o arquivo entra nessa lista à mão — e também como
+   `resources.pri`, que é o nome que o MRT Core procura ao lado do executável no modo
+   desempacotado.
+3. Com o `.pri` no lugar, `ms-appx:///` volta a resolver e o `App.xaml` finalmente mergeia o
+   `XamlControlsResources`.
+4. A `TreeView` nativa do WinUI volta a ser usada no editor, no padrão oficial de dados
+   hierárquicos. Os alvos de soltar continuam num `Border` dentro do `TreeViewItem`, pela razão
+   geométrica descrita acima, então a reordenação de 6.24 vale igual.
 
-Verificado de ponta a ponta com o app real: o editor abre, renderiza a hierarquia, a seta
-expande/recolhe e o processo sobrevive — o que antes era impossível.
+**Ganhos que o contorno manual não dava** — verificados por UI Automation no app real: os itens
+voltam a expor o papel `TreeItem` (eram `ListItem`) e o padrão `ExpandCollapse`, que leitores de
+tela e automação usam para navegar a árvore; o retângulo de foco de teclado volta a aparecer; e
+expandir/recolher, virtualização e navegação por setas passam a ser da plataforma, não código
+nosso.
 
-**A causa-raiz continua de pé, e vale registrar:** enquanto não houver `resources.pri`, todo
-controle novo cujo estilo padrão more no dicionário Fluent vai derrubar o processo do mesmo
-jeito. A alternativa descartada era gerar o PRI à mão com `makepri.exe` (existe nesta máquina,
-no Windows Kits e no pacote `Microsoft.Windows.SDK.BuildTools`), reproduzindo uma etapa de
-build que hoje pertence à task ausente do MSBuild e mantendo-a viva também no CI — conserta a
-classe inteira de bugs, mas troca um problema contido por uma etapa de build caseira.
+**O contorno dos `.xbf` foi removido do caminho normal.** Ele existia pela mesma causa-raiz, e
+com o MRT ligado passa a atrapalhar: o compilador XAML emite uma segunda cópia em
+`obj\...\embed\`, e o glob antigo pegava as duas, colidindo no mesmo caminho relativo
+(`NETSDK1152`). O alvo ficou condicionado ao modo degradado.
+
+**Contornos que podem ser revisitados agora:** `RadioMenuFlyoutItem` → `ToggleMenuFlyoutItem`
+(seção 5.2 da consolidação) e `BreadcrumbBar` → `StackPanel` à mão (Fase 14) foram adotados por
+esta mesma causa, que não existe mais. Nenhum dos dois foi revertido nesta fase — ambos
+funcionam e reverter é risco sem ganho imediato —, mas deixam de ser obrigatórios.
 
 ## 6.24 Fechamento — reordenar por arraste, WAL real e auditoria plano × código
 

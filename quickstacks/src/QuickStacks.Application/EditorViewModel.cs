@@ -24,16 +24,7 @@ public sealed partial class EditorViewModel : ObservableObject
         _lnkImportService = lnkImportService;
     }
 
-    /// <summary>Ids das pastas abertas, para o estado de expansao sobreviver a cada LoadAsync.</summary>
-    private readonly HashSet<string> _expandedIds = [];
-
     public ObservableCollection<MenuTreeNodeViewModel> RootNodes { get; private set; } = [];
-
-    /// <summary>
-    /// A arvore achatada em uma lista, respeitando quem esta expandido - e' o que a lista do
-    /// editor consome. Ver EditorWindow.xaml para por que nao e' uma TreeView.
-    /// </summary>
-    public ObservableCollection<MenuTreeNodeViewModel> VisibleNodes { get; } = [];
 
     [ObservableProperty]
     private MenuTreeNodeViewModel? _selectedNode;
@@ -43,56 +34,6 @@ public sealed partial class EditorViewModel : ObservableObject
         var all = await _repository.GetAllAsync(ct);
         RootNodes = MenuTreeNodeViewModel.BuildTree(all);
         OnPropertyChanged(nameof(RootNodes));
-        RebuildVisibleNodes();
-    }
-
-    public void ToggleExpanded(MenuTreeNodeViewModel node)
-    {
-        if (!node.HasChildren)
-        {
-            return;
-        }
-
-        node.IsExpanded = !node.IsExpanded;
-        if (node.IsExpanded)
-        {
-            _expandedIds.Add(node.Id);
-        }
-        else
-        {
-            _expandedIds.Remove(node.Id);
-        }
-
-        RebuildVisibleNodes();
-    }
-
-    private void RebuildVisibleNodes()
-    {
-        var selectedId = SelectedNode?.Id;
-
-        VisibleNodes.Clear();
-        foreach (var root in RootNodes)
-        {
-            AppendVisible(root);
-        }
-
-        SelectedNode = selectedId is null ? null : VisibleNodes.FirstOrDefault(n => n.Id == selectedId);
-    }
-
-    private void AppendVisible(MenuTreeNodeViewModel node)
-    {
-        node.IsExpanded = _expandedIds.Contains(node.Id);
-        VisibleNodes.Add(node);
-
-        if (!node.IsExpanded)
-        {
-            return;
-        }
-
-        foreach (var child in node.Children)
-        {
-            AppendVisible(child);
-        }
     }
 
     public async Task<MenuItem> AddFolderAsync(string name, MenuTreeNodeViewModel? parent, CancellationToken ct = default)
