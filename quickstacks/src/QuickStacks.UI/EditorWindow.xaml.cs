@@ -27,13 +27,29 @@ public sealed partial class EditorWindow : Window
         ToggleDesktopGroupButton.Visibility = FeatureTier.IsFull ? Visibility.Visible : Visibility.Collapsed;
 
         RefreshTexts();
+        UpdateDesktopGroupButtonState();
         LocalizationService.LanguageChanged += RefreshTexts;
-        Closed += (_, _) => LocalizationService.LanguageChanged -= RefreshTexts;
+
+        DataChangeNotifier.Changed += OnDataChanged;
+        Closed += (_, _) =>
+        {
+            DataChangeNotifier.Changed -= OnDataChanged;
+            LocalizationService.LanguageChanged -= RefreshTexts;
+        };
 
         _ = ViewModel.LoadAsync();
     }
 
     public EditorViewModel ViewModel { get; }
+
+    private void OnDataChanged()
+    {
+        DispatcherQueue.TryEnqueue(async () =>
+        {
+            await ViewModel.LoadAsync();
+            UpdateDesktopGroupButtonState();
+        });
+    }
 
     private void RefreshTexts()
     {
@@ -45,7 +61,24 @@ public sealed partial class EditorWindow : Window
         ExportButton.Label = LocalizationService.Get("editor.export");
         ImportButton.Label = LocalizationService.Get("editor.import");
         ImportLnkButton.Label = LocalizationService.Get("editor.importLnk");
-        ToggleDesktopGroupButton.Label = LocalizationService.Get("editor.toggleDesktopGroup");
+        ImportEasyWinMenuButton.Label = "Importar EasyWinMenu";
+        UpdateDesktopGroupButtonState();
+    }
+
+    private void UpdateDesktopGroupButtonState()
+    {
+        if (ViewModel.SelectedNode is { IsFolder: true } folder)
+        {
+            ToggleDesktopGroupButton.IsEnabled = true;
+            ToggleDesktopGroupButton.Label = folder.Item.IsDesktopGroup
+                ? "Remover da área de trabalho"
+                : "Fixar na área de trabalho";
+        }
+        else
+        {
+            ToggleDesktopGroupButton.IsEnabled = false;
+            ToggleDesktopGroupButton.Label = LocalizationService.Get("editor.toggleDesktopGroup") ?? "Desktop group";
+        }
     }
 
     private async void ToggleDesktopGroup_Click(object sender, RoutedEventArgs e)
@@ -55,13 +88,18 @@ public sealed partial class EditorWindow : Window
             return;
         }
 
-        await _repository.SetIsDesktopGroupAsync(node.Id, !node.Item.IsDesktopGroup);
+        var newState = !node.Item.IsDesktopGroup;
+        await _repository.SetIsDesktopGroupAsync(node.Id, newState);
         await ViewModel.LoadAsync();
+        await DesktopGroupWindow.SyncOpenGroupsWithDatabaseAsync(_repository);
+        DataChangeNotifier.NotifyChanged();
+        UpdateDesktopGroupButtonState();
     }
 
     private void Tree_SelectionChanged(TreeView sender, TreeViewSelectionChangedEventArgs args)
     {
         ViewModel.SelectedNode = sender.SelectedItem as MenuTreeNodeViewModel;
+        UpdateDesktopGroupButtonState();
     }
 
     // ---- CRUD ----
@@ -247,10 +285,69 @@ public sealed partial class EditorWindow : Window
         if (!e.DataView.Contains(DraggedItemFormat))
         {
             return;
+        var def = e.GetDeferral();
+        try
+        {
+            var draggedId = (string)await e.DataView.GetDataAsync(DraggedItemFormat);
+            DispatcherQueue.TryEnqueue(async () =>
+            {
+                await ViewModel.TryMoveAsync(draggedId, target.Id);
+                await DesktopGroupWindow.ReloadAllAsync();
+            });
+        }
+        catch (Exception ex)
+        {
+            App.Log($"EditorWindow.TreeItem_Drop error: {ex}");
+        }
+        finally
+        {
+            def.Complete();
+        }
+    }
+
+    private async void ImportEasyWinMenu_Click(object sender, RoutedEventArgs e)
+    {
+        if (!QuickStacks.Infrastructure.EasyWinMenuMigrationService.HasLegacyConfig())
+        {
+            var notFound = new ContentDialog
+            {
+                Title = "Configuração não encontrada",
+                Content = $"Nenhum arquivo config.json foi localizado em:\n{QuickStacks.Infrastructure.EasyWinMenuMigrationService.DefaultConfigPath}",
+                CloseButtonText = LocalizationService.Get("common.ok"),
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot,
+            };
+            await notFound.ShowAsync();
+            return;
         }
 
-        var draggedId = (string)await e.DataView.GetDataAsync(DraggedItemFormat);
-        await ViewModel.TryMoveAsync(draggedId, target.Id);
+        var confirm = new ContentDialog
+        {
+            Title = "Importar do EasyWinMenu",
+            Content = "Deseja importar todas as categorias, atalhos e posições da área de trabalho do EasyWinMenu legado?",
+            PrimaryButtonText = LocalizationService.Get("common.ok"),
+            CloseButtonText = LocalizationService.Get("common.cancel"),
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot,
+        };
+
+        if (await confirm.ShowAsync() == ContentDialogResult.Primary)
+        {
+            var imported = await QuickStacks.Infrastructure.EasyWinMenuMigrationService.MigrateAsync(_repository);
+            await ViewModel.LoadAsync();
+            await DesktopGroupWindow.SyncOpenGroupsWithDatabaseAsync(_repository);
+            DataChangeNotifier.NotifyChanged();
+
+            var done = new ContentDialog
+            {
+                Title = "Importação concluída",
+                Content = $"{imported} atalho(s) importado(s) com sucesso!",
+                CloseButtonText = LocalizationService.Get("common.ok"),
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot,
+            };
+            await done.ShowAsync();
+        }
     }
 
     // ---- Dialogos simples (sem XAML proprio - a Fase 2 prioriza funcionar; refinar visual e' polimento futuro) ----

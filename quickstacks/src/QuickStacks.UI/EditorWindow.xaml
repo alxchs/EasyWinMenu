@@ -20,6 +20,7 @@
             <AppBarButton x:Name="ExportButton" Icon="Save" Click="Export_Click" />
             <AppBarButton x:Name="ImportButton" Icon="OpenFile" Click="Import_Click" />
             <AppBarButton x:Name="ImportLnkButton" Icon="Link" Click="ImportLnk_Click" />
+            <AppBarButton x:Name="ImportEasyWinMenuButton" Icon="Import" Click="ImportEasyWinMenu_Click" />
             <AppBarSeparator x:Name="DesktopGroupSeparator" />
             <AppBarButton x:Name="ToggleDesktopGroupButton" Icon="Pin" Click="ToggleDesktopGroup_Click" />
         </CommandBar>
@@ -31,10 +32,9 @@
             Grid.Row="1"
             Margin="8"
             CanDragItems="True"
-            AllowDrop="True"
             SelectionChanged="Tree_SelectionChanged"
             DragItemsStarting="Tree_DragItemsStarting"
-            ItemsSource="{x:Bind ViewModel.RootNodes}">
+            ItemsSource="{x:Bind ViewModel.RootNodes, Mode=OneWay}">
             <TreeView.ItemTemplate>
                 <DataTemplate x:DataType="app:MenuTreeNodeViewModel">
                     <TreeViewItem
@@ -44,7 +44,7 @@
                         Drop="TreeItem_Drop">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="{x:Bind Glyph}" FontSize="16" />
-                            <TextBlock Text="{x:Bind Name}" />
+                            <TextBlock Text="{x:Bind DisplayName}" />
                         </StackPanel>
                     </TreeViewItem>
                 </DataTemplate>

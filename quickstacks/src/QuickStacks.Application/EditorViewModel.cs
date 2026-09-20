@@ -24,7 +24,7 @@ public sealed partial class EditorViewModel : ObservableObject
         _lnkImportService = lnkImportService;
     }
 
-    public ObservableCollection<MenuTreeNodeViewModel> RootNodes { get; private set; } = [];
+    public ObservableCollection<MenuTreeNodeViewModel> RootNodes { get; } = [];
 
     [ObservableProperty]
     private MenuTreeNodeViewModel? _selectedNode;
@@ -32,7 +32,13 @@ public sealed partial class EditorViewModel : ObservableObject
     public async Task LoadAsync(CancellationToken ct = default)
     {
         var all = await _repository.GetAllAsync(ct);
-        RootNodes = MenuTreeNodeViewModel.BuildTree(all);
+        var newRoots = MenuTreeNodeViewModel.BuildTree(all);
+        SelectedNode = null;
+        RootNodes.Clear();
+        foreach (var node in newRoots)
+        {
+            RootNodes.Add(node);
+        }
         OnPropertyChanged(nameof(RootNodes));
     }
 
@@ -43,6 +49,7 @@ public sealed partial class EditorViewModel : ObservableObject
         var folder = MenuItem.CreateFolder(name, parentId, siblingCount);
         await _repository.AddAsync(folder, ct);
         await LoadAsync(ct);
+        DataChangeNotifier.NotifyChanged();
         return folder;
     }
 
@@ -62,6 +69,7 @@ public sealed partial class EditorViewModel : ObservableObject
         item.WorkingDirectory = workingDirectory;
         await _repository.AddAsync(item, ct);
         await LoadAsync(ct);
+        DataChangeNotifier.NotifyChanged();
         return item;
     }
 
@@ -78,6 +86,7 @@ public sealed partial class EditorViewModel : ObservableObject
         node.Item.Name = newName;
         await _repository.UpdateAsync(node.Item, ct);
         await LoadAsync(ct);
+        DataChangeNotifier.NotifyChanged();
     }
 
     public async Task UpdateItemAsync(
@@ -94,12 +103,14 @@ public sealed partial class EditorViewModel : ObservableObject
         node.Item.WorkingDirectory = workingDirectory;
         await _repository.UpdateAsync(node.Item, ct);
         await LoadAsync(ct);
+        DataChangeNotifier.NotifyChanged();
     }
 
     public async Task DeleteAsync(MenuTreeNodeViewModel node, CancellationToken ct = default)
     {
         await _repository.DeleteAsync(node.Id, ct);
         await LoadAsync(ct);
+        DataChangeNotifier.NotifyChanged();
     }
 
     /// <summary>Reparenta um no arrastado (protegido contra ciclo pelo repositorio).</summary>
@@ -114,6 +125,7 @@ public sealed partial class EditorViewModel : ObservableObject
         {
             await _repository.MoveAsync(draggedItemId, newParentId, ct);
             await LoadAsync(ct);
+            DataChangeNotifier.NotifyChanged();
             return true;
         }
         catch (InvalidOperationException)
@@ -128,6 +140,7 @@ public sealed partial class EditorViewModel : ObservableObject
     {
         await _exportService.ImportAsync(filePath, ct);
         await LoadAsync(ct);
+        DataChangeNotifier.NotifyChanged();
     }
 
     /// <summary>Importa .lnk como itens novos dentro do no selecionado (raiz se nada selecionado) - RF08.</summary>
@@ -135,6 +148,7 @@ public sealed partial class EditorViewModel : ObservableObject
     {
         var created = await _lnkImportService.ImportAsync(lnkFilePaths, ResolveTargetParentId(SelectedNode), ct);
         await LoadAsync(ct);
+        DataChangeNotifier.NotifyChanged();
         return created;
     }
 

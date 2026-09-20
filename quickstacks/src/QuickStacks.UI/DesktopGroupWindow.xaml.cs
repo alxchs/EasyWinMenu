@@ -33,9 +33,43 @@ public sealed partial class DesktopGroupWindow : Window
 
     private const double AppFolderTileWidth = 110;
     private const double AppFolderTileHeight = 140;
-    private const int AppFolderMosaicCapacity = 9;
-
     private static readonly List<DesktopGroupWindow> _openGroups = new();
+
+    public static IReadOnlyList<DesktopGroupWindow> OpenGroups => _openGroups;
+
+    public static async Task ReloadAllAsync()
+    {
+        foreach (var window in _openGroups.ToArray())
+        {
+            await window.ReloadAsync();
+        }
+    }
+
+    public static async Task SyncOpenGroupsWithDatabaseAsync(IMenuRepository repo)
+    {
+        var desktopGroups = await repo.GetDesktopGroupsAsync();
+        var targetGroupIds = desktopGroups.Select(g => g.Id).ToHashSet();
+
+        foreach (var window in _openGroups.ToArray())
+        {
+            if (!targetGroupIds.Contains(window._groupId))
+            {
+                window.Close();
+            }
+        }
+
+        var openGroupIds = _openGroups.Select(g => g._groupId).ToHashSet();
+        foreach (var group in desktopGroups)
+        {
+            if (!openGroupIds.Contains(group.Id))
+            {
+                var win = new DesktopGroupWindow(repo, group);
+                win.Activate();
+            }
+        }
+
+        await ReloadAllAsync();
+    }
 
     private readonly IMenuRepository _repository;
     private readonly SettingsStore _settings = new();
@@ -91,10 +125,23 @@ public sealed partial class DesktopGroupWindow : Window
 
         _placement = DesktopGroupPlacement.CreateDefault(_groupId, 80, 80);
 
+        DataChangeNotifier.Changed += OnDataChanged;
         _openGroups.Add(this);
-        Closed += (_, _) => _openGroups.Remove(this);
+        Closed += (_, _) =>
+        {
+            DataChangeNotifier.Changed -= OnDataChanged;
+            _openGroups.Remove(this);
+        };
 
         _ = InitializeAsync();
+    }
+
+    private void OnDataChanged()
+    {
+        DispatcherQueue.TryEnqueue(async () =>
+        {
+            await ReloadAsync();
+        });
     }
 
     private async Task InitializeAsync()
@@ -689,54 +736,68 @@ public sealed partial class DesktopGroupWindow : Window
 
     private async void IconCanvas_Drop(object sender, DragEventArgs e)
     {
-        // 1. Movido de outro grupo do QuickStacks
-        if (e.DataView.Contains(DraggedItemFormat))
+        var def = e.GetDeferral();
+        try
         {
-            var itemId = (string)await e.DataView.GetDataAsync(DraggedItemFormat);
-            var sourceGroupId = e.DataView.Contains(SourceGroupFormat)
-                ? (string)await e.DataView.GetDataAsync(SourceGroupFormat)
-                : null;
-
-            if (sourceGroupId != null && sourceGroupId != _groupId)
+            // 1. Movido de outro grupo do QuickStacks
+            if (e.DataView.Contains(DraggedItemFormat))
             {
-                var item = await _repository.GetByIdAsync(itemId);
-                if (item != null)
+                var itemId = (string)await e.DataView.GetDataAsync(DraggedItemFormat);
+                var sourceGroupId = e.DataView.Contains(SourceGroupFormat)
+                    ? (string)await e.DataView.GetDataAsync(SourceGroupFormat)
+                    : null;
+
+                if (sourceGroupId != null && sourceGroupId != _groupId)
                 {
-                    // Transfere a posse do atalho para este grupo
-                    item.ParentId = _groupId;
-                    await _repository.UpdateAsync(item);
-
-                    // Notifica o grupo de origem para se reorganizar
-                    var sourceWindow = _openGroups.FirstOrDefault(g => g._groupId == sourceGroupId);
-                    if (sourceWindow != null)
+                    var item = await _repository.GetByIdAsync(itemId);
+                    if (item != null)
                     {
-                        _ = sourceWindow.ReloadAsync();
+                        // Transfere a posse do atalho para este grupo
+                        item.ParentId = _groupId;
+                        await _repository.UpdateAsync(item);
+
+                        // Notifica o grupo de origem para se reorganizar
+                        var sourceWindow = _openGroups.FirstOrDefault(g => g._groupId == sourceGroupId);
+                        if (sourceWindow != null)
+                        {
+                            _ = sourceWindow.ReloadAsync();
+                        }
+
+                        // Reorganiza este grupo imediatamente
+                        await ReloadAsync();
+                        DataChangeNotifier.NotifyChanged();
                     }
-
-                    // Reorganiza este grupo imediatamente
-                    await ReloadAsync();
                 }
+                return;
             }
-            return;
-        }
 
-        // 2. Solto de outra aplicação (Explorer / Desktop)
-        if (e.DataView.Contains(StandardDataFormats.StorageItems))
-        {
-            var items = await e.DataView.GetStorageItemsAsync();
-            var count = (await _repository.GetChildrenAsync(_groupId)).Count;
-
-            foreach (var storageItem in items)
+            // 2. Solto de outra aplicação (Explorer / Desktop)
+            if (e.DataView.Contains(StandardDataFormats.StorageItems))
             {
-                var name = storageItem.Name.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase)
-                    ? System.IO.Path.GetFileNameWithoutExtension(storageItem.Name)
-                    : storageItem.Name;
-                var shortcut = MenuItem.CreateShortcut(name, _groupId, MenuItemType.Shortcut, storageItem.Path, count++);
-                await _repository.AddAsync(shortcut);
-            }
+                var items = await e.DataView.GetStorageItemsAsync();
+                var count = (await _repository.GetChildrenAsync(_groupId)).Count;
 
-            // Auto-organização e redimensionamento imediatos
-            await ReloadAsync();
+                foreach (var storageItem in items)
+                {
+                    var name = storageItem.Name.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase)
+                        ? System.IO.Path.GetFileNameWithoutExtension(storageItem.Name)
+                        : storageItem.Name;
+                    var shortcut = MenuItem.CreateShortcut(name, _groupId, MenuItemType.Shortcut, storageItem.Path, count++);
+                    await _repository.AddAsync(shortcut);
+                }
+
+                // Auto-organização e redimensionamento imediatos
+                await ReloadAsync();
+                DataChangeNotifier.NotifyChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            App.Log($"DesktopGroupWindow.IconCanvas_Drop error: {ex}");
+        }
+        finally
+        {
+            def.Complete();
         }
     }
 
@@ -899,6 +960,7 @@ public sealed partial class DesktopGroupWindow : Window
             var shortcut = MenuItem.CreateShortcut(name, _groupId, MenuItemType.Shortcut, target, siblingCount);
             await _repository.AddAsync(shortcut);
             await ReloadAsync();
+            DataChangeNotifier.NotifyChanged();
         }
     }
 
@@ -911,6 +973,7 @@ public sealed partial class DesktopGroupWindow : Window
             await _repository.UpdateAsync(items[i]);
         }
         await ReloadAsync();
+        DataChangeNotifier.NotifyChanged();
     }
 
     private async void SortByType_Click(object sender, RoutedEventArgs e)
@@ -922,6 +985,7 @@ public sealed partial class DesktopGroupWindow : Window
             await _repository.UpdateAsync(items[i]);
         }
         await ReloadAsync();
+        DataChangeNotifier.NotifyChanged();
     }
 
     private async void SortByRecent_Click(object sender, RoutedEventArgs e)
@@ -933,6 +997,7 @@ public sealed partial class DesktopGroupWindow : Window
             await _repository.UpdateAsync(items[i]);
         }
         await ReloadAsync();
+        DataChangeNotifier.NotifyChanged();
     }
 
     private void EditStructure_Click(object sender, RoutedEventArgs e)

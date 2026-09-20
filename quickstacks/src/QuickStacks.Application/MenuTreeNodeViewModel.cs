@@ -20,9 +20,13 @@ public sealed partial class MenuTreeNodeViewModel : ObservableObject
 
     public bool IsFolder => Item.IsFolder;
 
+    public bool IsDesktopGroup => Item.IsFolder && Item.IsDesktopGroup;
+
+    public string DisplayName => IsDesktopGroup ? $"{Item.Name} [Desktop]" : Item.Name;
+
     public string Glyph => Item.Type switch
     {
-        MenuItemType.Folder => "",
+        MenuItemType.Folder => IsDesktopGroup ? "" : "",
         MenuItemType.Url => "",
         MenuItemType.Shortcut => "",
         MenuItemType.Executable => "",

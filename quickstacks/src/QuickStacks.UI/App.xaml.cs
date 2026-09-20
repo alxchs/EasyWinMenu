@@ -29,6 +29,18 @@ public partial class App : Microsoft.UI.Xaml.Application
         UnhandledException += (s, e) =>
         {
             Log($"[FATAL] App.UnhandledException: {e.Message}\n{e.Exception}");
+            e.Handled = true; // Impede que exceções não tratadas do WinRT derrubem o processo
+        };
+
+        AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+        {
+            Log($"[FATAL] AppDomain.UnhandledException: {e.ExceptionObject}");
+        };
+
+        TaskScheduler.UnobservedTaskException += (s, e) =>
+        {
+            Log($"[FATAL] TaskScheduler.UnobservedTaskException: {e.Exception}");
+            e.SetObserved();
         };
     }
 
@@ -45,7 +57,7 @@ public partial class App : Microsoft.UI.Xaml.Application
 
     public SettingsStore Settings { get; private set; } = null!;
 
-    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
         Log("OnLaunched: Starting initialization...");
         MenuRepository = new SqliteMenuRepository();
@@ -56,7 +68,18 @@ public partial class App : Microsoft.UI.Xaml.Application
         FeatureTier.Initialize(Settings);
         Log($"OnLaunched: FeatureTier initialized: IsFull = {FeatureTier.IsFull}");
         LocalizationService.SetLanguage(Settings.Get(SettingsStore.LanguageKey) ?? LocalizationService.DetectLanguage());
-        _ = SeedData.EnsureSeededAsync(MenuRepository);
+
+        var cmdArgs = Environment.GetCommandLineArgs();
+        if (cmdArgs.Contains("--migrate-easywinmenu") && EasyWinMenuMigrationService.HasLegacyConfig())
+        {
+            Log("OnLaunched: Migrating from EasyWinMenu config.json...");
+            var migrated = await EasyWinMenuMigrationService.MigrateAsync(MenuRepository);
+            Log($"OnLaunched: Migrated {migrated} items from EasyWinMenu.");
+        }
+        else
+        {
+            _ = SeedData.EnsureSeededAsync(MenuRepository);
+        }
 
         _trayIconWindow = new TrayIconWindow();
         _trayIconWindow.Activate();
@@ -66,7 +89,6 @@ public partial class App : Microsoft.UI.Xaml.Application
         _trayIconWindow.OpenDesktopGroupsIfFull();
         Log("OnLaunched: OpenDesktopGroupsIfFull called.");
 
-        var cmdArgs = Environment.GetCommandLineArgs();
         if (cmdArgs.Contains("--open-editor"))
         {
             _trayIconWindow.OpenEditorCommand.Execute(null);
