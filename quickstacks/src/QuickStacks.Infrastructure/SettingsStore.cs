@@ -50,4 +50,8 @@ public sealed class SettingsStore
     public const string ThemeModeKey = "theme.mode";
 
     public const string ProductTierKey = "product.tier";
+
+    public const string ShadowAngleKey = "desktopGroup.shadow.angle";
+
+    public const string ShadowEnabledKey = "desktopGroup.shadow.enabled";
 }

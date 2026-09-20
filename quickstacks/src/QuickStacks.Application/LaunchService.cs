@@ -19,16 +19,44 @@ public static class LaunchService
             return;
         }
 
-        // UseShellExecute=true: mesmo caminho para .exe, arquivo, pasta e URL - o shell do
-        // Windows decide o handler (o proprio Explorer, o navegador padrao, etc.).
-        Process.Start(new ProcessStartInfo
+        try
         {
-            FileName = item.Path,
-            Arguments = item.Arguments ?? string.Empty,
-            WorkingDirectory = item.WorkingDirectory ?? string.Empty,
-            UseShellExecute = true,
-        });
+            var path = item.Path?.Trim();
+            if (string.IsNullOrEmpty(path))
+            {
+                return;
+            }
+            ProcessStartInfo psi;
 
-        await repository.RegisterLaunchAsync(item.Id, ct);
+            if (path.StartsWith("shell:::", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("::{", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase))
+            {
+                // Atalhos virtuais do Windows (ex: Modo Deus, Painel de Controle)
+                psi = new ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = path,
+                    UseShellExecute = true,
+                };
+            }
+            else
+            {
+                psi = new ProcessStartInfo
+                {
+                    FileName = path,
+                    Arguments = item.Arguments ?? string.Empty,
+                    WorkingDirectory = item.WorkingDirectory ?? string.Empty,
+                    UseShellExecute = true,
+                };
+            }
+
+            Process.Start(psi);
+            await repository.RegisterLaunchAsync(item.Id, ct);
+        }
+        catch
+        {
+            // Ignora falha de execução externa sem derrubar a aplicação
+        }
     }
 }

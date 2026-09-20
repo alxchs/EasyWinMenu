@@ -194,15 +194,26 @@ public sealed partial class TrayIconWindow : Window
     /// </summary>
     private async Task OpenAllDesktopGroupsAsync()
     {
+        App.Log("OpenAllDesktopGroupsAsync: Starting...");
         CloseAllDesktopGroups();
 
         var app = (App)Microsoft.UI.Xaml.Application.Current;
         var groups = await app.MenuRepository.GetDesktopGroupsAsync();
+        App.Log($"OpenAllDesktopGroupsAsync: Retrieved {groups.Count} desktop groups from repository.");
         foreach (var group in groups)
         {
-            var window = new DesktopGroupWindow(app.MenuRepository, group);
-            _desktopGroupWindows.Add(window);
-            window.Activate();
+            try
+            {
+                App.Log($"OpenAllDesktopGroupsAsync: Instantiating DesktopGroupWindow for '{group.Name}' ({group.Id})...");
+                var window = new DesktopGroupWindow(app.MenuRepository, group);
+                _desktopGroupWindows.Add(window);
+                window.Activate();
+                App.Log($"OpenAllDesktopGroupsAsync: DesktopGroupWindow activated for '{group.Name}'.");
+            }
+            catch (Exception ex)
+            {
+                App.Log($"OpenAllDesktopGroupsAsync: ERROR for group '{group.Name}': {ex}");
+            }
         }
     }
 

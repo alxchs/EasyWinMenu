@@ -12,9 +12,24 @@ public partial class App : Microsoft.UI.Xaml.Application
 {
     private TrayIconWindow? _trayIconWindow;
 
+    public static void Log(string message)
+    {
+        try
+        {
+            var dir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "QuickStacks");
+            System.IO.Directory.CreateDirectory(dir);
+            System.IO.File.AppendAllText(System.IO.Path.Combine(dir, "quickstacks.log"), $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}\n");
+        }
+        catch { }
+    }
+
     public App()
     {
         InitializeComponent();
+        UnhandledException += (s, e) =>
+        {
+            Log($"[FATAL] App.UnhandledException: {e.Message}\n{e.Exception}");
+        };
     }
 
     /// <summary>
@@ -32,27 +47,24 @@ public partial class App : Microsoft.UI.Xaml.Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        Log("OnLaunched: Starting initialization...");
         MenuRepository = new SqliteMenuRepository();
         ExportService = new ConfigExportService(MenuRepository);
         LnkImportService = new LnkImportService(new LnkResolver(), MenuRepository);
         Settings = new SettingsStore();
         ThemeService.Initialize(Settings);
         FeatureTier.Initialize(Settings);
+        Log($"OnLaunched: FeatureTier initialized: IsFull = {FeatureTier.IsFull}");
         LocalizationService.SetLanguage(Settings.Get(SettingsStore.LanguageKey) ?? LocalizationService.DetectLanguage());
         _ = SeedData.EnsureSeededAsync(MenuRepository);
 
-        // Nao existe uma "janela principal" visivel: o unico ponto de entrada e' o icone
-        // da bandeja (RF01 - um unico icone na Taskbar). TrayIconWindow hospeda o
-        // TaskbarIcon (H.NotifyIcon) e permanece oculta; ela e' quem abre o PopupWindow.
         _trayIconWindow = new TrayIconWindow();
         _trayIconWindow.Activate();
         _trayIconWindow.AppWindow.Hide();
+        Log("OnLaunched: TrayIconWindow activated and hidden.");
 
-        // So' depois desta janela ja' ter sido ativada - ver o comentario em
-        // TrayIconWindow.OpenDesktopGroupsIfFull para o motivo (XamlParseException se uma
-        // Window com {ThemeResource} for construida antes da primeira janela do processo
-        // ser ativada - so' que aqui nao usamos mais ThemeResource nenhum, e' so' por cautela).
         _trayIconWindow.OpenDesktopGroupsIfFull();
+        Log("OnLaunched: OpenDesktopGroupsIfFull called.");
 
         var cmdArgs = Environment.GetCommandLineArgs();
         if (cmdArgs.Contains("--open-editor"))
@@ -63,5 +75,6 @@ public partial class App : Microsoft.UI.Xaml.Application
         {
             _trayIconWindow.ShowPopupCommand.Execute(null);
         }
+        Log("OnLaunched: Completed.");
     }
 }

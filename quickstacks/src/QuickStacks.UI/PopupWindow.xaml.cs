@@ -58,6 +58,31 @@ public sealed partial class PopupWindow : Window
             }
         };
 
+        if (AppWindow.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.IsMinimizable = false;
+            presenter.IsMaximizable = false;
+            presenter.SetBorderAndTitleBar(hasBorder: false, hasTitleBar: false);
+        }
+        try
+        {
+            AppWindow.IsShownInSwitchers = false;
+        }
+        catch
+        {
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            var exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+            SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TOOLWINDOW);
+        }
+
+        Activated += (s, e) =>
+        {
+            if (e.WindowActivationState == WindowActivationState.Deactivated)
+            {
+                Close();
+            }
+        };
+
         AppWindow.Resize(new SizeInt32(DefaultWidth, DefaultHeight));
         AppWindow.Changed += AppWindow_Changed;
 
@@ -460,6 +485,15 @@ public sealed partial class PopupWindow : Window
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out CursorPoint point);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+    private const int GWL_EXSTYLE = -20;
+    private const int WS_EX_TOOLWINDOW = 0x00000080;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct CursorPoint
