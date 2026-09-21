@@ -147,7 +147,7 @@ internal static class AppFolderTile
             Height = 22 * scale,
             CornerRadius = new CornerRadius(11 * scale),
             Padding = new Thickness(6 * scale, 0, 6 * scale, 0),
-            Background = new SolidColorBrush(Color.FromRgb(0xE5, 0x39, 0x35)),
+            Background = new SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4)),
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, -7 * scale, -7 * scale, 0),

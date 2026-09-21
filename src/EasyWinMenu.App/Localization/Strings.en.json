@@ -99,6 +99,7 @@
   "group.iconSizeMedium": "Medium",
   "group.iconSizeLarge": "Large",
   "group.newMenu": "New",
+  "group.newShortcut": "New shortcut...",
   "group.newFolder": "New folder...",
   "group.newTextFile": "New text document",
   "group.newTextFileName": "New Text Document",

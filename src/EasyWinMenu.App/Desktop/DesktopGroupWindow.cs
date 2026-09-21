@@ -169,6 +169,7 @@ internal sealed class DesktopGroupWindow : Window
         PreviewKeyDown += OnPreviewKeyDown;
         PreviewTextInput += OnPreviewTextInput;
         LocationChanged += OnLocationChanged;
+        Deactivated += (_, _) => CloseFindOverlay(rememberQuery: true);
         Drop += OnDrop;
         _allGroupWindows.Add(this);
         Closed += (_, _) =>
@@ -611,7 +612,11 @@ internal sealed class DesktopGroupWindow : Window
             RenderTransformOrigin = new System.Windows.Point(0, 0),
             ContextMenu = BuildHeaderContextMenu()
         };
-        _canvas.MouseLeftButtonDown += (_, _) => ClearSelection();
+        _canvas.MouseLeftButtonDown += (_, _) =>
+        {
+            ClearSelection();
+            CloseFindOverlay(rememberQuery: true);
+        };
         _canvas.PreviewMouseRightButtonDown += (_, _) => _canvas.ContextMenu = BuildHeaderContextMenu();
 
         PopulateTiles();
@@ -662,6 +667,16 @@ internal sealed class DesktopGroupWindow : Window
             VerticalAlignment = VerticalAlignment.Center
         };
         _searchBox.TextChanged += (_, _) => UpdateSearchMatches(_searchBox.Text);
+        _searchBox.LostFocus += (_, _) =>
+        {
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
+            {
+                if (!_searchBox.IsKeyboardFocusWithin && !_searchResultsList.IsKeyboardFocusWithin)
+                {
+                    CloseFindOverlay(rememberQuery: true);
+                }
+            });
+        };
 
         var row = new DockPanel();
         row.Children.Add(_searchCountText);
@@ -714,6 +729,7 @@ internal sealed class DesktopGroupWindow : Window
         _searchBar.Visibility = Visibility.Visible;
         _searchBox.Text = _lastSearchText;
         _searchBox.SelectAll();
+        _searchBox.Focus();
         Keyboard.Focus(_searchBox);
         UpdateSearchMatches(_searchBox.Text);
     }
@@ -1026,7 +1042,7 @@ internal sealed class DesktopGroupWindow : Window
             lines.Add(LocalizationService.Get("group.showBadge"));
         }
 
-        _headerText.ToolTip = string.Join(Environment.NewLine, lines);
+        _headerText.ToolTip = null;
     }
 
     private void EnsureThemeOverride()
@@ -1121,6 +1137,7 @@ internal sealed class DesktopGroupWindow : Window
         menu.Items.Add(BuildSeparator());
 
         var newMenu = CreateMenuItem(LocalizationService.Get("group.newMenu"), "IconAdd");
+        AddMenuItem(newMenu, LocalizationService.Get("group.newShortcut"), CreateShortcut, "IconAdd");
         AddMenuItem(newMenu, LocalizationService.Get("group.newFolder"), CreateSubfolder, "IconFolder");
         AddMenuItem(newMenu, LocalizationService.Get("group.newTextFile"), CreateTextFile, "IconFile");
         menu.Items.Add(newMenu);
@@ -1344,6 +1361,27 @@ internal sealed class DesktopGroupWindow : Window
         var item = CreateMenuItem(header, iconKey);
         item.Click += (_, _) => handler();
         parent.Items.Add(item);
+    }
+
+    private void CreateShortcut()
+    {
+        var newItem = new LaunchItem
+        {
+            Name = string.Empty,
+            Type = LaunchItemType.Application,
+            Target = string.Empty,
+            IsDesktopPinned = true
+        };
+        var editor = new Settings.LaunchItemEditWindow(newItem)
+        {
+            WindowStartupLocation = WindowStartupLocation.CenterScreen,
+            Topmost = true
+        };
+        if (editor.ShowDialog() == true)
+        {
+            _category.Items.Add(newItem);
+            FinishStructuralChange();
+        }
     }
 
     private void CreateSubfolder()
