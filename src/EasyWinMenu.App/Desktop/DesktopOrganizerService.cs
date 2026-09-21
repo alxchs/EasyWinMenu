@@ -130,7 +130,7 @@ internal sealed class DesktopOrganizerService(IconCacheService iconCache)
         Action<MenuCategory> onDeleteRequested,
         IDesktopGroupCommands? commands = null)
     {
-        var groups = FindDesktopGroups(configuration).ToList();
+        var groups = FindDesktopGroups(configuration).Where(g => !g.IsClosed).ToList();
 
         foreach (var stale in _windows.Keys.Except(groups).ToList())
         {
@@ -152,6 +152,27 @@ internal sealed class DesktopOrganizerService(IconCacheService iconCache)
         }
 
         EnsureGroupsReachable();
+    }
+
+    public void OpenAllGroups(LauncherConfiguration configuration)
+    {
+        foreach (var group in AllDesktopGroups(configuration))
+        {
+            group.IsClosed = false;
+        }
+    }
+
+    public void CloseAllGroups(LauncherConfiguration configuration)
+    {
+        foreach (var group in AllDesktopGroups(configuration))
+        {
+            group.IsClosed = true;
+        }
+    }
+
+    public void ToggleGroup(MenuCategory group)
+    {
+        group.IsClosed = !group.IsClosed;
     }
 
     public void CloseAll()

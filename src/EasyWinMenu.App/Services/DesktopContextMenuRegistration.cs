@@ -17,6 +17,8 @@ internal static class DesktopContextMenuRegistration
     private const string ArgumentPrefix = "--desktop-action=";
 
     public const string NewGroupAction = "new-group";
+    public const string OpenAllGroupsAction = "open-all-groups";
+    public const string CloseAllGroupsAction = "close-all-groups";
     public const string ToggleCollapseAllAction = "toggle-collapse-all";
     public const string AllAppFolderAction = "all-appfolder";
     public const string AllPanelAction = "all-panel";
@@ -49,10 +51,12 @@ internal static class DesktopContextMenuRegistration
 
         using var shell = root.CreateSubKey("shell");
         WriteVerb(shell, "01NewGroup", L("tray.newDesktopGroup"), executablePath, NewGroupAction);
-        WriteVerb(shell, "02ToggleCollapseAll", L("desktop.toggleCollapseAll"), executablePath, ToggleCollapseAllAction);
-        WriteVerb(shell, "03AllAppFolder", L("desktop.allAppFolder"), executablePath, AllAppFolderAction);
-        WriteVerb(shell, "04AllPanel", L("desktop.allPanel"), executablePath, AllPanelAction);
-        WriteVerb(shell, "05OpenSettings", L("tray.settings"), executablePath, OpenSettingsAction);
+        WriteVerb(shell, "02OpenAllGroups", L("desktop.openAllGroups"), executablePath, OpenAllGroupsAction);
+        WriteVerb(shell, "03CloseAllGroups", L("desktop.closeAllGroups"), executablePath, CloseAllGroupsAction);
+        WriteVerb(shell, "04ToggleCollapseAll", L("desktop.toggleCollapseAll"), executablePath, ToggleCollapseAllAction);
+        WriteVerb(shell, "05AllAppFolder", L("desktop.allAppFolder"), executablePath, AllAppFolderAction);
+        WriteVerb(shell, "06AllPanel", L("desktop.allPanel"), executablePath, AllPanelAction);
+        WriteVerb(shell, "07OpenSettings", L("tray.settings"), executablePath, OpenSettingsAction);
     }
 
     public static void Unregister()

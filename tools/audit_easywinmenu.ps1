@@ -49,24 +49,52 @@ Write-Host "`n[2/6] Auditoria de Código e Recursos..." -ForegroundColor Yellow
 $dtFile = Join-Path $repoRoot "src\EasyWinMenu.App\Desktop\DesktopGroupWindow.cs"
 $dtContent = Get-Content -LiteralPath $dtFile -Raw
 
-# Check A: Novo Atalho em Janela Externa
-$hasNewShortcut = $dtContent -match 'AddMenuItem\(newMenu,\s*LocalizationService\.Get\("group\.newShortcut"\),\s*CreateShortcut' -and
+# Check A: Novo Atalho Configurado
+$hasNewShortcut = $dtContent -match 'AddMenuItem\(menu,\s*LocalizationService\.Get\("group\.newShortcut"\),\s*CreateShortcut' -and
                   $dtContent -match 'WindowStartupLocation\s*=\s*WindowStartupLocation\.CenterScreen'
-Record-Result -Name "Code_NewShortcut_ExternalWindow" -Passed $hasNewShortcut -Details "Opção 'Novo atalho...' configurada para abrir janela externa CenterScreen"
+Record-Result -Name "Code_NewShortcut_DirectAndExternal" -Passed $hasNewShortcut -Details "Opção 'Novo atalho...' adicionada diretamente ao menu e abre em janela externa CenterScreen"
 
 # Check B: Tooltip Invasivo Desativado
 $hasCleanTooltip = $dtContent -match '_headerText\.ToolTip\s*=\s*null;'
 Record-Result -Name "Code_HeaderTooltip_Sanitized" -Passed $hasCleanTooltip -Details "Tooltip intrusivo constante no cabeçalho removido (_headerText.ToolTip = null)"
 
-# Check C: Auto-Fechamento da Busca CTRL+F
-$hasAutoDismissSearch = $dtContent -match '_searchBox\.LostFocus' -and $dtContent -match 'CloseFindOverlay\(rememberQuery:\s*true\)'
-Record-Result -Name "Code_Search_AutoDismiss" -Passed $hasAutoDismissSearch -Details "Busca CTRL+F configurada com auto-dismiss no LostFocus, Escape e Deactivated"
+# Check C: Auto-Fechamento e Placeholder da Busca CTRL+F
+$hasAutoDismissSearch = $dtContent -match '_searchBox\.LostFocus' -and $dtContent -match 'CloseFindOverlay\(rememberQuery:\s*true\)' -and $dtContent -match '_searchPlaceholder'
+Record-Result -Name "Code_Search_Enhanced" -Passed $hasAutoDismissSearch -Details "Busca CTRL+F com ícone de pesquisa, placeholder descritivo e auto-dismiss"
 
 # Check D: Sem Cor Vermelha no Badge
 $tileFile = Join-Path $repoRoot "src\EasyWinMenu.App\Desktop\AppFolderTile.cs"
 $tileContent = Get-Content -LiteralPath $tileFile -Raw
 $hasNoRed = -not ($tileContent -match '0xE5,\s*0x39,\s*0x35') -and ($tileContent -match '0x00,\s*0x78,\s*0xD4')
 Record-Result -Name "Design_No_Red_Badge" -Passed $hasNoRed -Details "Selo de contagem (badge) usa azul acentuado e não vermelho proibido"
+
+# Check E: Correção de Deslocamento para Cima ao Clicar (hasMoved Threshold)
+$hasNoShiftFix = $dtContent -match 'if\s*\(!hasMoved\s*\|\|\s*ghost\s+is\s+null\)' -and $dtContent -match 'SystemParameters\.MinimumHorizontalDragDistance'
+Record-Result -Name "Code_TileClick_NoUpwardShift" -Passed $hasNoShiftFix -Details "Clique simples protegido contra deslocamento vertical acidental (hasMoved + DragDistance check)"
+
+# Check F: Seleção Múltipla com Shift e Ctrl (Estilo Windows Explorer)
+$hasRangeSelection = $dtContent -match 'SelectRange' -and $dtContent -match '_selectionAnchor' -and $dtContent -match 'ModifierKeys\.Shift'
+Record-Result -Name "Code_Explorer_RangeSelection" -Passed $hasRangeSelection -Details "Seleção por intervalo com Shift e alternância com Ctrl implementadas"
+
+# Check G: Navegação por Teclas 2D e Teclas de Atalho (F5, Enter, Esc)
+$hasKeyNav = $dtContent -match 'Key\.F5' -and $dtContent -match 'Key\.Enter' -and $dtContent -match 'Key\.Escape' -and $dtContent -match 'Key\.Left or Key\.Right'
+Record-Result -Name "Code_Keyboard_2D_Navigation" -Passed $hasKeyNav -Details "Navegação por setas (Left/Right/Up/Down), F5 refresh, Enter para abrir e Esc para desselecionar"
+
+# Check H: Animação Heartbeat Pulse
+$hasHeartbeat = $dtContent -match 'StartHeartbeatAnimation' -and $dtContent -match 'StopHeartbeatAnimation'
+Record-Result -Name "Code_Heartbeat_Pulse_Animation" -Passed $hasHeartbeat -Details "Animação sutil de pulso (Heartbeat) de 300ms ao segurar o mouse implementada"
+
+# Check I: Botão Fechar no Cabeçalho e Gerenciamento de Fechamento (IsClosed)
+$hasCloseFeature = $dtContent -match '_closeButton' -and $dtContent -match 'CloseGroup' -and $dtContent -match '_category\.IsClosed\s*=\s*true'
+Record-Result -Name "Code_Group_Close_Management" -Passed $hasCloseFeature -Details "Botão de fechar '✕' no cabeçalho com persistência IsClosed implementado"
+
+# Check J: Redimensionamento com Reflow em Tempo Real
+$hasLiveReflow = $dtContent -match 'ReflowGridDuringResize'
+Record-Result -Name "Code_Live_Resize_Reflow" -Passed $hasLiveReflow -Details "Reflow instantâneo e suave dos ícones durante redimensionamento da janela"
+
+# Check K: Clipboard Completo (Recortar, Copiar, Colar) nos Menus
+$hasClipboard = $dtContent -match 'LocalizationService\.Get\("item\.cut"\)' -and $dtContent -match 'LocalizationService\.Get\("group\.paste"\)'
+Record-Result -Name "Code_Clipboard_Context_Menus" -Passed $hasClipboard -Details "Opções Recortar (Ctrl+X), Copiar (Ctrl+C) e Colar (Ctrl+V) disponíveis nos menus de contexto"
 
 # ------------------------------------------------------------------------------
 # 3. Teste de Inicialização e Processo em Execução

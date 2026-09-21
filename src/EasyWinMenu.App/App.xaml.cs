@@ -127,6 +127,14 @@ public partial class App : Application, IDesktopGroupCommands
             case DesktopContextMenuRegistration.NewGroupAction:
                 CreateDesktopGroup();
                 break;
+            case DesktopContextMenuRegistration.OpenAllGroupsAction:
+                _desktopOrganizer?.OpenAllGroups(_configuration!);
+                SaveAndReloadGroups();
+                break;
+            case DesktopContextMenuRegistration.CloseAllGroupsAction:
+                _desktopOrganizer?.CloseAllGroups(_configuration!);
+                SaveAndReloadGroups();
+                break;
             case DesktopContextMenuRegistration.ToggleCollapseAllAction:
                 _desktopOrganizer?.ToggleCollapseAll();
                 break;
@@ -295,6 +303,21 @@ public partial class App : Application, IDesktopGroupCommands
             CreateDesktopGroup,
             _desktopOrganizer.ToggleCollapseAll,
             _desktopOrganizer.GatherAll,
+            () =>
+            {
+                _desktopOrganizer.OpenAllGroups(_configuration!);
+                SaveAndReloadGroups();
+            },
+            () =>
+            {
+                _desktopOrganizer.CloseAllGroups(_configuration!);
+                SaveAndReloadGroups();
+            },
+            group =>
+            {
+                _desktopOrganizer.ToggleGroup(group);
+                SaveAndReloadGroups();
+            },
             StartupRegistration.SetEnabled,
             Shutdown);
 

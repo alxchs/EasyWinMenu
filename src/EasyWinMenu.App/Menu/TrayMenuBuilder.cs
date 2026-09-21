@@ -4,6 +4,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
+using EasyWinMenu.App.Desktop;
 using EasyWinMenu.App.Localization;
 using EasyWinMenu.App.Services;
 using EasyWinMenu.App.Theming;
@@ -32,6 +33,9 @@ internal static class TrayMenuBuilder
         Action createDesktopGroup,
         Action toggleCollapseAll,
         Action gatherAll,
+        Action openAllGroups,
+        Action closeAllGroups,
+        Action<MenuCategory> toggleGroup,
         Action<bool> setStartWithWindows,
         Action exit)
     {
@@ -54,6 +58,38 @@ internal static class TrayMenuBuilder
         ApplyMenuItemAppearance(newGroupItem, theme, theme, "IconAdd");
         newGroupItem.Click += (_, _) => createDesktopGroup();
         menu.Items.Add(newGroupItem);
+
+        var groupsSubmenu = new MenuItem { Header = LocalizationService.Get("desktop.groupsMenu") };
+        ApplyMenuItemAppearance(groupsSubmenu, theme, theme, "IconStylePanel");
+
+        var openAllItem = new MenuItem { Header = LocalizationService.Get("desktop.openAllGroups") };
+        ApplyMenuItemAppearance(openAllItem, theme, theme, "IconChevronDown");
+        openAllItem.Click += (_, _) => openAllGroups();
+        groupsSubmenu.Items.Add(openAllItem);
+
+        var closeAllItem = new MenuItem { Header = LocalizationService.Get("desktop.closeAllGroups") };
+        ApplyMenuItemAppearance(closeAllItem, theme, theme, "IconClose");
+        closeAllItem.Click += (_, _) => closeAllGroups();
+        groupsSubmenu.Items.Add(closeAllItem);
+
+        var allGroups = DesktopOrganizerService.AllDesktopGroups(configuration).ToList();
+        if (allGroups.Count > 0)
+        {
+            groupsSubmenu.Items.Add(BuildSeparator(theme));
+            foreach (var group in allGroups)
+            {
+                var groupItem = new MenuItem
+                {
+                    Header = group.Name,
+                    IsChecked = !group.IsClosed
+                };
+                ApplyMenuItemAppearance(groupItem, theme, theme, !group.IsClosed ? "IconCheck" : null);
+                var targetGroup = group;
+                groupItem.Click += (_, _) => toggleGroup(targetGroup);
+                groupsSubmenu.Items.Add(groupItem);
+            }
+        }
+        menu.Items.Add(groupsSubmenu);
 
         var collapseAllItem = new MenuItem
         {

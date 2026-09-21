@@ -129,5 +129,12 @@
   "theme.shadowBlur": "Shadow blur",
   "theme.shadowDepth": "Shadow distance",
   "theme.shadowDirection": "Shadow direction (degrees)",
-  "theme.shadowOpacity": "Shadow opacity"
+  "theme.shadowOpacity": "Shadow opacity",
+  "item.cut": "Cut",
+  "item.copy": "Copy",
+  "group.paste": "Paste",
+  "group.close": "Close group",
+  "desktop.openAllGroups": "Open all desktop groups",
+  "desktop.closeAllGroups": "Close all desktop groups",
+  "desktop.groupsMenu": "Desktop groups"
 }

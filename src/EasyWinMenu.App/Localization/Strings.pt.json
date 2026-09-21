@@ -129,5 +129,12 @@
   "theme.shadowBlur": "Desfoque da sombra",
   "theme.shadowDepth": "Distância da sombra",
   "theme.shadowDirection": "Direção da sombra (graus)",
-  "theme.shadowOpacity": "Opacidade da sombra"
+  "theme.shadowOpacity": "Opacidade da sombra",
+  "item.cut": "Recortar",
+  "item.copy": "Copiar",
+  "group.paste": "Colar",
+  "group.close": "Fechar grupo",
+  "desktop.openAllGroups": "Abrir todos os grupos",
+  "desktop.closeAllGroups": "Fechar todos os grupos",
+  "desktop.groupsMenu": "Grupos da Área de Trabalho"
 }

@@ -94,12 +94,15 @@ internal sealed class DesktopGroupWindow : Window
     private readonly List<Border> _resizeHandles = new();
     private TextBlock _headerText = null!;
     private Border _collapseGlyph = null!;
+    private Border _closeButton = null!;
     private Border _menuButton = null!;
     private readonly Dictionary<object, TextBlock> _captionsByEntry = new();
     private readonly Dictionary<object, Action> _openActionsByEntry = new();
+    private object? _selectionAnchor;
 
     private Border _searchBar = null!;
     private System.Windows.Controls.TextBox _searchBox = null!;
+    private TextBlock? _searchPlaceholder;
     private TextBlock _searchCountText = null!;
     private System.Windows.Controls.Primitives.Popup _searchPopup = null!;
     private System.Windows.Controls.ListBox _searchResultsList = null!;
@@ -573,6 +576,11 @@ internal sealed class DesktopGroupWindow : Window
             VerticalAlignment = VerticalAlignment.Center
         };
 
+        _closeButton = BuildHeaderButton(CloseGroup);
+        _closeButton.Child = AppIcons.Create("IconClose", ThemeBrushes.CreateBrush(_theme.TextColor, 1.0), _theme.TitleFontSize);
+        _closeButton.ToolTip = LocalizationService.Get("group.close");
+        DockPanel.SetDock(_closeButton, Dock.Right);
+
         _collapseGlyph = BuildHeaderButton(ToggleCollapse);
         DockPanel.SetDock(_collapseGlyph, Dock.Right);
 
@@ -582,6 +590,7 @@ internal sealed class DesktopGroupWindow : Window
         DockPanel.SetDock(_menuButton, Dock.Right);
 
         var headerPanel = new DockPanel();
+        headerPanel.Children.Add(_closeButton);
         headerPanel.Children.Add(_menuButton);
         headerPanel.Children.Add(_collapseGlyph);
         headerPanel.Children.Add(_headerText);
@@ -639,6 +648,13 @@ internal sealed class DesktopGroupWindow : Window
         return _border;
     }
 
+    private void CloseGroup()
+    {
+        _category.IsClosed = true;
+        _onLayoutChanged(_category);
+        Close();
+    }
+
     /// <summary>
     /// A Ctrl+F search strip docked under the header, hidden until asked for. The match
     /// list itself lives in a <see cref="System.Windows.Controls.Primitives.Popup"/>
@@ -647,6 +663,30 @@ internal sealed class DesktopGroupWindow : Window
     /// </summary>
     private Border BuildSearchBar()
     {
+        var searchIcon = AppIcons.Create("IconSearch", ThemeBrushes.CreateBrush(_theme.TextColor, 0.65), _theme.ItemFontSize + 2);
+        var iconWrap = new Border
+        {
+            Child = searchIcon,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 6, 0)
+        };
+        DockPanel.SetDock(iconWrap, Dock.Left);
+
+        var closeSearch = new Border
+        {
+            Width = _theme.ItemFontSize + 4,
+            Height = _theme.ItemFontSize + 4,
+            CornerRadius = new CornerRadius(3),
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6, 0, 0, 0),
+            Child = AppIcons.Create("IconClose", ThemeBrushes.CreateBrush(_theme.TextColor, 0.65), _theme.ItemFontSize - 2),
+            ToolTip = LocalizationService.Get("common.cancel")
+        };
+        closeSearch.MouseLeftButtonDown += (_, _) => CloseFindOverlay(rememberQuery: false);
+        DockPanel.SetDock(closeSearch, Dock.Right);
+
         _searchCountText = new TextBlock
         {
             Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 0.65),
@@ -657,6 +697,16 @@ internal sealed class DesktopGroupWindow : Window
         };
         DockPanel.SetDock(_searchCountText, Dock.Right);
 
+        _searchPlaceholder = new TextBlock
+        {
+            Text = LocalizationService.Get("group.searchPlaceholder") + " (Esc)",
+            Foreground = ThemeBrushes.CreateBrush(_theme.TextColor, 0.4),
+            FontFamily = new FontFamily(_theme.ItemFontFamily),
+            FontSize = _theme.ItemFontSize,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsHitTestVisible = false
+        };
+
         _searchBox = new System.Windows.Controls.TextBox
         {
             Background = Brushes.Transparent,
@@ -666,7 +716,14 @@ internal sealed class DesktopGroupWindow : Window
             FontSize = _theme.ItemFontSize,
             VerticalAlignment = VerticalAlignment.Center
         };
-        _searchBox.TextChanged += (_, _) => UpdateSearchMatches(_searchBox.Text);
+        _searchBox.TextChanged += (_, _) =>
+        {
+            if (_searchPlaceholder is not null)
+            {
+                _searchPlaceholder.Visibility = string.IsNullOrEmpty(_searchBox.Text) ? Visibility.Visible : Visibility.Collapsed;
+            }
+            UpdateSearchMatches(_searchBox.Text);
+        };
         _searchBox.LostFocus += (_, _) =>
         {
             Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
@@ -678,9 +735,15 @@ internal sealed class DesktopGroupWindow : Window
             });
         };
 
+        var boxGrid = new Grid();
+        boxGrid.Children.Add(_searchPlaceholder);
+        boxGrid.Children.Add(_searchBox);
+
         var row = new DockPanel();
+        row.Children.Add(iconWrap);
+        row.Children.Add(closeSearch);
         row.Children.Add(_searchCountText);
-        row.Children.Add(_searchBox);
+        row.Children.Add(boxGrid);
 
         var bar = new Border
         {
@@ -728,6 +791,10 @@ internal sealed class DesktopGroupWindow : Window
 
         _searchBar.Visibility = Visibility.Visible;
         _searchBox.Text = _lastSearchText;
+        if (_searchPlaceholder is not null)
+        {
+            _searchPlaceholder.Visibility = string.IsNullOrEmpty(_searchBox.Text) ? Visibility.Visible : Visibility.Collapsed;
+        }
         _searchBox.SelectAll();
         _searchBox.Focus();
         Keyboard.Focus(_searchBox);
@@ -1136,11 +1203,15 @@ internal sealed class DesktopGroupWindow : Window
 
         menu.Items.Add(BuildSeparator());
 
-        var newMenu = CreateMenuItem(LocalizationService.Get("group.newMenu"), "IconAdd");
-        AddMenuItem(newMenu, LocalizationService.Get("group.newShortcut"), CreateShortcut, "IconAdd");
-        AddMenuItem(newMenu, LocalizationService.Get("group.newFolder"), CreateSubfolder, "IconFolder");
-        AddMenuItem(newMenu, LocalizationService.Get("group.newTextFile"), CreateTextFile, "IconFile");
-        menu.Items.Add(newMenu);
+        AddMenuItem(menu, LocalizationService.Get("group.newShortcut"), CreateShortcut, "IconAdd");
+
+        var canPaste = System.Windows.Clipboard.ContainsFileDropList() || _pendingCuts.Count > 0;
+        var pasteItem = CreateMenuItem(LocalizationService.Get("group.paste") + "\tCtrl+V", "IconPaste");
+        pasteItem.IsEnabled = canPaste;
+        pasteItem.Click += (_, _) => PasteFromClipboard();
+        menu.Items.Add(pasteItem);
+
+        menu.Items.Add(BuildSeparator());
 
         AddCheckItem(menu, LocalizationService.Get("group.arrangeIcons"), _category.IconArrangement == IconArrangement.Grid, ArrangeIconsAutomatically, "IconGrid");
 
@@ -1191,6 +1262,8 @@ internal sealed class DesktopGroupWindow : Window
 
         menu.Items.Add(BuildSeparator());
 
+        AddMenuItem(menu, LocalizationService.Get("group.close"), CloseGroup, "IconClose");
+
         var isEmpty = GroupEntries.Count(_category) == 0;
         var removeItem = CreateMenuItem(LocalizationService.Get("group.remove"), "IconDelete");
         removeItem.IsEnabled = isEmpty;
@@ -1220,6 +1293,9 @@ internal sealed class DesktopGroupWindow : Window
 
         AddMenuItem(menu, LocalizationService.Get("item.rename"), () => RenameItem(item), "IconRename");
         menu.Items.Add(BuildSeparator());
+        AddMenuItem(menu, LocalizationService.Get("item.cut") + "\tCtrl+X", () => CopySelectedToClipboard(cut: true), "IconCut");
+        AddMenuItem(menu, LocalizationService.Get("item.copy") + "\tCtrl+C", () => CopySelectedToClipboard(cut: false), "IconCopy");
+        menu.Items.Add(BuildSeparator());
         AddMenuItem(menu, LocalizationService.Get("item.removeFromGroup"), () => RemoveEntryRespectingSelection(item, () => RemoveItem(item)), "IconDelete");
 
         if (ShellCommands.HasFileTarget(item))
@@ -1237,6 +1313,9 @@ internal sealed class DesktopGroupWindow : Window
         var menu = CreateContextMenuShell();
         AddMenuItem(menu, LocalizationService.Get("item.open"), () => OpenSubfolder(folder), "IconFolder");
         AddMenuItem(menu, LocalizationService.Get("item.rename"), () => RenameFolder(folder), "IconRename");
+        menu.Items.Add(BuildSeparator());
+        AddMenuItem(menu, LocalizationService.Get("item.cut") + "\tCtrl+X", () => CopySelectedToClipboard(cut: true), "IconCut");
+        AddMenuItem(menu, LocalizationService.Get("item.copy") + "\tCtrl+C", () => CopySelectedToClipboard(cut: false), "IconCopy");
         menu.Items.Add(BuildSeparator());
 
         var isEmpty = GroupEntries.Count(folder) == 0;
@@ -1379,8 +1458,19 @@ internal sealed class DesktopGroupWindow : Window
         };
         if (editor.ShowDialog() == true)
         {
+            newItem.IsDesktopPinned = true;
+            if (newItem.DesktopIconX is null || newItem.DesktopIconY is null)
+            {
+                var index = _category.Items.Count + _category.Categories.Count;
+                var usableWidth = _category.DesktopWidth - (PaddingX * 2);
+                var columns = Math.Max(1, (int)(usableWidth / (TileSize * _category.DesktopIconScale)));
+                newItem.DesktopIconX = PaddingX + ((index % columns) * TileSize);
+                newItem.DesktopIconY = PaddingY + ((index / columns) * TileSize);
+            }
+
             _category.Items.Add(newItem);
             FinishStructuralChange();
+            _onLayoutChanged(_category);
         }
     }
 
@@ -1723,8 +1813,9 @@ internal sealed class DesktopGroupWindow : Window
             index++;
         }
 
-        foreach (var item in _category.Items.Where(i => i.IsDesktopPinned))
+        foreach (var item in _category.Items)
         {
+            item.IsDesktopPinned = true;
             AddTile(
                 item,
                 item.DesktopIconX ?? PaddingX + ((index % 3) * TileSize),
@@ -1758,20 +1849,20 @@ internal sealed class DesktopGroupWindow : Window
     {
         return _category.Categories
             .Cast<object>()
-            .Concat(_category.Items.Where(i => i.IsDesktopPinned));
+            .Concat(_category.Items);
     }
 
     private IEnumerable<object> NameOrder()
     {
         var folders = _category.Categories.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase);
-        var items = _category.Items.Where(i => i.IsDesktopPinned).OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
+        var items = _category.Items.OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
         return folders.Cast<object>().Concat(items);
     }
 
     private IEnumerable<object> TypeOrder()
     {
         var folders = _category.Categories.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase);
-        var items = _category.Items.Where(i => i.IsDesktopPinned)
+        var items = _category.Items
             .OrderBy(i => i.Type)
             .ThenBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
         return folders.Cast<object>().Concat(items);
@@ -1874,7 +1965,9 @@ internal sealed class DesktopGroupWindow : Window
         System.Windows.Point dragStartScreen = default;
         System.Windows.Point tileStartScreen = default;
         var dragging = false;
+        var hasMoved = false;
         DragGhostWindow? ghost = null;
+        DispatcherTimer? heartbeatTimer = null;
 
         tile.MouseLeftButtonDown += (_, e) =>
         {
@@ -1885,12 +1978,26 @@ internal sealed class DesktopGroupWindow : Window
                 return;
             }
 
-            SelectEntry(entry, Keyboard.Modifiers == ModifierKeys.Control);
+            HandleTileSelection(entry);
 
             dragging = true;
+            hasMoved = false;
             dragStartScreen = PointToScreen(e.GetPosition(this));
-            tileStartScreen = PointToScreen(new System.Windows.Point(Canvas.GetLeft(tile), Canvas.GetTop(tile)));
+            tileStartScreen = _canvas.PointToScreen(new System.Windows.Point(Canvas.GetLeft(tile), Canvas.GetTop(tile)));
             tile.CaptureMouse();
+
+            heartbeatTimer?.Stop();
+            heartbeatTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+            heartbeatTimer.Tick += (_, _) =>
+            {
+                heartbeatTimer.Stop();
+                if (dragging && !hasMoved)
+                {
+                    StartHeartbeatAnimation(tile);
+                }
+            };
+            heartbeatTimer.Start();
+
             e.Handled = true;
         };
 
@@ -1901,12 +2008,28 @@ internal sealed class DesktopGroupWindow : Window
                 return;
             }
 
-            ghost ??= DragGhostWindow.Show(tile, tileStartScreen, () => tile.Opacity = SelectedTileOpacityWhileDragging);
-
             var currentScreen = PointToScreen(e.GetPosition(this));
             var delta = currentScreen - dragStartScreen;
-            ghost.Left = tileStartScreen.X + delta.X;
-            ghost.Top = tileStartScreen.Y + delta.Y;
+
+            if (!hasMoved)
+            {
+                if (Math.Abs(delta.X) < SystemParameters.MinimumHorizontalDragDistance
+                    && Math.Abs(delta.Y) < SystemParameters.MinimumVerticalDragDistance)
+                {
+                    return;
+                }
+
+                hasMoved = true;
+                heartbeatTimer?.Stop();
+                StopHeartbeatAnimation(tile);
+                ghost ??= DragGhostWindow.Show(tile, tileStartScreen, () => tile.Opacity = SelectedTileOpacityWhileDragging);
+            }
+
+            if (ghost is not null)
+            {
+                ghost.Left = tileStartScreen.X + delta.X;
+                ghost.Top = tileStartScreen.Y + delta.Y;
+            }
         };
 
         tile.MouseLeftButtonUp += (_, e) =>
@@ -1919,12 +2042,20 @@ internal sealed class DesktopGroupWindow : Window
             dragging = false;
             tile.ReleaseMouseCapture();
 
-            // Enquanto o tile esteve escondido (arrasto em andamento), a posicao que "vale"
-            // e' a da janela-fantasma - ela e' quem preserva corretamente o ponto onde o
-            // usuario pegou o icone (grab offset), coisa que o codigo antigo perdia ao
-            // recalcular a posicao a partir do cursor cru no drop.
-            var finalScreenTopLeft = ghost?.CurrentTopLeft ?? tileStartScreen;
-            ghost?.Close();
+            heartbeatTimer?.Stop();
+            StopHeartbeatAnimation(tile);
+
+            if (!hasMoved || ghost is null)
+            {
+                // Pure click without dragging - do NOT change position or notify onMoved!
+                ghost?.Close();
+                ghost = null;
+                tile.Opacity = 1.0;
+                return;
+            }
+
+            var finalScreenTopLeft = ghost.CurrentTopLeft;
+            ghost.Close();
             ghost = null;
             tile.Opacity = 1.0;
 
@@ -2086,6 +2217,80 @@ internal sealed class DesktopGroupWindow : Window
         return Math.Clamp(value, padding, max);
     }
 
+    private static void StartHeartbeatAnimation(FrameworkElement tile)
+    {
+        if (tile.RenderTransform is not ScaleTransform scale)
+        {
+            scale = new ScaleTransform(1, 1);
+            tile.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
+            tile.RenderTransform = scale;
+        }
+
+        var anim = new DoubleAnimation(1.0, 1.07, TimeSpan.FromMilliseconds(220))
+        {
+            AutoReverse = true,
+            RepeatBehavior = RepeatBehavior.Forever,
+            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+        };
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, anim);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, anim);
+    }
+
+    private static void StopHeartbeatAnimation(FrameworkElement tile)
+    {
+        if (tile.RenderTransform is ScaleTransform scale)
+        {
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+            scale.ScaleX = 1.0;
+            scale.ScaleY = 1.0;
+        }
+    }
+
+    private void HandleTileSelection(object entry)
+    {
+        if (Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            if (!_selectedEntries.Remove(entry))
+            {
+                _selectedEntries.Add(entry);
+            }
+            _selectionAnchor = entry;
+        }
+        else if (Keyboard.Modifiers == ModifierKeys.Shift)
+        {
+            SelectRange(_selectionAnchor ?? entry, entry);
+        }
+        else
+        {
+            _selectedEntries.Clear();
+            _selectedEntries.Add(entry);
+            _selectionAnchor = entry;
+        }
+
+        RefreshSelectionVisuals();
+    }
+
+    private void SelectRange(object fromEntry, object toEntry)
+    {
+        var all = GroupEntries.Enumerate(_category).ToList();
+        var i1 = all.IndexOf(fromEntry);
+        var i2 = all.IndexOf(toEntry);
+        if (i1 < 0) i1 = 0;
+        if (i2 < 0) i2 = all.Count - 1;
+
+        var start = Math.Min(i1, i2);
+        var end = Math.Max(i1, i2);
+
+        _selectedEntries.Clear();
+        for (var i = start; i <= end; i++)
+        {
+            _selectedEntries.Add(all[i]);
+        }
+
+        RefreshSelectionVisuals();
+    }
+
     private void SelectEntry(object entry, bool additive)
     {
         if (additive)
@@ -2094,11 +2299,13 @@ internal sealed class DesktopGroupWindow : Window
             {
                 _selectedEntries.Add(entry);
             }
+            _selectionAnchor = entry;
         }
         else
         {
             _selectedEntries.Clear();
             _selectedEntries.Add(entry);
+            _selectionAnchor = entry;
         }
 
         RefreshSelectionVisuals();
@@ -2439,6 +2646,53 @@ internal sealed class DesktopGroupWindow : Window
         Height = newHeight;
         Left = newLeft;
         Top = newTop;
+        _category.DesktopWidth = newWidth;
+        _category.DesktopHeight = newHeight;
+        _category.DesktopX = newLeft;
+        _category.DesktopY = newTop;
+
+        if (_category.IconArrangement != IconArrangement.None)
+        {
+            ReflowGridDuringResize();
+        }
+    }
+
+    private void ReflowGridDuringResize()
+    {
+        var usableWidth = _category.DesktopWidth - (PaddingX * 2);
+        var columns = Math.Max(1, (int)(usableWidth / (TileSize * _category.DesktopIconScale)));
+        var ordered = _category.IconArrangement switch
+        {
+            IconArrangement.ByName => NameOrder(),
+            IconArrangement.ByType => TypeOrder(),
+            _ => GridOrder()
+        };
+
+        var index = 0;
+        foreach (var entry in ordered)
+        {
+            var x = PaddingX + ((index % columns) * TileSize);
+            var y = PaddingY + ((index / columns) * TileSize);
+            switch (entry)
+            {
+                case LaunchItem item:
+                    item.DesktopIconX = x;
+                    item.DesktopIconY = y;
+                    break;
+                case MenuCategory folder:
+                    folder.IconX = x;
+                    folder.IconY = y;
+                    break;
+            }
+
+            if (_tilesByEntry.TryGetValue(entry, out var tile))
+            {
+                Canvas.SetLeft(tile, x);
+                Canvas.SetTop(tile, y);
+            }
+
+            index++;
+        }
     }
 
     private void OnResizeMouseUp(object sender, MouseButtonEventArgs e)
@@ -2597,20 +2851,111 @@ internal sealed class DesktopGroupWindow : Window
             return;
         }
 
-        if (Keyboard.Modifiers != ModifierKeys.None)
+        if (Keyboard.Modifiers == ModifierKeys.None)
         {
-            return;
+            if (e.Key == Key.F5)
+            {
+                FinishStructuralChange();
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key == Key.Escape)
+            {
+                ClearSelection();
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key == Key.Enter)
+            {
+                if (_selectedEntries.Count > 0)
+                {
+                    foreach (var entry in _selectedEntries.ToList())
+                    {
+                        if (_openActionsByEntry.TryGetValue(entry, out var open))
+                        {
+                            open();
+                        }
+                    }
+
+                    e.Handled = true;
+                    return;
+                }
+            }
+
+            if (e.Key == Key.Delete)
+            {
+                RemoveSelectedEntries();
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key == Key.F2 && _selectedEntries.Count == 1)
+            {
+                RenameSelectedEntry();
+                e.Handled = true;
+                return;
+            }
         }
 
-        if (e.Key == Key.Delete)
+        if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End
+            && (Keyboard.Modifiers == ModifierKeys.None || Keyboard.Modifiers == ModifierKeys.Shift))
         {
-            RemoveSelectedEntries();
-            e.Handled = true;
-        }
-        else if (e.Key == Key.F2 && _selectedEntries.Count == 1)
-        {
-            RenameSelectedEntry();
-            e.Handled = true;
+            var all = GroupEntries.Enumerate(_category).ToList();
+            if (all.Count > 0)
+            {
+                var usableWidth = _category.DesktopWidth - (PaddingX * 2);
+                var cols = Math.Max(1, (int)(usableWidth / (TileSize * _category.DesktopIconScale)));
+
+                var currentIdx = _selectionAnchor is not null ? all.IndexOf(_selectionAnchor) : -1;
+                if (currentIdx < 0 && _selectedEntries.Count > 0)
+                {
+                    currentIdx = all.IndexOf(_selectedEntries.First());
+                }
+
+                int targetIdx;
+                switch (e.Key)
+                {
+                    case Key.Left:
+                        targetIdx = currentIdx <= 0 ? 0 : currentIdx - 1;
+                        break;
+                    case Key.Right:
+                        targetIdx = currentIdx < 0 ? 0 : Math.Min(all.Count - 1, currentIdx + 1);
+                        break;
+                    case Key.Up:
+                        targetIdx = currentIdx < 0 ? 0 : Math.Max(0, currentIdx - cols);
+                        break;
+                    case Key.Down:
+                        targetIdx = currentIdx < 0 ? 0 : Math.Min(all.Count - 1, currentIdx + cols);
+                        break;
+                    case Key.Home:
+                        targetIdx = 0;
+                        break;
+                    case Key.End:
+                        targetIdx = all.Count - 1;
+                        break;
+                    default:
+                        targetIdx = 0;
+                        break;
+                }
+
+                var targetEntry = all[targetIdx];
+                if (Keyboard.Modifiers == ModifierKeys.Shift)
+                {
+                    SelectRange(_selectionAnchor ?? all[0], targetEntry);
+                }
+                else
+                {
+                    _selectedEntries.Clear();
+                    _selectedEntries.Add(targetEntry);
+                    _selectionAnchor = targetEntry;
+                    RefreshSelectionVisuals();
+                }
+
+                e.Handled = true;
+                return;
+            }
         }
     }
 

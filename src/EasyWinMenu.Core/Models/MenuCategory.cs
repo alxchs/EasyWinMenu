@@ -18,6 +18,7 @@ public sealed class MenuCategory : IMenuContainer
     public double? IconX { get; set; }
     public double? IconY { get; set; }
     public bool IsCollapsed { get; set; }
+    public bool IsClosed { get; set; }
     /// <summary>0 is fully see-through, 1 fully painted. Replaces the old on/off flag.</summary>
     public double AreaOpacity { get; set; } = 1.0;
     public double TitleOpacity { get; set; } = 1.0;
@@ -85,6 +86,7 @@ public sealed class MenuCategory : IMenuContainer
             IconX = IconX,
             IconY = IconY,
             IsCollapsed = IsCollapsed,
+            IsClosed = IsClosed,
             AreaOpacity = AreaOpacity,
             TitleOpacity = TitleOpacity,
             DisplayMode = DisplayMode,
