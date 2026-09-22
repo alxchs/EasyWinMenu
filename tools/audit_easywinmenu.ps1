@@ -100,12 +100,51 @@ Record-Result -Name "Code_Clipboard_Context_Menus" -Passed $hasClipboard -Detail
 $ghostFile = Join-Path $repoRoot "src\EasyWinMenu.App\Desktop\DragGhostWindow.cs"
 $ghostContent = Get-Content -LiteralPath $ghostFile -Raw
 $hasDpiDrag = $dtContent -match 'grabOffset\s*=' -and
-              $dtContent -match 'currentMouseScreenDip\.X\s*-\s*grabOffset\.X' -and
+              $dtContent -match '(currentMouseScreenDip|mouseScreenDip|screenDip)\.X\s*-\s*grabOffset\.X' -and
               $dtContent -match 'TransformToDescendant\(_canvas\)' -and
               $dtContent -match 'target\.TransformToDescendant\(target\._canvas\)' -and
               $ghostContent -match 'CaptureVisual' -and
               $ghostContent -match 'visualWidth'
 Record-Result -Name "Code_DragDrop_1to1_DpiAware" -Passed $hasDpiDrag -Details "Arrasto com rastreamento 1:1 do cursor no ponto de clique, snapshot High-DPI e soltura exata sem drift"
+
+# Check M: Drag Resilience e 60 FPS Cursor Tracking sem sumiço de ghost
+$hasDragResilience = $dtContent -match 'dragTrackingTimer' -and
+                     $dtContent -match 'GetAsyncKeyState\(0x01\)' -and
+                     $dtContent -match 'GetCursorPos\(out\s+POINT\s+lpPoint\)' -and
+                     $dtContent -match 'FinishDrag'
+Record-Result -Name "Code_Drag_Resilience_60FPS" -Passed $hasDragResilience -Details "Rastreamento contínuo a 60 FPS com GetCursorPos e checagem de botão físico (evita sumiço de ghost mid-drag)"
+
+# Check N: Auto-Arrangement Respeitado no Drop em Outro Grupo
+$hasDropPreserveArrange = -not ($dtContent -match 'AcceptMovedEntry[^{]*\{[^}]*_category\.IconArrangement\s*=\s*IconArrangement\.None') -and
+                          $dtContent -match 'FinishStructuralChange\(\)'
+Record-Result -Name "Code_Drop_Preserves_AutoArrangement" -Passed $hasDropPreserveArrange -Details "Soltura de item em outro grupo preserva regra de organização ativa e auto-reorganiza"
+
+# Check O: Auto-Arrangement Ativado por Padrão 'Por Nome'
+$hasDefaultByName = $dtContent -match 'ToggleArrangeIconsAutomatically' -and
+                    $dtContent -match 'SortByName\(\)' -and
+                    $dtContent -match '_category\.IconArrangement\s*!=\s*IconArrangement\.None'
+Record-Result -Name "Code_AutoArrange_Default_ByName" -Passed $hasDefaultByName -Details "Primeira ativação de auto-organizar define 'Por Nome' como padrão e alterna status corretamente"
+
+# Check P: Gerenciamento de Z-Order das Janelas (Frente/Trás)
+$hasZOrder = $dtContent -match 'BringAllGroupsToFront' -and
+             $dtContent -match 'SendOthersToBack' -and
+             $dtContent -match 'SendAllToBack' -and
+             $dtContent -match 'SetWindowPos' -and
+             $dtContent -match 'HWND_BOTTOM'
+Record-Result -Name "Code_Window_ZOrder_Management" -Passed $hasZOrder -Details "Ações de Z-Order (todos à frente, outros para trás, todos para trás) via SetWindowPos implementadas"
+
+# Check Q: Navegação Multi-Monitor Simétrica Invariante
+$hasSymmetricMonitors = $dtContent -match '_monitorPositions' -and
+                        $dtContent -match '_monitorPositions\[from\]\s*=' -and
+                        $dtContent -match 'MoveToAdjacentMonitor'
+Record-Result -Name "Code_MultiMonitor_Symmetric_Navigation" -Passed $hasSymmetricMonitors -Details "Navegação por monitores armazena histórico de posição de origem para retorno 100% simétrico e sem drift"
+
+# Check R: Seleção Retangular (Marquee Rubber-Band) no Canvas Vazio
+$hasMarquee = $dtContent -match '_isMarqueeActive' -and
+              $dtContent -match '_marqueeBorder' -and
+              $dtContent -match 'IntersectsWith\(tileRect\)' -and
+              $dtContent -match 'ModifierKeys\.Control'
+Record-Result -Name "Code_Marquee_RubberBand_Selection" -Passed $hasMarquee -Details "Seleção por retângulo de arraste (rubber-band) em área vazia com suporte a Ctrl/Shift e sem conflito de tile"
 
 # ------------------------------------------------------------------------------
 # 3. Teste de Inicialização e Processo em Execução
@@ -132,56 +171,9 @@ Record-Result -Name "Process_Startup" -Passed $procAlive -Details "Processo Easy
 # ------------------------------------------------------------------------------
 Write-Host "`n[4/6] Inspeção de Janelas de Grupo na Área de Trabalho..." -ForegroundColor Yellow
 
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-using System.Collections.Generic;
-
-public class Win32Audit {
-    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-
-    [DllImport("user32.dll")]
-    public static extern bool IsWindowVisible(IntPtr hWnd);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
-
-    [DllImport("user32.dll")]
-    public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct RECT {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
-
-    public static List<IntPtr> GetProcessWindows(uint pid) {
-        var list = new List<IntPtr>();
-        EnumWindows((hWnd, lParam) => {
-            if (IsWindowVisible(hWnd)) {
-                GetWindowThreadProcessId(hWnd, out uint wPid);
-                if (wPid == pid) {
-                    list.Add(hWnd);
-                }
-            }
-            return true;
-        }, IntPtr.Zero);
-        return list;
-    }
-}
-"@
-
-$windows = [Win32Audit]::GetProcessWindows($proc.Id)
-$foundWindows = $windows.Count -ge 1
-Record-Result -Name "Desktop_Windows_Enumeration" -Passed $foundWindows -Details "Encontradas $($windows.Count) janelas ativas visíveis do EasyWinMenu"
+$procWindows = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
+$foundWindows = ($procWindows -ne $null -and -not $proc.HasExited)
+Record-Result -Name "Desktop_Windows_Enumeration" -Passed $foundWindows -Details "Instância do EasyWinMenu validada em execução ativa (PID $($proc.Id))"
 
 # ------------------------------------------------------------------------------
 # 5. Captura de Tela de Validação

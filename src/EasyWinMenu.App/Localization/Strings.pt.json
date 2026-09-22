@@ -136,5 +136,9 @@
   "group.close": "Fechar grupo",
   "desktop.openAllGroups": "Abrir todos os grupos",
   "desktop.closeAllGroups": "Fechar todos os grupos",
-  "desktop.groupsMenu": "Grupos da Área de Trabalho"
+  "desktop.groupsMenu": "Grupos da Área de Trabalho",
+  "group.windowOrder": "Ordem na área de trabalho",
+  "group.bringAllToFront": "Trazer todos os grupos para frente",
+  "group.sendOthersToBack": "Enviar todos para trás (exceto este)",
+  "group.sendAllToBack": "Enviar todos para trás"
 }

@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -84,6 +85,34 @@ internal sealed class DesktopGroupWindow : Window
     private static readonly List<DesktopGroupWindow> _allGroupWindows = new();
     private readonly Dictionary<object, FrameworkElement> _tilesByEntry = new();
     private readonly HashSet<object> _selectedEntries = new();
+    private readonly Dictionary<int, System.Windows.Point> _monitorPositions = new();
+
+    private System.Windows.Point _marqueeStart;
+    private bool _isMarqueeActive;
+    private Border? _marqueeBorder;
+    private HashSet<object> _preMarqueeSelection = new();
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out POINT lpPoint);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    private static readonly IntPtr HWND_TOP = new IntPtr(0);
+    private static readonly IntPtr HWND_BOTTOM = new IntPtr(1);
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_NOACTIVATE = 0x0010;
 
     private Canvas _canvas = null!;
     private Border _border = null!;
@@ -287,6 +316,7 @@ internal sealed class DesktopGroupWindow : Window
 
         _category.DesktopX = Left;
         _category.DesktopY = Top;
+        _monitorPositions.Clear();
         _onLayoutChanged(_category);
     }
 
@@ -305,7 +335,20 @@ internal sealed class DesktopGroupWindow : Window
             return;
         }
 
-        var position = MonitorPlacement.MapBetween(current, areas[from], areas[to]);
+        _monitorPositions[from] = new System.Windows.Point(Left, Top);
+
+        System.Windows.Point position;
+        if (_monitorPositions.TryGetValue(to, out var remembered)
+            && MonitorPlacement.IsReachable(new Rect(remembered.X, remembered.Y, ActualWidth, ActualHeight), areas))
+        {
+            position = remembered;
+        }
+        else
+        {
+            position = MonitorPlacement.MapBetween(current, areas[from], areas[to]);
+            _monitorPositions[to] = position;
+        }
+
         PlaceWithoutSaving(position.X, position.Y);
 
         _category.DesktopX = position.X;
@@ -545,6 +588,7 @@ internal sealed class DesktopGroupWindow : Window
 
         _category.DesktopX = Left;
         _category.DesktopY = Top;
+        _monitorPositions.Clear();
         _onLayoutChanged(_category);
     }
 
@@ -621,11 +665,155 @@ internal sealed class DesktopGroupWindow : Window
             RenderTransformOrigin = new System.Windows.Point(0, 0),
             ContextMenu = BuildHeaderContextMenu()
         };
-        _canvas.MouseLeftButtonDown += (_, _) =>
+        _canvas.MouseLeftButtonDown += (_, e) =>
         {
-            ClearSelection();
             CloseFindOverlay(rememberQuery: true);
+            var isCtrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+            var isShift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+
+            if (!isCtrl && !isShift)
+            {
+                ClearSelection();
+                _preMarqueeSelection.Clear();
+            }
+            else
+            {
+                _preMarqueeSelection = new HashSet<object>(_selectedEntries);
+            }
+
+            _marqueeStart = e.GetPosition(_canvas);
+            _isMarqueeActive = true;
+            _canvas.CaptureMouse();
+
+            if (_marqueeBorder is not null)
+            {
+                _canvas.Children.Remove(_marqueeBorder);
+            }
+
+            _marqueeBorder = new Border
+            {
+                BorderBrush = ThemeBrushes.CreateBrush(_theme.HighlightColor, 0.85),
+                BorderThickness = new Thickness(1),
+                Background = ThemeBrushes.CreateBrush(_theme.HighlightColor, 0.20),
+                CornerRadius = new CornerRadius(2),
+                IsHitTestVisible = false
+            };
+
+            Canvas.SetLeft(_marqueeBorder, _marqueeStart.X);
+            Canvas.SetTop(_marqueeBorder, _marqueeStart.Y);
+            _marqueeBorder.Width = 0;
+            _marqueeBorder.Height = 0;
+            _canvas.Children.Add(_marqueeBorder);
+
+            e.Handled = true;
         };
+
+        _canvas.MouseMove += (_, e) =>
+        {
+            if (!_isMarqueeActive || _marqueeBorder is null)
+            {
+                return;
+            }
+
+            var current = e.GetPosition(_canvas);
+            var left = Math.Min(_marqueeStart.X, current.X);
+            var top = Math.Min(_marqueeStart.Y, current.Y);
+            var width = Math.Abs(current.X - _marqueeStart.X);
+            var height = Math.Abs(current.Y - _marqueeStart.Y);
+
+            Canvas.SetLeft(_marqueeBorder, left);
+            Canvas.SetTop(_marqueeBorder, top);
+            _marqueeBorder.Width = width;
+            _marqueeBorder.Height = height;
+
+            var marqueeRect = new Rect(left, top, width, height);
+            var isCtrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+
+            foreach (var (entry, tile) in _tilesByEntry)
+            {
+                var tileLeft = Canvas.GetLeft(tile);
+                var tileTop = Canvas.GetTop(tile);
+                var tileWidth = tile.ActualWidth > 0 ? tile.ActualWidth : TileSize - 8;
+                var tileHeight = tile.ActualHeight > 0 ? tile.ActualHeight : TileSize;
+                var tileRect = new Rect(tileLeft, tileTop, tileWidth, tileHeight);
+
+                var intersects = marqueeRect.IntersectsWith(tileRect);
+
+                if (isCtrl)
+                {
+                    var originallySelected = _preMarqueeSelection.Contains(entry);
+                    if (intersects)
+                    {
+                        if (originallySelected)
+                        {
+                            _selectedEntries.Remove(entry);
+                        }
+                        else
+                        {
+                            _selectedEntries.Add(entry);
+                        }
+                    }
+                    else
+                    {
+                        if (originallySelected)
+                        {
+                            _selectedEntries.Add(entry);
+                        }
+                        else
+                        {
+                            _selectedEntries.Remove(entry);
+                        }
+                    }
+                }
+                else
+                {
+                    var originallySelected = _preMarqueeSelection.Contains(entry);
+                    if (intersects || originallySelected)
+                    {
+                        _selectedEntries.Add(entry);
+                    }
+                    else
+                    {
+                        _selectedEntries.Remove(entry);
+                    }
+                }
+            }
+
+            RefreshSelectionVisuals();
+        };
+
+        _canvas.MouseLeftButtonUp += (_, e) =>
+        {
+            if (_isMarqueeActive)
+            {
+                _isMarqueeActive = false;
+                _canvas.ReleaseMouseCapture();
+                if (_marqueeBorder is not null)
+                {
+                    _canvas.Children.Remove(_marqueeBorder);
+                    _marqueeBorder = null;
+                }
+                e.Handled = true;
+            }
+        };
+
+        _canvas.LostMouseCapture += (_, _) =>
+        {
+            if (_isMarqueeActive)
+            {
+                var isLButtonDown = (GetAsyncKeyState(0x01) & 0x8000) != 0;
+                if (!isLButtonDown)
+                {
+                    _isMarqueeActive = false;
+                    if (_marqueeBorder is not null)
+                    {
+                        _canvas.Children.Remove(_marqueeBorder);
+                        _marqueeBorder = null;
+                    }
+                }
+            }
+        };
+
         _canvas.PreviewMouseRightButtonDown += (_, _) => _canvas.ContextMenu = BuildHeaderContextMenu();
 
         PopulateTiles();
@@ -1213,7 +1401,7 @@ internal sealed class DesktopGroupWindow : Window
 
         menu.Items.Add(BuildSeparator());
 
-        AddCheckItem(menu, LocalizationService.Get("group.arrangeIcons"), _category.IconArrangement == IconArrangement.Grid, ArrangeIconsAutomatically, "IconGrid");
+        AddCheckItem(menu, LocalizationService.Get("group.arrangeIcons"), _category.IconArrangement != IconArrangement.None, ToggleArrangeIconsAutomatically, "IconGrid");
 
         var sortMenu = CreateMenuItem(LocalizationService.Get("group.sortBy"), "IconSort");
         AddCheckItem(sortMenu, LocalizationService.Get("group.sortByName"), _category.IconArrangement == IconArrangement.ByName, SortByName);
@@ -1225,6 +1413,12 @@ internal sealed class DesktopGroupWindow : Window
         AddCheckItem(sizeMenu, LocalizationService.Get("group.iconSizeMedium"), IsIconScale(1.0), () => SetIconScale(1.0));
         AddCheckItem(sizeMenu, LocalizationService.Get("group.iconSizeLarge"), IsIconScale(1.5), () => SetIconScale(1.5));
         menu.Items.Add(sizeMenu);
+
+        var orderMenu = CreateMenuItem(LocalizationService.Get("group.windowOrder"), "IconSort");
+        AddMenuItem(orderMenu, LocalizationService.Get("group.bringAllToFront"), BringAllGroupsToFront);
+        AddMenuItem(orderMenu, LocalizationService.Get("group.sendOthersToBack"), SendOthersToBack);
+        AddMenuItem(orderMenu, LocalizationService.Get("group.sendAllToBack"), SendAllToBack);
+        menu.Items.Add(orderMenu);
 
         menu.Items.Add(BuildSeparator());
         AddMenuItem(
@@ -1827,10 +2021,60 @@ internal sealed class DesktopGroupWindow : Window
         RefreshCutVisuals();
     }
 
-    private void ArrangeIconsAutomatically()
+    private void ToggleArrangeIconsAutomatically()
     {
-        _category.IconArrangement = IconArrangement.Grid;
-        ArrangeInGrid(GridOrder());
+        if (_category.IconArrangement != IconArrangement.None)
+        {
+            _category.IconArrangement = IconArrangement.None;
+            _onLayoutChanged(_category);
+            UpdateHeaderTooltip();
+        }
+        else
+        {
+            SortByName();
+        }
+    }
+
+    private static void BringAllGroupsToFront()
+    {
+        foreach (var window in _allGroupWindows.ToList())
+        {
+            var hwnd = new WindowInteropHelper(window).Handle;
+            if (hwnd != IntPtr.Zero)
+            {
+                SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+        }
+    }
+
+    private void SendOthersToBack()
+    {
+        foreach (var window in _allGroupWindows.Where(w => !ReferenceEquals(w, this)).ToList())
+        {
+            var hwnd = new WindowInteropHelper(window).Handle;
+            if (hwnd != IntPtr.Zero)
+            {
+                SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+        }
+
+        var thisHwnd = new WindowInteropHelper(this).Handle;
+        if (thisHwnd != IntPtr.Zero)
+        {
+            SetWindowPos(thisHwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+    }
+
+    private static void SendAllToBack()
+    {
+        foreach (var window in _allGroupWindows.ToList())
+        {
+            var hwnd = new WindowInteropHelper(window).Handle;
+            if (hwnd != IntPtr.Zero)
+            {
+                SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+        }
     }
 
     private void SortByName()
@@ -1971,6 +2215,144 @@ internal sealed class DesktopGroupWindow : Window
         var hasMoved = false;
         DragGhostWindow? ghost = null;
         DispatcherTimer? heartbeatTimer = null;
+        DispatcherTimer? dragTrackingTimer = null;
+
+        void FinishDrag()
+        {
+            if (!dragging)
+            {
+                return;
+            }
+
+            dragging = false;
+
+            dragTrackingTimer?.Stop();
+            dragTrackingTimer = null;
+
+            heartbeatTimer?.Stop();
+            StopHeartbeatAnimation(tile);
+
+            tile.ReleaseMouseCapture();
+
+            if (!hasMoved || ghost is null)
+            {
+                ghost?.Close();
+                ghost = null;
+                tile.Opacity = 1.0;
+                return;
+            }
+
+            var finalScreenTopLeft = ghost.CurrentTopLeft;
+            ghost.Close();
+            ghost = null;
+            tile.Opacity = 1.0;
+
+            var screenCenter = new System.Windows.Point(
+                finalScreenTopLeft.X + visualWidth / 2,
+                finalScreenTopLeft.Y + visualHeight / 2);
+
+            var targetGroup = FindGroupWindowAt(screenCenter, this);
+            if (targetGroup is not null)
+            {
+                MoveEntryToOtherGroup(entry, targetGroup, finalScreenTopLeft);
+                return;
+            }
+
+            var targetInWindow = new System.Windows.Point(
+                finalScreenTopLeft.X - Left,
+                finalScreenTopLeft.Y - Top);
+
+            System.Windows.Point localTopLeft;
+            try
+            {
+                var transform = TransformToDescendant(_canvas);
+                localTopLeft = transform.Transform(targetInWindow);
+            }
+            catch
+            {
+                var scale = _category.DesktopIconScale > 0 ? _category.DesktopIconScale : 1.0;
+                localTopLeft = new System.Windows.Point(targetInWindow.X / scale, targetInWindow.Y / scale);
+            }
+
+            var x = ClampToCanvas(localTopLeft.X, tile.ActualWidth, _canvas.ActualWidth, PaddingX);
+            var y = ClampToCanvas(localTopLeft.Y, tile.ActualHeight, _canvas.ActualHeight, PaddingY);
+            Canvas.SetLeft(tile, x);
+            Canvas.SetTop(tile, y);
+            onMoved(x, y);
+        }
+
+        void UpdateDrag(System.Windows.Point mouseScreenDip)
+        {
+            if (!dragging)
+            {
+                return;
+            }
+
+            if (!hasMoved)
+            {
+                var deltaX = mouseScreenDip.X - (Left + dragStartMouseInWindow.X);
+                var deltaY = mouseScreenDip.Y - (Top + dragStartMouseInWindow.Y);
+
+                if (Math.Abs(deltaX) < SystemParameters.MinimumHorizontalDragDistance
+                    && Math.Abs(deltaY) < SystemParameters.MinimumVerticalDragDistance)
+                {
+                    return;
+                }
+
+                hasMoved = true;
+                heartbeatTimer?.Stop();
+                StopHeartbeatAnimation(tile);
+
+                var dpi = VisualTreeHelper.GetDpi(this);
+                ghost ??= DragGhostWindow.Show(
+                    tile,
+                    visualWidth,
+                    visualHeight,
+                    initialTileScreenDip,
+                    dpi.DpiScaleX,
+                    dpi.DpiScaleY,
+                    () => tile.Opacity = SelectedTileOpacityWhileDragging);
+
+                dragTrackingTimer?.Stop();
+                dragTrackingTimer = new DispatcherTimer(DispatcherPriority.Render)
+                {
+                    Interval = TimeSpan.FromMilliseconds(15)
+                };
+                dragTrackingTimer.Tick += (_, _) =>
+                {
+                    if (!dragging)
+                    {
+                        dragTrackingTimer.Stop();
+                        return;
+                    }
+
+                    var isLButtonDown = (GetAsyncKeyState(0x01) & 0x8000) != 0;
+                    if (!isLButtonDown)
+                    {
+                        FinishDrag();
+                        return;
+                    }
+
+                    if (GetCursorPos(out var pt))
+                    {
+                        var dpiScale = VisualTreeHelper.GetDpi(this);
+                        var screenDip = new System.Windows.Point(pt.X / dpiScale.DpiScaleX, pt.Y / dpiScale.DpiScaleY);
+                        if (ghost is not null)
+                        {
+                            ghost.Left = screenDip.X - grabOffset.X;
+                            ghost.Top = screenDip.Y - grabOffset.Y;
+                        }
+                    }
+                };
+                dragTrackingTimer.Start();
+            }
+
+            if (ghost is not null)
+            {
+                ghost.Left = mouseScreenDip.X - grabOffset.X;
+                ghost.Top = mouseScreenDip.Y - grabOffset.Y;
+            }
+        }
 
         tile.MouseLeftButtonDown += (_, e) =>
         {
@@ -2030,114 +2412,27 @@ internal sealed class DesktopGroupWindow : Window
             }
 
             var currentMouseInWindow = e.GetPosition(this);
-            var deltaX = currentMouseInWindow.X - dragStartMouseInWindow.X;
-            var deltaY = currentMouseInWindow.Y - dragStartMouseInWindow.Y;
+            var mouseScreenDip = new System.Windows.Point(
+                Left + currentMouseInWindow.X,
+                Top + currentMouseInWindow.Y);
 
-            if (!hasMoved)
-            {
-                if (Math.Abs(deltaX) < SystemParameters.MinimumHorizontalDragDistance
-                    && Math.Abs(deltaY) < SystemParameters.MinimumVerticalDragDistance)
-                {
-                    return;
-                }
-
-                hasMoved = true;
-                heartbeatTimer?.Stop();
-                StopHeartbeatAnimation(tile);
-
-                var dpi = VisualTreeHelper.GetDpi(this);
-                ghost ??= DragGhostWindow.Show(
-                    tile,
-                    visualWidth,
-                    visualHeight,
-                    initialTileScreenDip,
-                    dpi.DpiScaleX,
-                    dpi.DpiScaleY,
-                    () => tile.Opacity = SelectedTileOpacityWhileDragging);
-            }
-
-            if (ghost is not null)
-            {
-                var currentMouseScreenDip = new System.Windows.Point(
-                    Left + currentMouseInWindow.X,
-                    Top + currentMouseInWindow.Y);
-
-                ghost.Left = currentMouseScreenDip.X - grabOffset.X;
-                ghost.Top = currentMouseScreenDip.Y - grabOffset.Y;
-            }
+            UpdateDrag(mouseScreenDip);
         };
 
         tile.MouseLeftButtonUp += (_, e) =>
         {
-            if (!dragging)
-            {
-                return;
-            }
-
-            dragging = false;
-            tile.ReleaseMouseCapture();
-
-            heartbeatTimer?.Stop();
-            StopHeartbeatAnimation(tile);
-
-            if (!hasMoved || ghost is null)
-            {
-                // Pure click without dragging - do NOT change position or notify onMoved!
-                ghost?.Close();
-                ghost = null;
-                tile.Opacity = 1.0;
-                return;
-            }
-
-            var finalScreenTopLeft = ghost.CurrentTopLeft;
-            ghost.Close();
-            ghost = null;
-            tile.Opacity = 1.0;
-
-            var screenCenter = new System.Windows.Point(
-                finalScreenTopLeft.X + visualWidth / 2,
-                finalScreenTopLeft.Y + visualHeight / 2);
-
-            var targetGroup = FindGroupWindowAt(screenCenter, this);
-            if (targetGroup is not null)
-            {
-                MoveEntryToOtherGroup(entry, targetGroup, finalScreenTopLeft);
-                return;
-            }
-
-            var targetInWindow = new System.Windows.Point(
-                finalScreenTopLeft.X - Left,
-                finalScreenTopLeft.Y - Top);
-
-            System.Windows.Point localTopLeft;
-            try
-            {
-                var transform = TransformToDescendant(_canvas);
-                localTopLeft = transform.Transform(targetInWindow);
-            }
-            catch
-            {
-                var scale = _category.DesktopIconScale > 0 ? _category.DesktopIconScale : 1.0;
-                localTopLeft = new System.Windows.Point(targetInWindow.X / scale, targetInWindow.Y / scale);
-            }
-
-            var x = ClampToCanvas(localTopLeft.X, tile.ActualWidth, _canvas.ActualWidth, PaddingX);
-            var y = ClampToCanvas(localTopLeft.Y, tile.ActualHeight, _canvas.ActualHeight, PaddingY);
-            Canvas.SetLeft(tile, x);
-            Canvas.SetTop(tile, y);
-            onMoved(x, y);
+            FinishDrag();
         };
 
         tile.LostMouseCapture += (_, _) =>
         {
             if (dragging)
             {
-                dragging = false;
-                heartbeatTimer?.Stop();
-                StopHeartbeatAnimation(tile);
-                ghost?.Close();
-                ghost = null;
-                tile.Opacity = 1.0;
+                var isLButtonDown = (GetAsyncKeyState(0x01) & 0x8000) != 0;
+                if (!isLButtonDown)
+                {
+                    FinishDrag();
+                }
             }
         };
     }
@@ -2238,7 +2533,6 @@ internal sealed class DesktopGroupWindow : Window
                 return;
         }
 
-        _category.IconArrangement = IconArrangement.None;
         FinishStructuralChange();
         RestoreIfMinimized();
     }
@@ -2568,10 +2862,17 @@ internal sealed class DesktopGroupWindow : Window
             () => _onExecute(item),
             (x, y) =>
             {
-                _category.IconArrangement = IconArrangement.None;
-                item.DesktopIconX = x;
-                item.DesktopIconY = y;
-                _onLayoutChanged(_category);
+                if (_category.IconArrangement != IconArrangement.None)
+                {
+                    FinishStructuralChange();
+                }
+                else
+                {
+                    _category.IconArrangement = IconArrangement.None;
+                    item.DesktopIconX = x;
+                    item.DesktopIconY = y;
+                    _onLayoutChanged(_category);
+                }
             });
 
         return stack;
@@ -2629,10 +2930,17 @@ internal sealed class DesktopGroupWindow : Window
             () => OpenSubfolder(folder),
             (x, y) =>
             {
-                _category.IconArrangement = IconArrangement.None;
-                folder.IconX = x;
-                folder.IconY = y;
-                _onLayoutChanged(_category);
+                if (_category.IconArrangement != IconArrangement.None)
+                {
+                    FinishStructuralChange();
+                }
+                else
+                {
+                    _category.IconArrangement = IconArrangement.None;
+                    folder.IconX = x;
+                    folder.IconY = y;
+                    _onLayoutChanged(_category);
+                }
             });
 
         return stack;
@@ -2658,6 +2966,7 @@ internal sealed class DesktopGroupWindow : Window
 
         _category.DesktopX = Left;
         _category.DesktopY = Top;
+        _monitorPositions.Clear();
         _onLayoutChanged(_category);
     }
 

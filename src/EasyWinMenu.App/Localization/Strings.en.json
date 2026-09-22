@@ -136,5 +136,9 @@
   "group.close": "Close group",
   "desktop.openAllGroups": "Open all desktop groups",
   "desktop.closeAllGroups": "Close all desktop groups",
-  "desktop.groupsMenu": "Desktop groups"
+  "desktop.groupsMenu": "Desktop groups",
+  "group.windowOrder": "Desktop window order",
+  "group.bringAllToFront": "Bring all groups to front",
+  "group.sendOthersToBack": "Send other groups to back",
+  "group.sendAllToBack": "Send all groups to back"
 }
