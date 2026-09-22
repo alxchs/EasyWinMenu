@@ -96,6 +96,17 @@ Record-Result -Name "Code_Live_Resize_Reflow" -Passed $hasLiveReflow -Details "R
 $hasClipboard = $dtContent -match 'LocalizationService\.Get\("item\.cut"\)' -and $dtContent -match 'LocalizationService\.Get\("group\.paste"\)'
 Record-Result -Name "Code_Clipboard_Context_Menus" -Passed $hasClipboard -Details "Opções Recortar (Ctrl+X), Copiar (Ctrl+C) e Colar (Ctrl+V) disponíveis nos menus de contexto"
 
+# Check L: Drag and Drop com Precisão 1:1 e Consciência de DPI
+$ghostFile = Join-Path $repoRoot "src\EasyWinMenu.App\Desktop\DragGhostWindow.cs"
+$ghostContent = Get-Content -LiteralPath $ghostFile -Raw
+$hasDpiDrag = $dtContent -match 'grabOffset\s*=' -and
+              $dtContent -match 'currentMouseScreenDip\.X\s*-\s*grabOffset\.X' -and
+              $dtContent -match 'TransformToDescendant\(_canvas\)' -and
+              $dtContent -match 'target\.TransformToDescendant\(target\._canvas\)' -and
+              $ghostContent -match 'CaptureVisual' -and
+              $ghostContent -match 'visualWidth'
+Record-Result -Name "Code_DragDrop_1to1_DpiAware" -Passed $hasDpiDrag -Details "Arrasto com rastreamento 1:1 do cursor no ponto de clique, snapshot High-DPI e soltura exata sem drift"
+
 # ------------------------------------------------------------------------------
 # 3. Teste de Inicialização e Processo em Execução
 # ------------------------------------------------------------------------------

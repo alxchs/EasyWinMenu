@@ -1962,8 +1962,11 @@ internal sealed class DesktopGroupWindow : Window
         // PointToScreen chamado duas vezes por MouseMove, misturando o DPI de antes/depois do
         // Left/Top mudar), PointToScreen so' e' chamado sobre "this" - a janela de origem, que
         // nunca se move durante o arrasto - nunca sobre a propria janela-fantasma.
-        System.Windows.Point dragStartScreen = default;
-        System.Windows.Point tileStartScreen = default;
+        System.Windows.Point dragStartMouseInWindow = default;
+        System.Windows.Point initialTileScreenDip = default;
+        System.Windows.Point grabOffset = default;
+        double visualWidth = 0;
+        double visualHeight = 0;
         var dragging = false;
         var hasMoved = false;
         DragGhostWindow? ghost = null;
@@ -1982,8 +1985,26 @@ internal sealed class DesktopGroupWindow : Window
 
             dragging = true;
             hasMoved = false;
-            dragStartScreen = PointToScreen(e.GetPosition(this));
-            tileStartScreen = _canvas.PointToScreen(new System.Windows.Point(Canvas.GetLeft(tile), Canvas.GetTop(tile)));
+
+            // Visual geometry in window DIP space:
+            var tileTransform = tile.TransformToAncestor(this);
+            var tileVisualOrigin = tileTransform.Transform(new System.Windows.Point(0, 0));
+            var tileVisualBottomRight = tileTransform.Transform(new System.Windows.Point(
+                tile.ActualWidth > 0 ? tile.ActualWidth : TileSize - 8,
+                tile.ActualHeight > 0 ? tile.ActualHeight : TileSize));
+            visualWidth = Math.Max(1, Math.Abs(tileVisualBottomRight.X - tileVisualOrigin.X));
+            visualHeight = Math.Max(1, Math.Abs(tileVisualBottomRight.Y - tileVisualOrigin.Y));
+
+            var mouseInWindow = e.GetPosition(this);
+            dragStartMouseInWindow = mouseInWindow;
+            grabOffset = new System.Windows.Point(
+                mouseInWindow.X - tileVisualOrigin.X,
+                mouseInWindow.Y - tileVisualOrigin.Y);
+
+            initialTileScreenDip = new System.Windows.Point(
+                Left + tileVisualOrigin.X,
+                Top + tileVisualOrigin.Y);
+
             tile.CaptureMouse();
 
             heartbeatTimer?.Stop();
@@ -2008,13 +2029,14 @@ internal sealed class DesktopGroupWindow : Window
                 return;
             }
 
-            var currentScreen = PointToScreen(e.GetPosition(this));
-            var delta = currentScreen - dragStartScreen;
+            var currentMouseInWindow = e.GetPosition(this);
+            var deltaX = currentMouseInWindow.X - dragStartMouseInWindow.X;
+            var deltaY = currentMouseInWindow.Y - dragStartMouseInWindow.Y;
 
             if (!hasMoved)
             {
-                if (Math.Abs(delta.X) < SystemParameters.MinimumHorizontalDragDistance
-                    && Math.Abs(delta.Y) < SystemParameters.MinimumVerticalDragDistance)
+                if (Math.Abs(deltaX) < SystemParameters.MinimumHorizontalDragDistance
+                    && Math.Abs(deltaY) < SystemParameters.MinimumVerticalDragDistance)
                 {
                     return;
                 }
@@ -2022,13 +2044,26 @@ internal sealed class DesktopGroupWindow : Window
                 hasMoved = true;
                 heartbeatTimer?.Stop();
                 StopHeartbeatAnimation(tile);
-                ghost ??= DragGhostWindow.Show(tile, tileStartScreen, () => tile.Opacity = SelectedTileOpacityWhileDragging);
+
+                var dpi = VisualTreeHelper.GetDpi(this);
+                ghost ??= DragGhostWindow.Show(
+                    tile,
+                    visualWidth,
+                    visualHeight,
+                    initialTileScreenDip,
+                    dpi.DpiScaleX,
+                    dpi.DpiScaleY,
+                    () => tile.Opacity = SelectedTileOpacityWhileDragging);
             }
 
             if (ghost is not null)
             {
-                ghost.Left = tileStartScreen.X + delta.X;
-                ghost.Top = tileStartScreen.Y + delta.Y;
+                var currentMouseScreenDip = new System.Windows.Point(
+                    Left + currentMouseInWindow.X,
+                    Top + currentMouseInWindow.Y);
+
+                ghost.Left = currentMouseScreenDip.X - grabOffset.X;
+                ghost.Top = currentMouseScreenDip.Y - grabOffset.Y;
             }
         };
 
@@ -2060,8 +2095,8 @@ internal sealed class DesktopGroupWindow : Window
             tile.Opacity = 1.0;
 
             var screenCenter = new System.Windows.Point(
-                finalScreenTopLeft.X + tile.ActualWidth / 2,
-                finalScreenTopLeft.Y + tile.ActualHeight / 2);
+                finalScreenTopLeft.X + visualWidth / 2,
+                finalScreenTopLeft.Y + visualHeight / 2);
 
             var targetGroup = FindGroupWindowAt(screenCenter, this);
             if (targetGroup is not null)
@@ -2070,12 +2105,40 @@ internal sealed class DesktopGroupWindow : Window
                 return;
             }
 
-            var localTopLeft = _canvas.PointFromScreen(finalScreenTopLeft);
+            var targetInWindow = new System.Windows.Point(
+                finalScreenTopLeft.X - Left,
+                finalScreenTopLeft.Y - Top);
+
+            System.Windows.Point localTopLeft;
+            try
+            {
+                var transform = TransformToDescendant(_canvas);
+                localTopLeft = transform.Transform(targetInWindow);
+            }
+            catch
+            {
+                var scale = _category.DesktopIconScale > 0 ? _category.DesktopIconScale : 1.0;
+                localTopLeft = new System.Windows.Point(targetInWindow.X / scale, targetInWindow.Y / scale);
+            }
+
             var x = ClampToCanvas(localTopLeft.X, tile.ActualWidth, _canvas.ActualWidth, PaddingX);
             var y = ClampToCanvas(localTopLeft.Y, tile.ActualHeight, _canvas.ActualHeight, PaddingY);
             Canvas.SetLeft(tile, x);
             Canvas.SetTop(tile, y);
             onMoved(x, y);
+        };
+
+        tile.LostMouseCapture += (_, _) =>
+        {
+            if (dragging)
+            {
+                dragging = false;
+                heartbeatTimer?.Stop();
+                StopHeartbeatAnimation(tile);
+                ghost?.Close();
+                ghost = null;
+                tile.Opacity = 1.0;
+            }
         };
     }
 
@@ -2132,7 +2195,22 @@ internal sealed class DesktopGroupWindow : Window
 
         FinishStructuralChange();
 
-        var dropPoint = target._canvas.PointFromScreen(tileTopLeftScreen);
+        var pointInTargetWindow = new System.Windows.Point(
+            tileTopLeftScreen.X - target.Left,
+            tileTopLeftScreen.Y - target.Top);
+
+        System.Windows.Point dropPoint;
+        try
+        {
+            var transform = target.TransformToDescendant(target._canvas);
+            dropPoint = transform.Transform(pointInTargetWindow);
+        }
+        catch
+        {
+            var scale = target._category.DesktopIconScale > 0 ? target._category.DesktopIconScale : 1.0;
+            dropPoint = new System.Windows.Point(pointInTargetWindow.X / scale, pointInTargetWindow.Y / scale);
+        }
+
         target.AcceptMovedEntry(entry, dropPoint);
     }
 
@@ -2160,6 +2238,7 @@ internal sealed class DesktopGroupWindow : Window
                 return;
         }
 
+        _category.IconArrangement = IconArrangement.None;
         FinishStructuralChange();
         RestoreIfMinimized();
     }
@@ -2489,6 +2568,7 @@ internal sealed class DesktopGroupWindow : Window
             () => _onExecute(item),
             (x, y) =>
             {
+                _category.IconArrangement = IconArrangement.None;
                 item.DesktopIconX = x;
                 item.DesktopIconY = y;
                 _onLayoutChanged(_category);
@@ -2549,6 +2629,7 @@ internal sealed class DesktopGroupWindow : Window
             () => OpenSubfolder(folder),
             (x, y) =>
             {
+                _category.IconArrangement = IconArrangement.None;
                 folder.IconX = x;
                 folder.IconY = y;
                 _onLayoutChanged(_category);
