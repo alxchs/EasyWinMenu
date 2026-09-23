@@ -99,8 +99,8 @@ Record-Result -Name "Code_Clipboard_Context_Menus" -Passed $hasClipboard -Detail
 # Check L: Drag and Drop com Precisão 1:1 e Consciência de DPI
 $ghostFile = Join-Path $repoRoot "src\EasyWinMenu.App\Desktop\DragGhostWindow.cs"
 $ghostContent = Get-Content -LiteralPath $ghostFile -Raw
-$hasDpiDrag = $dtContent -match 'grabOffset\s*=' -and
-              $dtContent -match '(currentMouseScreenDip|mouseScreenDip|screenDip)\.X\s*-\s*grabOffset\.X' -and
+$hasDpiDrag = $dtContent -match 'grabOffset(Physical)?\s*=' -and
+              $dtContent -match '(currentMouseScreenDip|mouseScreenDip|screenDip|currentCursorPt|pt)\.X\s*-\s*grabOffset(Physical)?\.X' -and
               $dtContent -match 'TransformToDescendant\(_canvas\)' -and
               $dtContent -match 'target\.TransformToDescendant\(target\._canvas\)' -and
               $ghostContent -match 'CaptureVisual' -and
@@ -216,7 +216,7 @@ $passedCount = ($testResults | Where-Object { $_.Status -eq "PASS" }).Count
 $totalCount = $testResults.Count
 
 $summaryColor = if ($passedCount -eq $totalCount) { "Green" } else { "Red" }
-Write-Host "Resultado Geral: $passedCount / $totalCount testes aprovados com 100% de sucesso." -ForegroundColor $summaryColor
+Write-Host ("Resultado Geral: " + $passedCount + " / " + $totalCount + " testes aprovados.") -ForegroundColor $summaryColor
 
 if ($passedCount -ne $totalCount) {
     exit 1

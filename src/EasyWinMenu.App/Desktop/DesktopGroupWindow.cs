@@ -101,11 +101,31 @@ internal sealed class DesktopGroupWindow : Window
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT lpPoint);
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(POINT point);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetAncestor(IntPtr hwnd, uint gaFlags);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    private const uint GA_ROOT = 2;
+
     [StructLayout(LayoutKind.Sequential)]
-    private struct POINT
+    public struct POINT
     {
         public int X;
         public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
     }
 
     private static readonly IntPtr HWND_TOP = new IntPtr(0);
@@ -2206,9 +2226,10 @@ internal sealed class DesktopGroupWindow : Window
         // PointToScreen chamado duas vezes por MouseMove, misturando o DPI de antes/depois do
         // Left/Top mudar), PointToScreen so' e' chamado sobre "this" - a janela de origem, que
         // nunca se move durante o arrasto - nunca sobre a propria janela-fantasma.
-        System.Windows.Point dragStartMouseInWindow = default;
+        POINT dragStartPhysical = default;
+        POINT initialTilePhysical = default;
+        POINT grabOffsetPhysical = default;
         System.Windows.Point initialTileScreenDip = default;
-        System.Windows.Point grabOffset = default;
         double visualWidth = 0;
         double visualHeight = 0;
         var dragging = false;
@@ -2242,36 +2263,34 @@ internal sealed class DesktopGroupWindow : Window
                 return;
             }
 
-            var finalScreenTopLeft = ghost.CurrentTopLeft;
+            GetCursorPos(out var dropCursorPt);
+            var ghostPhys = ghost.CurrentPhysicalTopLeft;
             ghost.Close();
             ghost = null;
             tile.Opacity = 1.0;
 
-            var screenCenter = new System.Windows.Point(
-                finalScreenTopLeft.X + visualWidth / 2,
-                finalScreenTopLeft.Y + visualHeight / 2);
-
-            var targetGroup = FindGroupWindowAt(screenCenter, this);
+            var targetGroup = FindTargetGroupWindow(dropCursorPt, ghostPhys, (int)Math.Ceiling(visualWidth), (int)Math.Ceiling(visualHeight), this);
             if (targetGroup is not null)
             {
-                MoveEntryToOtherGroup(entry, targetGroup, finalScreenTopLeft);
+                MoveEntryToOtherGroup(entry, targetGroup, dropCursorPt);
                 return;
             }
 
-            var targetInWindow = new System.Windows.Point(
-                finalScreenTopLeft.X - Left,
-                finalScreenTopLeft.Y - Top);
+            var targetInWindow = PointFromScreen(new System.Windows.Point(dropCursorPt.X, dropCursorPt.Y));
+            var dpi = VisualTreeHelper.GetDpi(this);
+            var localTopLeft = new System.Windows.Point(
+                targetInWindow.X - (grabOffsetPhysical.X / dpi.DpiScaleX),
+                targetInWindow.Y - (grabOffsetPhysical.Y / dpi.DpiScaleY));
 
-            System.Windows.Point localTopLeft;
             try
             {
                 var transform = TransformToDescendant(_canvas);
-                localTopLeft = transform.Transform(targetInWindow);
+                localTopLeft = transform.Transform(localTopLeft);
             }
             catch
             {
                 var scale = _category.DesktopIconScale > 0 ? _category.DesktopIconScale : 1.0;
-                localTopLeft = new System.Windows.Point(targetInWindow.X / scale, targetInWindow.Y / scale);
+                localTopLeft = new System.Windows.Point(localTopLeft.X / scale, localTopLeft.Y / scale);
             }
 
             var x = ClampToCanvas(localTopLeft.X, tile.ActualWidth, _canvas.ActualWidth, PaddingX);
@@ -2281,7 +2300,7 @@ internal sealed class DesktopGroupWindow : Window
             onMoved(x, y);
         }
 
-        void UpdateDrag(System.Windows.Point mouseScreenDip)
+        void UpdateDragPhysical(POINT currentCursorPt)
         {
             if (!dragging)
             {
@@ -2290,8 +2309,8 @@ internal sealed class DesktopGroupWindow : Window
 
             if (!hasMoved)
             {
-                var deltaX = mouseScreenDip.X - (Left + dragStartMouseInWindow.X);
-                var deltaY = mouseScreenDip.Y - (Top + dragStartMouseInWindow.Y);
+                var deltaX = currentCursorPt.X - dragStartPhysical.X;
+                var deltaY = currentCursorPt.Y - dragStartPhysical.Y;
 
                 if (Math.Abs(deltaX) < SystemParameters.MinimumHorizontalDragDistance
                     && Math.Abs(deltaY) < SystemParameters.MinimumVerticalDragDistance)
@@ -2309,6 +2328,7 @@ internal sealed class DesktopGroupWindow : Window
                     visualWidth,
                     visualHeight,
                     initialTileScreenDip,
+                    new DragGhostWindow.POINT { X = initialTilePhysical.X, Y = initialTilePhysical.Y },
                     dpi.DpiScaleX,
                     dpi.DpiScaleY,
                     () => tile.Opacity = SelectedTileOpacityWhileDragging);
@@ -2335,13 +2355,7 @@ internal sealed class DesktopGroupWindow : Window
 
                     if (GetCursorPos(out var pt))
                     {
-                        var dpiScale = VisualTreeHelper.GetDpi(this);
-                        var screenDip = new System.Windows.Point(pt.X / dpiScale.DpiScaleX, pt.Y / dpiScale.DpiScaleY);
-                        if (ghost is not null)
-                        {
-                            ghost.Left = screenDip.X - grabOffset.X;
-                            ghost.Top = screenDip.Y - grabOffset.Y;
-                        }
+                        UpdateDragPhysical(pt);
                     }
                 };
                 dragTrackingTimer.Start();
@@ -2349,8 +2363,7 @@ internal sealed class DesktopGroupWindow : Window
 
             if (ghost is not null)
             {
-                ghost.Left = mouseScreenDip.X - grabOffset.X;
-                ghost.Top = mouseScreenDip.Y - grabOffset.Y;
+                ghost.MovePhysical(currentCursorPt.X - grabOffsetPhysical.X, currentCursorPt.Y - grabOffsetPhysical.Y);
             }
         }
 
@@ -2377,11 +2390,18 @@ internal sealed class DesktopGroupWindow : Window
             visualWidth = Math.Max(1, Math.Abs(tileVisualBottomRight.X - tileVisualOrigin.X));
             visualHeight = Math.Max(1, Math.Abs(tileVisualBottomRight.Y - tileVisualOrigin.Y));
 
-            var mouseInWindow = e.GetPosition(this);
-            dragStartMouseInWindow = mouseInWindow;
-            grabOffset = new System.Windows.Point(
-                mouseInWindow.X - tileVisualOrigin.X,
-                mouseInWindow.Y - tileVisualOrigin.Y);
+            GetCursorPos(out dragStartPhysical);
+            var tilePhysicalPt = tile.PointToScreen(new System.Windows.Point(0, 0));
+            initialTilePhysical = new POINT
+            {
+                X = (int)Math.Round(tilePhysicalPt.X),
+                Y = (int)Math.Round(tilePhysicalPt.Y)
+            };
+            grabOffsetPhysical = new POINT
+            {
+                X = dragStartPhysical.X - initialTilePhysical.X,
+                Y = dragStartPhysical.Y - initialTilePhysical.Y
+            };
 
             initialTileScreenDip = new System.Windows.Point(
                 Left + tileVisualOrigin.X,
@@ -2411,12 +2431,10 @@ internal sealed class DesktopGroupWindow : Window
                 return;
             }
 
-            var currentMouseInWindow = e.GetPosition(this);
-            var mouseScreenDip = new System.Windows.Point(
-                Left + currentMouseInWindow.X,
-                Top + currentMouseInWindow.Y);
-
-            UpdateDrag(mouseScreenDip);
+            if (GetCursorPos(out var pt))
+            {
+                UpdateDragPhysical(pt);
+            }
         };
 
         tile.MouseLeftButtonUp += (_, e) =>
@@ -2440,9 +2458,29 @@ internal sealed class DesktopGroupWindow : Window
     /// <summary>Opacidade do tile de origem enquanto a janela-fantasma o representa em tela - o mesmo "ícone esmaecido" que o Explorer usa durante um arrasto.</summary>
     private const double SelectedTileOpacityWhileDragging = 0.35;
 
-    /// <summary>Whichever other open group's window occupies this screen point, if any.</summary>
-    private static DesktopGroupWindow? FindGroupWindowAt(System.Windows.Point screenPoint, DesktopGroupWindow excluding)
+    /// <summary>Localiza com precisão absoluta qual grupo de desktop está sob o cursor ou sobreposto pelo fantasma no momento da soltura.</summary>
+    private static DesktopGroupWindow? FindTargetGroupWindow(
+        POINT dropPt,
+        DragGhostWindow.POINT ghostTopLeft,
+        int ghostWidth,
+        int ghostHeight,
+        DesktopGroupWindow excluding)
     {
+        // 1. Verificação direta por HWND sob o cursor físico
+        var hwndUnderCursor = WindowFromPoint(dropPt);
+        if (hwndUnderCursor != IntPtr.Zero)
+        {
+            var rootHwnd = GetAncestor(hwndUnderCursor, GA_ROOT);
+            var match = _allGroupWindows.FirstOrDefault(w =>
+                !ReferenceEquals(w, excluding) &&
+                new WindowInteropHelper(w).Handle == rootHwnd);
+            if (match is not null)
+            {
+                return match;
+            }
+        }
+
+        // 2. Verificação de bounding rect físico de cada janela para o ponto do cursor
         foreach (var window in _allGroupWindows)
         {
             if (ReferenceEquals(window, excluding))
@@ -2450,10 +2488,41 @@ internal sealed class DesktopGroupWindow : Window
                 continue;
             }
 
-            var rect = new Rect(window.Left, window.Top, window.ActualWidth, window.ActualHeight);
-            if (rect.Contains(screenPoint))
+            var hwnd = new WindowInteropHelper(window).Handle;
+            if (hwnd != IntPtr.Zero && GetWindowRect(hwnd, out RECT rc))
             {
-                return window;
+                if (dropPt.X >= rc.Left && dropPt.X <= rc.Right &&
+                    dropPt.Y >= rc.Top && dropPt.Y <= rc.Bottom)
+                {
+                    return window;
+                }
+            }
+        }
+
+        // 3. Verificação de sobreposição física com o retângulo do ghost
+        var ghostRect = new RECT
+        {
+            Left = ghostTopLeft.X,
+            Top = ghostTopLeft.Y,
+            Right = ghostTopLeft.X + ghostWidth,
+            Bottom = ghostTopLeft.Y + ghostHeight
+        };
+
+        foreach (var window in _allGroupWindows)
+        {
+            if (ReferenceEquals(window, excluding))
+            {
+                continue;
+            }
+
+            var hwnd = new WindowInteropHelper(window).Handle;
+            if (hwnd != IntPtr.Zero && GetWindowRect(hwnd, out RECT rc))
+            {
+                if (ghostRect.Left < rc.Right && ghostRect.Right > rc.Left &&
+                    ghostRect.Top < rc.Bottom && ghostRect.Bottom > rc.Top)
+                {
+                    return window;
+                }
             }
         }
 
@@ -2468,7 +2537,7 @@ internal sealed class DesktopGroupWindow : Window
     /// into the wrong list and mistaken for a standalone desktop group instead of a
     /// subfolder that belongs to the target.
     /// </summary>
-    private void MoveEntryToOtherGroup(object entry, DesktopGroupWindow target, System.Windows.Point tileTopLeftScreen)
+    private void MoveEntryToOtherGroup(object entry, DesktopGroupWindow target, POINT dropPhysicalPoint)
     {
         switch (entry)
         {
@@ -2490,9 +2559,7 @@ internal sealed class DesktopGroupWindow : Window
 
         FinishStructuralChange();
 
-        var pointInTargetWindow = new System.Windows.Point(
-            tileTopLeftScreen.X - target.Left,
-            tileTopLeftScreen.Y - target.Top);
+        var pointInTargetWindow = target.PointFromScreen(new System.Windows.Point(dropPhysicalPoint.X, dropPhysicalPoint.Y));
 
         System.Windows.Point dropPoint;
         try
