@@ -14,7 +14,7 @@
 
 | | A. Atalho `.lnk` com argumento | B. Botão de barra de tarefas por grupo (janela-proxy) |
 |---|---|---|
-| Como o usuário fixa | Arrasta o `.lnk` gerado para a barra (o app abre a pasta com o arquivo selecionado) | Clica com o direito no botão que apareceu e escolhe "Fixar na barra de tarefas" |
+| Como o usuário fixa | Arrasta o `.lnk` gerado para a barra (o app abre a pasta com o arquivo selecionado); ou "A+", abaixo, que fixa sozinho | Clica com o direito no botão que apareceu e escolhe "Fixar na barra de tarefas" |
 | Botão na barra com o app rodando | Não (o app hoje é só bandeja) | Sim, um por grupo escolhido, com indicador de "aberto" |
 | Clique | Inicia um processo curto que repassa o comando ao app já aberto e sai | Ativa a janela-proxy, que traz o grupo para frente |
 | Miniatura / Aero Peek | Não | Possível, mas é a parte mais cara |
@@ -66,15 +66,40 @@ grupo (ver "Identidade do grupo").
    `IShellLink`/`IPersistFile` (~60 linhas de interop COM), com destino
    `EasyWinMenu.App.exe`, argumento da ação, ícone do grupo e nome do grupo.
 
-## Limite do Windows que define o desenho
+## Fixar na barra de tarefas: o que foi testado (e uma correção minha)
 
-A Microsoft removeu a fixação **programática** na barra de tarefas (o verbo
-`taskbarpin` foi bloqueado no Windows 10 e continua bloqueado no Windows 11). Qualquer
-"fixar sozinho" depende de truques não suportados que quebram entre atualizações. Por
-isso a Implementação A **não** promete fixar sozinha: ela cria o `.lnk` e mostra o
-arquivo para o usuário arrastar (ou usar "Fixar na barra de tarefas" do clique direito no
-próprio `.lnk`). A Implementação B contorna isso de outro jeito: quem é fixado é um
-**botão de janela** que o usuário fixa pelo menu nativo do botão.
+A primeira versão deste documento dizia que o Windows 11 "não deixa fixar programaticamente".
+Isso foi dito de forma absoluta demais, e o Alexandre apontou o caminho certo: os atalhos
+fixados ficam como arquivos `.lnk` em
+`%AppData%\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar` (existe nesta
+máquina, com 26 atalhos), e a pasta é gravável pelo usuário. O que **foi medido** aqui:
+
+- Criar um `.lnk` de teste nessa pasta **sozinho não fixa nada**: o valor `Favorites` de
+  `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Taskband` continuou com os mesmos
+  22.865 bytes, esperando 8 s.
+- **Reiniciar o Explorer também não fixa**: depois do reinício o `Favorites` continuou com
+  22.865 bytes e sem o nome do arquivo de teste.
+- Conclusão: a lista que o Explorer usa para desenhar os botões é o valor binário
+  `Favorites` (mais `FavoritesResolve`, `FavoritesVersion` e `FavoritesChanges`), e a pasta é
+  só o depósito dos `.lnk` a que ele se refere. Para fixar **por código**, é preciso escrever
+  o `.lnk` na pasta **e** acrescentar a entrada no `Favorites` (formato binário não
+  documentado, com identificadores de item do shell) e reiniciar o Explorer. Esse último
+  passo **não foi testado**; só foi medido que a pasta sozinha não basta.
+
+Consequência para o desenho: existe uma **Implementação A+** (fixar de verdade, sem o usuário
+arrastar), com custo e risco maiores que A simples:
+
+| | A (arrastar o `.lnk`) | A+ (pasta + `Favorites` + reiniciar Explorer) |
+|---|---|---|
+| Usuário faz algo depois | Arrasta o arquivo | Nada (o botão aparece) |
+| Depende de formato não documentado | Não | **Sim** (`Favorites`), pode quebrar numa atualização do Windows |
+| Reinicia o Explorer | Não | **Sim** (a barra pisca; as janelas abertas continuam) |
+| Outro usuário logado | Não se aplica | Precisa do perfil (`HKU\<SID>`) e da pasta dele, só com o hive carregado |
+| Tempo adicional sobre A | 0 | +2 a 3 h (engenharia reversa do blob e testes de reversão) |
+| Tokens adicionais | 0 | +40 a 70 mil de saída / +1 a 2 milhões totais (estimativa) |
+
+Recomendação revisada: entregar A primeiro, com **A+ como opção do menu** ("Fixar na barra
+de tarefas agora") que faz backup da chave `Taskband` antes de mexer e desfaz se algo falhar.
 
 ## Implementação A — atalho `.lnk` com argumento
 
