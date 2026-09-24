@@ -6,6 +6,8 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Brushes = System.Windows.Media.Brushes;
+using Color = System.Windows.Media.Color;
+using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Point = System.Windows.Point;
 using Rectangle = System.Windows.Shapes.Rectangle;
 
@@ -61,7 +63,8 @@ internal sealed class DragGhostWindow : Window
         Point initialScreenDip,
         POINT initialPhysical,
         double dpiScaleX,
-        double dpiScaleY)
+        double dpiScaleY,
+        int itemCount)
     {
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
@@ -71,28 +74,27 @@ internal sealed class DragGhostWindow : Window
         ResizeMode = ResizeMode.NoResize;
         IsHitTestVisible = false;
         ShowActivated = false;
-        Width = Math.Max(1, visualWidth);
-        Height = Math.Max(1, visualHeight);
+
+        var extraWidth = itemCount > 1 ? 16.0 : 0.0;
+        var extraHeight = itemCount > 1 ? 16.0 : 0.0;
+        Width = Math.Max(1, visualWidth + extraWidth);
+        Height = Math.Max(1, visualHeight + extraHeight);
         Left = initialScreenDip.X;
         Top = initialScreenDip.Y;
         _physicalTopLeft = initialPhysical;
 
         var snapshot = CaptureVisual(tile, dpiScaleX, dpiScaleY);
-        if (snapshot is not null)
-        {
-            Content = new System.Windows.Controls.Image
+        FrameworkElement primaryVisual = snapshot is not null
+            ? new System.Windows.Controls.Image
             {
                 Source = snapshot,
                 Width = Math.Max(1, visualWidth),
                 Height = Math.Max(1, visualHeight),
                 Stretch = Stretch.Uniform,
-                Opacity = 0.88,
+                Opacity = 0.92,
                 IsHitTestVisible = false
-            };
-        }
-        else
-        {
-            Content = new Rectangle
+            }
+            : new Rectangle
             {
                 Width = Math.Max(1, visualWidth),
                 Height = Math.Max(1, visualHeight),
@@ -102,9 +104,68 @@ internal sealed class DragGhostWindow : Window
                     AlignmentX = AlignmentX.Center,
                     AlignmentY = AlignmentY.Center
                 },
-                Opacity = 0.88,
+                Opacity = 0.92,
                 IsHitTestVisible = false
             };
+
+        if (itemCount <= 1)
+        {
+            Content = primaryVisual;
+        }
+        else
+        {
+            var grid = new Grid
+            {
+                Width = Width,
+                Height = Height,
+                IsHitTestVisible = false
+            };
+
+            var stackCard = new Border
+            {
+                Width = Math.Max(1, visualWidth - 4),
+                Height = Math.Max(1, visualHeight - 4),
+                Background = new SolidColorBrush(Color.FromArgb(0x55, 0x36, 0x41, 0x53)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x99, 0x64, 0x74, 0x8B)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(10, 10, 0, 0),
+                Opacity = 0.70,
+                IsHitTestVisible = false
+            };
+            grid.Children.Add(stackCard);
+
+            primaryVisual.HorizontalAlignment = HorizontalAlignment.Left;
+            primaryVisual.VerticalAlignment = VerticalAlignment.Top;
+            primaryVisual.Margin = new Thickness(0, 0, 0, 0);
+            grid.Children.Add(primaryVisual);
+
+            // Badge com contador (estilo discreto, sem vermelho):
+            var badge = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x1B, 0x22, 0x30)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x4A, 0x90, 0xE2)),
+                BorderThickness = new Thickness(1.5),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(6, 2, 6, 2),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 2, 2, 0),
+                IsHitTestVisible = false,
+                Child = new TextBlock
+                {
+                    Text = itemCount.ToString(),
+                    Foreground = Brushes.White,
+                    FontSize = 11,
+                    FontWeight = FontWeights.Bold,
+                    TextAlignment = TextAlignment.Center
+                }
+            };
+            grid.Children.Add(badge);
+
+            Content = grid;
         }
     }
 
@@ -164,10 +225,28 @@ internal sealed class DragGhostWindow : Window
     {
         try
         {
-            var width = (int)Math.Max(1, Math.Ceiling(element.ActualWidth * dpiScaleX));
-            var height = (int)Math.Max(1, Math.Ceiling(element.ActualHeight * dpiScaleY));
-            var rtb = new RenderTargetBitmap(width, height, 96 * dpiScaleX, 96 * dpiScaleY, PixelFormats.Pbgra32);
-            rtb.Render(element);
+            var w = element.ActualWidth > 0 ? element.ActualWidth : 80;
+            var h = element.ActualHeight > 0 ? element.ActualHeight : 80;
+            var pxW = (int)Math.Max(1, Math.Ceiling(w * dpiScaleX));
+            var pxH = (int)Math.Max(1, Math.Ceiling(h * dpiScaleY));
+
+            // Renderizar via DrawingVisual + VisualBrush com Viewbox absoluto
+            // para ignorar completamente offsets do Canvas/painel pai (ex: Canvas.Left, Canvas.Top)
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen())
+            {
+                var vb = new VisualBrush(element)
+                {
+                    Stretch = Stretch.Uniform,
+                    Viewbox = new Rect(0, 0, w, h),
+                    ViewboxUnits = BrushMappingMode.Absolute
+                };
+                dc.DrawRectangle(vb, null, new Rect(0, 0, w, h));
+            }
+
+            var rtb = new RenderTargetBitmap(pxW, pxH, 96 * dpiScaleX, 96 * dpiScaleY, PixelFormats.Pbgra32);
+            rtb.Render(dv);
+            rtb.Freeze();
             return rtb;
         }
         catch
@@ -183,7 +262,8 @@ internal sealed class DragGhostWindow : Window
     /// <param name="initialPhysical">Where the ghost starts, in physical screen coordinates.</param>
     /// <param name="dpiScaleX">Display scale X for high-DPI snapshot sharpness.</param>
     /// <param name="dpiScaleY">Display scale Y for high-DPI snapshot sharpness.</param>
-    /// <param name="onShown">Called once the ghost is visible - used to dim the source tile so it doesn't look duplicated.</param>
+    /// <param name="itemCount">Total number of items being dragged simultaneously.</param>
+    /// <param name="onShown">Called once the ghost is visible - used to dim the source tile(s).</param>
     public static DragGhostWindow Show(
         FrameworkElement tile,
         double visualWidth,
@@ -192,10 +272,15 @@ internal sealed class DragGhostWindow : Window
         POINT initialPhysical,
         double dpiScaleX,
         double dpiScaleY,
+        int itemCount,
         Action onShown)
     {
-        var ghost = new DragGhostWindow(tile, visualWidth, visualHeight, initialScreenDip, initialPhysical, dpiScaleX, dpiScaleY);
+        var ghost = new DragGhostWindow(tile, visualWidth, visualHeight, initialScreenDip, initialPhysical, dpiScaleX, dpiScaleY, itemCount);
         ghost.Show();
+        if (ghost._hwnd != IntPtr.Zero)
+        {
+            SetWindowPos(ghost._hwnd, HWND_TOPMOST, initialPhysical.X, initialPhysical.Y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        }
         onShown();
         return ghost;
     }

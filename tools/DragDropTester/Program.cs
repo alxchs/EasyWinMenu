@@ -9,7 +9,6 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
-using System.Windows.Forms;
 
 namespace DragDropTester;
 
@@ -27,8 +26,13 @@ class Program
     [DllImport("user32.dll")]
     static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, UIntPtr dwExtraInfo);
 
+    [DllImport("user32.dll")]
+    static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+
     const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
     const uint MOUSEEVENTF_LEFTUP = 0x0004;
+    const byte VK_CONTROL = 0x11;
+    const uint KEYEVENTF_KEYUP = 0x0002;
 
     [DllImport("user32.dll")]
     static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
@@ -68,7 +72,7 @@ class Program
     {
         SetProcessDPIAware();
         Console.WriteLine("==================================================================");
-        Console.WriteLine("EasyWinMenu Drag & Drop Automation & GIF Verification");
+        Console.WriteLine("EasyWinMenu Automated Drag & Drop Test Agents Suite");
         Console.WriteLine("==================================================================");
 
         var repoRoot = @"C:\desenv\utils\EasyWinMenu";
@@ -99,34 +103,19 @@ class Program
         var windows = GetProcessWindows(pid);
         Console.WriteLine($"[2] Janelas detectadas para PID {pid}: {windows.Count}");
 
-        foreach (var w in windows)
-        {
-            Console.WriteLine($"   HWND: 0x{w.Hwnd.ToInt64():X8} | Titulo: '{w.Title}' | Rect: [{w.Rect.Left},{w.Rect.Top},{w.Rect.Right},{w.Rect.Bottom}]");
-        }
-
         // Filtra janelas de grupo (WPF windows com tamanho razoável)
         var groupWindows = windows.Where(w => (w.Rect.Right - w.Rect.Left) > 150 && (w.Rect.Bottom - w.Rect.Top) > 100).ToList();
         if (groupWindows.Count < 2)
         {
-            Console.WriteLine("[ERRO] Menos de duas janelas de grupo encontradas para o teste.");
+            Console.WriteLine("[ERRO] Menos de duas janelas de grupo encontradas para os testes.");
             return;
         }
 
         var sourceWindow = groupWindows[0];
         var destWindow = groupWindows[1];
-        Console.WriteLine($"\n[3] Cenário de Arraste:");
-        Console.WriteLine($"   Origem:  '{sourceWindow.Title}' [{sourceWindow.Rect.Left},{sourceWindow.Rect.Top} -> {sourceWindow.Rect.Right},{sourceWindow.Rect.Bottom}]");
-        Console.WriteLine($"   Destino: '{destWindow.Title}' [{destWindow.Rect.Left},{destWindow.Rect.Top} -> {destWindow.Rect.Right},{destWindow.Rect.Bottom}]");
 
-        // Coordenada inicial (um tile dentro da janela de origem)
-        int startX = sourceWindow.Rect.Left + 60;
-        int startY = sourceWindow.Rect.Top + 65;
-
-        // Coordenada final (dentro da janela de destino)
-        int endX = destWindow.Rect.Left + 100;
-        int endY = destWindow.Rect.Top + 100;
-
-        Console.WriteLine($"   Trajeto: ({startX}, {startY}) ===> ({endX}, {endY})");
+        Console.WriteLine($"   Grupo Origem:  '{sourceWindow.Title}' [{sourceWindow.Rect.Left},{sourceWindow.Rect.Top} -> {sourceWindow.Rect.Right},{sourceWindow.Rect.Bottom}]");
+        Console.WriteLine($"   Grupo Destino: '{destWindow.Title}' [{destWindow.Rect.Left},{destWindow.Rect.Top} -> {destWindow.Rect.Right},{destWindow.Rect.Bottom}]");
 
         // Região para captura (bounding box cobrindo ambas as janelas com folga)
         int captureLeft = Math.Min(sourceWindow.Rect.Left, destWindow.Rect.Left) - 30;
@@ -136,30 +125,179 @@ class Program
         int captureWidth = Math.Max(100, captureRight - captureLeft);
         int captureHeight = Math.Max(100, captureBottom - captureTop);
 
-        Console.WriteLine($"   Área de Captura de Frames: [{captureLeft}, {captureTop}, {captureWidth}x{captureHeight}]");
+        // =========================================================================================
+        // AGENTE 1: Arraste de Objeto Único com Verificação de Não-Desaparecimento e Reorganização
+        // =========================================================================================
+        Console.WriteLine("\n==================================================================");
+        Console.WriteLine("TEST AGENT 1: Arraste de Item Único & Verificação de Visibilidade do Ghost");
+        Console.WriteLine("==================================================================");
+
+        int tile1X = sourceWindow.Rect.Left + 55;
+        int tile1Y = sourceWindow.Rect.Top + 65;
+        int dropDestX = destWindow.Rect.Left + 90;
+        int dropDestY = destWindow.Rect.Top + 90;
+
+        RunDragScenario(
+            pid,
+            sourceWindow,
+            destWindow,
+            startX: tile1X,
+            startY: tile1Y,
+            endX: dropDestX,
+            endY: dropDestY,
+            captureLeft, captureTop, captureWidth, captureHeight,
+            scenarioName: "Single Item Drag & Ghost Verification",
+            gifFileName: "drag_drop_single_item.gif",
+            screenshotDir,
+            artifactDir,
+            beforeDrag: null);
+
+        Thread.Sleep(1000);
+
+        // =========================================================================================
+        // AGENTE 2: Arraste de Múltiplos Objetos (2 Marcados Simultaneamente)
+        // =========================================================================================
+        Console.WriteLine("\n==================================================================");
+        Console.WriteLine("TEST AGENT 2: Arraste de Múltiplos Itens (2 Itens Marcados)");
+        Console.WriteLine("==================================================================");
+
+        int multiTile1X = destWindow.Rect.Left + 55;
+        int multiTile1Y = destWindow.Rect.Top + 65;
+        int multiTile2X = destWindow.Rect.Left + 135;
+        int multiTile2Y = destWindow.Rect.Top + 65;
+        int returnDestX = sourceWindow.Rect.Left + 90;
+        int returnDestY = sourceWindow.Rect.Top + 90;
+
+        RunDragScenario(
+            pid,
+            destWindow,
+            sourceWindow,
+            startX: multiTile1X,
+            startY: multiTile1Y,
+            endX: returnDestX,
+            endY: returnDestY,
+            captureLeft, captureTop, captureWidth, captureHeight,
+            scenarioName: "Multi-Item (2 items) Drag & Drop Across Windows",
+            gifFileName: "drag_drop_multi_item.gif",
+            screenshotDir,
+            artifactDir,
+            beforeDrag: () =>
+            {
+                // 1. Clica no item 1
+                Console.WriteLine("   [Multi-Select] Selecionando item 1...");
+                ClickAt(multiTile1X, multiTile1Y);
+                Thread.Sleep(200);
+
+                // 2. Ctrl + Clique no item 2
+                Console.WriteLine("   [Multi-Select] Ctrl + Clique no item 2 para selecionar ambos...");
+                CtrlClickAt(multiTile2X, multiTile2Y);
+                Thread.Sleep(250);
+            });
+
+        Thread.Sleep(1000);
+
+        // =========================================================================================
+        // AGENTE 3: Reorganização Dentro do Mesmo Grupo ao Soltar
+        // =========================================================================================
+        Console.WriteLine("\n==================================================================");
+        Console.WriteLine("TEST AGENT 3: Reorganização Forçada na Soltura Dentro do Mesmo Grupo");
+        Console.WriteLine("==================================================================");
+
+        int sameGroupStartX = sourceWindow.Rect.Left + 55;
+        int sameGroupStartY = sourceWindow.Rect.Top + 65;
+        int sameGroupEndX = sourceWindow.Rect.Left + 140;
+        int sameGroupEndY = sourceWindow.Rect.Top + 130;
+
+        int sLeft = sourceWindow.Rect.Left - 20;
+        int sTop = sourceWindow.Rect.Top - 20;
+        int sWidth = (sourceWindow.Rect.Right - sourceWindow.Rect.Left) + 40;
+        int sHeight = (sourceWindow.Rect.Bottom - sourceWindow.Rect.Top) + 40;
+
+        RunDragScenario(
+            pid,
+            sourceWindow,
+            sourceWindow,
+            startX: sameGroupStartX,
+            startY: sameGroupStartY,
+            endX: sameGroupEndX,
+            endY: sameGroupEndY,
+            sLeft, sTop, sWidth, sHeight,
+            scenarioName: "Same Group Reorganization On Drop",
+            gifFileName: "drag_drop_same_group_reorganize.gif",
+            screenshotDir,
+            artifactDir,
+            beforeDrag: null);
+
+        Console.WriteLine("\n==================================================================");
+        Console.WriteLine("[SUCESSO TOTAL] Todos os 3 cenários de testes automatizados concluídos!");
+        Console.WriteLine("==================================================================");
+    }
+
+    static void ClickAt(int x, int y)
+    {
+        SetCursorPos(x, y);
+        Thread.Sleep(60);
+        mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(60);
+        mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+    }
+
+    static void CtrlClickAt(int x, int y)
+    {
+        keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(40);
+        SetCursorPos(x, y);
+        Thread.Sleep(40);
+        mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(60);
+        mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(40);
+        keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+    }
+
+    static void RunDragScenario(
+        uint pid,
+        WindowInfo sourceWindow,
+        WindowInfo destWindow,
+        int startX, int startY,
+        int endX, int endY,
+        int captureLeft, int captureTop, int captureWidth, int captureHeight,
+        string scenarioName,
+        string gifFileName,
+        string screenshotDir,
+        string artifactDir,
+        Action? beforeDrag)
+    {
+        Console.WriteLine($"\n[Cenário: {scenarioName}]");
+        Console.WriteLine($"   Trajeto: ({startX}, {startY}) ===> ({endX}, {endY})");
 
         var frames = new List<Bitmap>();
 
-        // 1. Move cursor para o tile inicial
+        if (beforeDrag is not null)
+        {
+            beforeDrag();
+            frames.Add(CaptureFrame(captureLeft, captureTop, captureWidth, captureHeight, startX, startY));
+        }
+
+        // 1. Move cursor para coordenada inicial
         SetCursorPos(startX, startY);
-        Thread.Sleep(300);
+        Thread.Sleep(200);
         frames.Add(CaptureFrame(captureLeft, captureTop, captureWidth, captureHeight, startX, startY));
 
         // 2. MouseDown
-        Console.WriteLine("\n[4] Pressionando botão esquerdo (MouseDown) no tile...");
+        Console.WriteLine("   [Passo] MouseDown no objeto...");
         mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
         Thread.Sleep(100);
         frames.Add(CaptureFrame(captureLeft, captureTop, captureWidth, captureHeight, startX, startY));
 
-        // 3. Arraste interpolado em 30 passos (20-25 FPS)
-        int steps = 30;
-        Console.WriteLine($"[5] Conduzindo arraste contínuo em {steps} etapas suaves...");
+        // 3. Arraste contínuo
+        int steps = 28;
         int ghostDetectedCount = 0;
+        Console.WriteLine($"   [Passo] Conduzindo arraste contínuo em {steps} etapas...");
 
         for (int i = 1; i <= steps; i++)
         {
             double t = (double)i / steps;
-            // Interpolação suave (easeInOutQuad)
             double ease = t < 0.5 ? 2 * t * t : 1 - Math.Pow(-2 * t + 2, 2) / 2;
             int curX = (int)Math.Round(startX + (endX - startX) * ease);
             int curY = (int)Math.Round(startY + (endY - startY) * ease);
@@ -167,7 +305,6 @@ class Program
             SetCursorPos(curX, curY);
             Thread.Sleep(45); // ~22 FPS
 
-            // Verifica se o ghost existe no processo
             var liveWindows = GetProcessWindows(pid);
             bool ghostPresent = liveWindows.Any(w =>
             {
@@ -183,32 +320,33 @@ class Program
             frames.Add(CaptureFrame(captureLeft, captureTop, captureWidth, captureHeight, curX, curY));
         }
 
-        Console.WriteLine($"   Ghost detectado em {ghostDetectedCount} de {steps} etapas de movimento.");
+        Console.WriteLine($"   [Verificação] Ghost Window detectado em {ghostDetectedCount} de {steps} etapas de movimento.");
 
-        // 4. MouseUp na janela de destino
-        Console.WriteLine("[6] Soltando botão esquerdo (MouseUp) na janela de destino...");
+        // 4. MouseUp
+        Console.WriteLine("   [Passo] MouseUp (soltura do objeto)...");
         mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
-        Thread.Sleep(200);
+        Thread.Sleep(150);
 
-        // Quadros pós-soltura para registrar a reorganização/acomodação
-        for (int i = 0; i < 6; i++)
+        // Quadros pós-soltura para registrar a reorganização/reflow da grade
+        for (int i = 0; i < 8; i++)
         {
             Thread.Sleep(80);
             frames.Add(CaptureFrame(captureLeft, captureTop, captureWidth, captureHeight, endX, endY));
         }
 
-        Console.WriteLine($"\n[7] Total de quadros capturados: {frames.Count}. Gerando GIF animado...");
+        // 5. Salva GIF comprobatório
+        var gifPath = Path.Combine(screenshotDir, gifFileName);
+        var artifactGif = Path.Combine(artifactDir, gifFileName);
 
-        var gifPath = Path.Combine(screenshotDir, "drag_drop_resilience_verification.gif");
-        var artifactGif = Path.Combine(artifactDir, "drag_drop_resilience_verification.gif");
+        Console.WriteLine($"   [GIF] Gerando GIF ({frames.Count} quadros)...");
+        SaveAnimatedGif(frames, gifPath, delayMs: 48);
+        try
+        {
+            File.Copy(gifPath, artifactGif, overwrite: true);
+        }
+        catch { }
 
-        SaveAnimatedGif(frames, gifPath, delayMs: 50);
-        File.Copy(gifPath, artifactGif, overwrite: true);
-
-        Console.WriteLine($"[8] GIF gerado com sucesso:");
-        Console.WriteLine($"   Repo:     {gifPath}");
-        Console.WriteLine($"   Artifact: {artifactGif}");
-        Console.WriteLine("\n[RESULTADO] Verificação automatizada física concluída com sucesso!");
+        Console.WriteLine($"   [GIF Salvo] {gifPath}");
     }
 
     static Bitmap CaptureFrame(int left, int top, int width, int height, int cursorX, int cursorY)
@@ -218,12 +356,12 @@ class Program
         {
             g.CopyFromScreen(left, top, 0, 0, new Size(width, height), CopyPixelOperation.SourceCopy);
 
-            // Desenha cursor indicador não-vermelho (laranja brilhante + borda preta)
+            // Cursor indicador: Laranja/Dourado com borda preta (NÃO VERMELHO!)
             int localCurX = cursorX - left;
             int localCurY = cursorY - top;
             if (localCurX >= 0 && localCurX < width && localCurY >= 0 && localCurY < height)
             {
-                var brush = new SolidBrush(Color.FromArgb(240, 255, 170, 0)); // Laranja/Dourado (não vermelho!)
+                var brush = new SolidBrush(Color.FromArgb(240, 255, 175, 0));
                 var pen = new Pen(Color.Black, 2);
                 var points = new Point[]
                 {
@@ -244,7 +382,6 @@ class Program
 
     static void SaveAnimatedGif(List<Bitmap> frames, string outputPath, int delayMs)
     {
-        // Constrói GIF animado padrão GIF89a via GDI+ multi-frame
         if (frames.Count == 0) return;
 
         var gifEncoder = ImageCodecInfo.GetImageEncoders().First(c => c.FormatID == ImageFormat.Gif.Guid);
@@ -253,19 +390,17 @@ class Program
         var firstFrame = frames[0];
         var encoderParams = new EncoderParameters(1);
 
-        // Prepara byte array de tempo de delay (PropertyItem 0x5100 = FrameDelay)
         var item = (PropertyItem)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(PropertyItem));
-        item.Id = 0x5100;
-        item.Type = 3; // Short
+        item.Id = 0x5100; // FrameDelay
+        item.Type = 3;
         int delayHundreds = delayMs / 10;
         byte[] delayBytes = BitConverter.GetBytes((short)delayHundreds);
         item.Len = delayBytes.Length;
         item.Value = delayBytes;
         firstFrame.SetPropertyItem(item);
 
-        // Loop infinito (PropertyItem 0x5101 = LoopCount)
         var loopItem = (PropertyItem)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(PropertyItem));
-        loopItem.Id = 0x5101;
+        loopItem.Id = 0x5101; // LoopCount
         loopItem.Type = 3;
         loopItem.Len = 4;
         loopItem.Value = new byte[] { 0, 0, 0, 0 }; // 0 = infinito

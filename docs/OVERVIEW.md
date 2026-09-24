@@ -34,7 +34,9 @@ tools/
   DeskProbe/                      *(não commitado — vive fora do repo)*
 docs/
   OVERVIEW.md                     este arquivo
-  PROMPT.md                       o prompt único equivalente a tudo isto
+  PROMPT.md                       o prompt único equivalente a tudo isto (histórico)
+  PROMPT_GERACAO_UNICA.md         o mesmo produto como especificação do zero, em um passo
+  VIABILIDADE_ATALHO_TASKBAR_GRUPO.md   análise (não implementada): atalho de grupo na barra de tarefas
 ```
 
 `EasyWinMenu.Core` não depende de WPF nem de Win32: só modelos
@@ -115,8 +117,8 @@ funciona de fora desta rede, sem custo.
   contexto é o **mesmo** em qualquer lugar que se clique com o botão direito
   — cabeçalho, canvas vazio ou o ladrilho fechado do App Folder
   (`BuildHeaderContextMenu`, único método) — para o App Folder não ficar
-  sem os comandos que só existiam no canvas (organizar, ordenar, novo
-  arquivo/pasta, tamanho do ícone). É reconstruído a cada clique direito
+  sem os comandos que só existiam no canvas (organizar, novo atalho,
+  tamanho do ícone). É reconstruído a cada clique direito
   (`PreviewMouseRightButtonDown`) para o "visto" de qual organização está
   ativa nunca ficar desatualizado.
   - Arrastar um ícone (arquivo ou subpasta) para **fora** do próprio grupo,
@@ -193,10 +195,16 @@ funciona de fora desta rede, sem custo.
     grupo faz *polling* a cada 2s (`CheckPendingCutsAgainstDisk`) e só
     remove quando o arquivo realmente some do caminho original, o que só
     acontece se algo o moveu de fato.
-  - Ícones no modo painel são organizados por um dos três modos "vivos" de
-    `IconArrangement` (grade automática, por nome, por tipo) ou por posição
-    livre (`None`, o padrão). O modo escolhido é salvo em
-    `MenuCategory.IconArrangement` e reaplicado sozinho (`FinishStructuralChange`)
+  - Ícones no modo painel ficam em posição livre (`IconArrangement.None`, o
+    padrão) ou em **organização automática, sempre por nome do atalho**
+    (`IconArrangement.ByName`). Como um grupo só guarda atalhos, **não existe
+    mais o menu "Ordenar por"** nem ordenação por tipo: o menu tem um único
+    item marcável, "Organizar ícones automaticamente" (`ToggleArrangeIconsAutomatically`
+    → `EnableAutoArrange`). `Grid` e `ByType` continuam no enum só para ler
+    configs antigas; `FinishStructuralChange` os regrava como `ByName` na
+    primeira mudança. A escolha é salva em
+    `MenuCategory.IconArrangement` e reaplicada sozinha (`FinishStructuralChange`,
+    ordem em `NameOrder`)
     toda vez que algo muda o conteúdo ou o tamanho do grupo — soltar um
     arquivo, colar, apagar, renomear, **redimensionar o painel** (`OnResizeMouseUp`)
     e **mudar o zoom dos ícones** (`SetIconScale`) — não só no momento em que

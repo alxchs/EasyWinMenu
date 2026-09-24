@@ -2,19 +2,16 @@
 
 ## Autonomia Total de Execução (Regra Rígida)
 
-1. **NUNCA pedir permissão, confirmação ou interromper o fluxo para rodar comandos de leitura, busca ou inspeção**:
-   - `git grep`
-   - `git log`
-   - `git status`
-   - `git diff`
+1. **NUNCA pedir permissão, confirmação ou interromper o fluxo para comandos de busca, listagem ou leitura**:
+   - `Get-ChildItem`, `dir`, `ls`
    - `Select-String`
-   - Localização e listagem de arquivos (`Get-ChildItem`, `dir`)
+   - `git grep`, `git log`, `git status`, `git diff`, `git branch`, `git show`
    - Scripts de teste, auditoria e compilação
-   - Esses comandos DEVEM ser executados de forma 100% autônoma, direta e contínua sem nunca perguntar ao usuário.
+   - Esses comandos DEVEM ser executados de forma 100% autônoma, direta e contínua sem nunca perguntar ao Alexandre.
 
 2. **Git**:
-   - Commits locais: executar diretamente e com autonomia.
-   - `git push`: NUNCA fazer push sem confirmação explícita do Alexandre naquele momento.
+   - NUNCA perguntar nada sobre comandos git (leitura, checkout, branch, add, commits locais de trabalho). Executar diretamente com autonomia total.
+   - A única restrição é `git push`: NUNCA fazer push sem confirmação explícita do Alexandre naquele momento.
 
 3. **Compilação**:
    - Usar sempre `mkfile r` para release e `mkfile p` para gerar pacote/instalador.

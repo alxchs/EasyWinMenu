@@ -247,8 +247,9 @@ janela do Windows já se comporta.
 
 ## 12. Um lote de acabamentos e recursos do painel
 
-- **Arranjar automaticamente / ordenar por nome / ordenar por tipo** deixam de
-  ser um comando de "fazer uma vez": a escolha fica salva por grupo
+- **Organizar ícones automaticamente** deixa de ser um comando de "fazer uma vez"
+  (e, como um grupo só guarda atalhos, **não há mais "ordenar por nome/tipo"**: ligado,
+  a ordem é sempre por nome do atalho): a escolha fica salva por grupo
   (`MenuCategory.IconArrangement`) e é **reaplicada sozinha** toda vez que o
   conjunto de ícones muda — soltar um arquivo, colar, apagar, renomear —
   não só no instante em que o item de menu foi clicado. Um grupo em posição
@@ -513,3 +514,35 @@ correção ficou validada por leitura de código e por compilação, não por
 reprodução visual — diferente do item 18, onde a reprodução automatizada
 foi possível. Fica pendente a confirmação manual de alguém rodando o app de
 verdade.
+
+## 21. Seleção estilo Explorer, abrir/fechar grupos, ordem das janelas e organização só por nome
+
+Depois de tudo acima, um lote de pedidos deixou o painel com o comportamento do Explorer
+e simplificou a organização. (A versão do zero, em um passo, está em
+[`PROMPT_GERACAO_UNICA.md`](PROMPT_GERACAO_UNICA.md).)
+
+- **Um grupo só guarda atalhos**, então **não faz sentido ordenar por nome ou por tipo**.
+  Removi o submenu "Ordenar por" e a ordenação por tipo. O menu do grupo tem um único item
+  marcável, **"Organizar ícones automaticamente"**; ligado, a ordem é **sempre por nome do
+  atalho** (sem diferenciar maiúsculas de minúsculas), em grade, reaplicada sozinha ao
+  soltar, colar, apagar, renomear, redimensionar e mudar o zoom. Configurações salvas com os
+  valores antigos `Grid` ou `ByType` continuam abrindo e passam a valer como "por nome".
+- **Seleção como no Explorer**: clique, Ctrl+clique, Shift+clique (intervalo), retângulo de
+  seleção arrastando no fundo, Ctrl+A. **Setas, Home e End** navegam em 2D pela grade (Shift
+  estende); **Enter** abre; **F2** renomeia; **Delete** remove; **F5** reaplica a organização;
+  **Esc** limpa a seleção. Ctrl+C, Ctrl+X e Ctrl+V usam a área de transferência real.
+- **Arrastar vários itens selecionados** de uma vez, também para outro grupo, com a
+  janela-fantasma e uma animação de batimento no ícone pego. Ao soltar num grupo com a
+  organização ligada, ele reordena por nome.
+- **Novo atalho…** no menu do grupo, que também abre pela janela externa (fora do painel).
+- **Fechar grupo** no menu do grupo (`MenuCategory.IsClosed`), e no menu da bandeja e no
+  clique direito da área de trabalho: **Abrir todos os grupos**, **Fechar todos os grupos** e
+  um item marcável por grupo.
+- **Ordem das janelas** (submenu no grupo): trazer todos para frente, enviar os outros para
+  trás, enviar todos para trás — para escolher quem cobre quem na área de trabalho.
+- **Win+Shift+←/→** leva o grupo ao monitor vizinho.
+- Versão **1.1.0.3**.
+
+**Ainda não implementado, só analisado:** atalho de grupo na barra de tarefas — ver
+[`VIABILIDADE_ATALHO_TASKBAR_GRUPO.md`](VIABILIDADE_ATALHO_TASKBAR_GRUPO.md).
+

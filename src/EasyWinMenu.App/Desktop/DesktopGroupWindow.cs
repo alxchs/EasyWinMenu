@@ -1290,16 +1290,9 @@ internal sealed class DesktopGroupWindow : Window
             LocalizationService.Get(IsAppFolder ? "group.styleAppFolder" : "group.stylePanel")
         };
 
-        var arrangementKey = _category.IconArrangement switch
+        if (_category.IconArrangement != IconArrangement.None)
         {
-            IconArrangement.Grid => "group.arrangeIcons",
-            IconArrangement.ByName => "group.sortByName",
-            IconArrangement.ByType => "group.sortByType",
-            _ => null
-        };
-        if (arrangementKey is not null)
-        {
-            lines.Add(LocalizationService.Get(arrangementKey));
+            lines.Add($"{LocalizationService.Get("group.arrangeIcons")} — {LocalizationService.Get("group.sortByName")}");
         }
 
         var iconSizeKey = _category.DesktopIconScale switch
@@ -1422,11 +1415,6 @@ internal sealed class DesktopGroupWindow : Window
         menu.Items.Add(BuildSeparator());
 
         AddCheckItem(menu, LocalizationService.Get("group.arrangeIcons"), _category.IconArrangement != IconArrangement.None, ToggleArrangeIconsAutomatically, "IconGrid");
-
-        var sortMenu = CreateMenuItem(LocalizationService.Get("group.sortBy"), "IconSort");
-        AddCheckItem(sortMenu, LocalizationService.Get("group.sortByName"), _category.IconArrangement == IconArrangement.ByName, SortByName);
-        AddCheckItem(sortMenu, LocalizationService.Get("group.sortByType"), _category.IconArrangement == IconArrangement.ByType, SortByType);
-        menu.Items.Add(sortMenu);
 
         var sizeMenu = CreateMenuItem(LocalizationService.Get("group.iconSize"), "IconIconSize");
         AddCheckItem(sizeMenu, LocalizationService.Get("group.iconSizeSmall"), IsIconScale(0.75), () => SetIconScale(0.75));
@@ -2051,7 +2039,7 @@ internal sealed class DesktopGroupWindow : Window
         }
         else
         {
-            SortByName();
+            EnableAutoArrange();
         }
     }
 
@@ -2097,23 +2085,14 @@ internal sealed class DesktopGroupWindow : Window
         }
     }
 
-    private void SortByName()
+    /// <summary>
+    /// Turns auto-arrange on. A group only ever holds shortcuts, so there is a single,
+    /// fixed order — by shortcut name — and no sort-by menu to choose another one.
+    /// </summary>
+    private void EnableAutoArrange()
     {
         _category.IconArrangement = IconArrangement.ByName;
         ArrangeInGrid(NameOrder());
-    }
-
-    private void SortByType()
-    {
-        _category.IconArrangement = IconArrangement.ByType;
-        ArrangeInGrid(TypeOrder());
-    }
-
-    private IEnumerable<object> GridOrder()
-    {
-        return _category.Categories
-            .Cast<object>()
-            .Concat(_category.Items);
     }
 
     private IEnumerable<object> NameOrder()
@@ -2123,19 +2102,10 @@ internal sealed class DesktopGroupWindow : Window
         return folders.Cast<object>().Concat(items);
     }
 
-    private IEnumerable<object> TypeOrder()
-    {
-        var folders = _category.Categories.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase);
-        var items = _category.Items
-            .OrderBy(i => i.Type)
-            .ThenBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
-        return folders.Cast<object>().Concat(items);
-    }
-
     /// <summary>
-    /// Keeps a live arrangement (grid / by name / by type) honest after the set of icons
+    /// Keeps the live by-name arrangement honest after the set of icons
     /// changes underneath it — a drop, a paste, a delete, a rename. Without this, picking
-    /// "sort by name" would only ever reflect the moment it was clicked instead of
+    /// "auto-arrange" would only ever reflect the moment it was clicked instead of
     /// following the group as it actually stands. Free placement (<see cref="IconArrangement.None"/>)
     /// just persists and repaints, same as before this existed.
     /// </summary>
@@ -2143,21 +2113,12 @@ internal sealed class DesktopGroupWindow : Window
     {
         UpdateHeaderTooltip();
 
-        switch (_category.IconArrangement)
+        if (_category.IconArrangement != IconArrangement.None)
         {
-            case IconArrangement.Grid:
-                ArrangeInGrid(GridOrder());
-                return;
-            case IconArrangement.ByName:
-                ArrangeInGrid(NameOrder());
-                return;
-            case IconArrangement.ByType:
-                ArrangeInGrid(TypeOrder());
-                return;
-            default:
-                PopulateTiles();
-                _onLayoutChanged(_category);
-                return;
+            // Configs saved before the sort-by menu was removed may still carry Grid or
+            // ByType; both now mean "by name".
+            _category.IconArrangement = IconArrangement.ByName;
+            ArrangeInGrid(NameOrder());
         }
     }
 
@@ -2237,6 +2198,8 @@ internal sealed class DesktopGroupWindow : Window
         DragGhostWindow? ghost = null;
         DispatcherTimer? heartbeatTimer = null;
         DispatcherTimer? dragTrackingTimer = null;
+        List<object> draggedPayload = new();
+        List<FrameworkElement> dimmedTiles = new();
 
         void FinishDrag()
         {
@@ -2255,27 +2218,51 @@ internal sealed class DesktopGroupWindow : Window
 
             tile.ReleaseMouseCapture();
 
-            if (!hasMoved || ghost is null)
+            if (!hasMoved)
             {
                 ghost?.Close();
                 ghost = null;
-                tile.Opacity = 1.0;
+                foreach (var t in dimmedTiles)
+                {
+                    t.Opacity = 1.0;
+                }
+                dimmedTiles.Clear();
+
+                // Se o usuário apenas clicou num item já selecionado sem arrastar,
+                // reduz a seleção apenas a ele no MouseUp (comportamento padrão Windows Explorer)
+                var isCtrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+                var isShift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+                if (!isCtrl && !isShift && _selectedEntries.Count > 1)
+                {
+                    _selectedEntries.Clear();
+                    _selectedEntries.Add(entry);
+                    _selectionAnchor = entry;
+                    RefreshSelectionVisuals();
+                }
                 return;
             }
 
             GetCursorPos(out var dropCursorPt);
-            var ghostPhys = ghost.CurrentPhysicalTopLeft;
-            ghost.Close();
+            var ghostPhys = ghost is not null
+                ? ghost.CurrentPhysicalTopLeft
+                : new DragGhostWindow.POINT { X = initialTilePhysical.X, Y = initialTilePhysical.Y };
+            ghost?.Close();
             ghost = null;
-            tile.Opacity = 1.0;
+
+            foreach (var t in dimmedTiles)
+            {
+                t.Opacity = 1.0;
+            }
+            dimmedTiles.Clear();
 
             var targetGroup = FindTargetGroupWindow(dropCursorPt, ghostPhys, (int)Math.Ceiling(visualWidth), (int)Math.Ceiling(visualHeight), this);
             if (targetGroup is not null)
             {
-                MoveEntryToOtherGroup(entry, targetGroup, dropCursorPt);
+                MoveEntriesToOtherGroup(draggedPayload, targetGroup, dropCursorPt);
                 return;
             }
 
+            // Soltura no mesmo grupo: reorganiza os elementos na lista e grade
             var targetInWindow = PointFromScreen(new System.Windows.Point(dropCursorPt.X, dropCursorPt.Y));
             var dpi = VisualTreeHelper.GetDpi(this);
             var localTopLeft = new System.Windows.Point(
@@ -2293,11 +2280,7 @@ internal sealed class DesktopGroupWindow : Window
                 localTopLeft = new System.Windows.Point(localTopLeft.X / scale, localTopLeft.Y / scale);
             }
 
-            var x = ClampToCanvas(localTopLeft.X, tile.ActualWidth, _canvas.ActualWidth, PaddingX);
-            var y = ClampToCanvas(localTopLeft.Y, tile.ActualHeight, _canvas.ActualHeight, PaddingY);
-            Canvas.SetLeft(tile, x);
-            Canvas.SetTop(tile, y);
-            onMoved(x, y);
+            ReorganizeEntriesInSameGroup(draggedPayload, localTopLeft);
         }
 
         void UpdateDragPhysical(POINT currentCursorPt)
@@ -2322,6 +2305,12 @@ internal sealed class DesktopGroupWindow : Window
                 heartbeatTimer?.Stop();
                 StopHeartbeatAnimation(tile);
 
+                dimmedTiles = draggedPayload
+                    .Select(item => _tilesByEntry.TryGetValue(item, out var t) ? t : null)
+                    .Where(t => t != null)
+                    .Cast<FrameworkElement>()
+                    .ToList();
+
                 var dpi = VisualTreeHelper.GetDpi(this);
                 ghost ??= DragGhostWindow.Show(
                     tile,
@@ -2331,7 +2320,14 @@ internal sealed class DesktopGroupWindow : Window
                     new DragGhostWindow.POINT { X = initialTilePhysical.X, Y = initialTilePhysical.Y },
                     dpi.DpiScaleX,
                     dpi.DpiScaleY,
-                    () => tile.Opacity = SelectedTileOpacityWhileDragging);
+                    draggedPayload.Count,
+                    () =>
+                    {
+                        foreach (var t in dimmedTiles)
+                        {
+                            t.Opacity = SelectedTileOpacityWhileDragging;
+                        }
+                    });
 
                 dragTrackingTimer?.Stop();
                 dragTrackingTimer = new DispatcherTimer(DispatcherPriority.Render)
@@ -2376,7 +2372,27 @@ internal sealed class DesktopGroupWindow : Window
                 return;
             }
 
-            HandleTileSelection(entry);
+            var isCtrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+            var isShift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+            var isAlreadySelected = _selectedEntries.Contains(entry);
+
+            if (isCtrl || isShift)
+            {
+                HandleTileSelection(entry);
+            }
+            else if (!isAlreadySelected)
+            {
+                HandleTileSelection(entry);
+            }
+
+            if (_selectedEntries.Contains(entry) && _selectedEntries.Count > 1)
+            {
+                draggedPayload = _selectedEntries.ToList();
+            }
+            else
+            {
+                draggedPayload = new List<object> { entry };
+            }
 
             dragging = true;
             hasMoved = false;
@@ -2530,31 +2546,85 @@ internal sealed class DesktopGroupWindow : Window
     }
 
     /// <summary>
-    /// Drops a tile dragged past this group's own edge onto whichever group it landed on.
-    /// The entry actually moves — removed from this category's own list and added to the
-    /// target's — rather than just visually relocating, which is what previously left a
-    /// dragged subfolder nowhere at all, or (depending on what handled the drop) folded
-    /// into the wrong list and mistaken for a standalone desktop group instead of a
-    /// subfolder that belongs to the target.
+    /// Reorganiza elementos soltos dentro do próprio grupo, calculando a nova posição na lista
+    /// conforme o ponto onde o mouse soltou e forçando a reorganização/reflow de toda a grade.
     /// </summary>
-    private void MoveEntryToOtherGroup(object entry, DesktopGroupWindow target, POINT dropPhysicalPoint)
+    private void ReorganizeEntriesInSameGroup(IReadOnlyList<object> entries, System.Windows.Point dropCanvasPoint)
     {
-        switch (entry)
+        if (entries.Count == 0)
         {
-            case LaunchItem item:
-                _category.Items.Remove(item);
-                break;
-            case MenuCategory folder:
-                _category.Categories.Remove(folder);
-                if (_openSubfolders.TryGetValue(folder, out var openWindow))
-                {
-                    openWindow.Close();
-                    _openSubfolders.Remove(folder);
-                }
+            return;
+        }
 
-                break;
-            default:
-                return;
+        var usableWidth = ActualWidth > 0 ? ActualWidth - (PaddingX * 2) : _category.DesktopWidth - (PaddingX * 2);
+        var scale = _category.DesktopIconScale > 0 ? _category.DesktopIconScale : 1.0;
+        var columns = Math.Max(1, (int)(usableWidth / (TileSize * scale)));
+
+        var dropCol = Math.Max(0, (int)Math.Round((dropCanvasPoint.X - PaddingX) / TileSize));
+        var dropRow = Math.Max(0, (int)Math.Round((dropCanvasPoint.Y - PaddingY) / TileSize));
+        var targetSlotIndex = Math.Max(0, (dropRow * columns) + dropCol);
+
+        var foldersToMove = entries.OfType<MenuCategory>().ToList();
+        var itemsToMove = entries.OfType<LaunchItem>().ToList();
+
+        if (foldersToMove.Count > 0)
+        {
+            foreach (var f in foldersToMove)
+            {
+                _category.Categories.Remove(f);
+            }
+            var insertIndex = Math.Clamp(targetSlotIndex, 0, _category.Categories.Count);
+            _category.Categories.InsertRange(insertIndex, foldersToMove);
+        }
+
+        if (itemsToMove.Count > 0)
+        {
+            foreach (var item in itemsToMove)
+            {
+                _category.Items.Remove(item);
+            }
+            var adjustedSlot = Math.Max(0, targetSlotIndex - _category.Categories.Count);
+            var insertIndex = Math.Clamp(adjustedSlot, 0, _category.Items.Count);
+            _category.Items.InsertRange(insertIndex, itemsToMove);
+        }
+
+        FinishStructuralChange();
+
+        _selectedEntries.Clear();
+        foreach (var e in entries)
+        {
+            _selectedEntries.Add(e);
+        }
+        RefreshSelectionVisuals();
+    }
+
+    /// <summary>
+    /// Move um ou múltiplos elementos arrastados para outro grupo de desktop, removendo-os deste
+    /// grupo de origem, refazendo a grade de origem e repassando todos ao grupo alvo.
+    /// </summary>
+    private void MoveEntriesToOtherGroup(IReadOnlyList<object> entries, DesktopGroupWindow target, POINT dropPhysicalPoint)
+    {
+        if (entries.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var entry in entries)
+        {
+            switch (entry)
+            {
+                case LaunchItem item:
+                    _category.Items.Remove(item);
+                    break;
+                case MenuCategory folder:
+                    _category.Categories.Remove(folder);
+                    if (_openSubfolders.TryGetValue(folder, out var openWindow))
+                    {
+                        openWindow.Close();
+                        _openSubfolders.Remove(folder);
+                    }
+                    break;
+            }
         }
 
         FinishStructuralChange();
@@ -2573,34 +2643,53 @@ internal sealed class DesktopGroupWindow : Window
             dropPoint = new System.Windows.Point(pointInTargetWindow.X / scale, pointInTargetWindow.Y / scale);
         }
 
-        target.AcceptMovedEntry(entry, dropPoint);
+        target.AcceptMovedEntries(entries, dropPoint);
     }
 
-    /// <summary>The other half of <see cref="MoveEntryToOtherGroup"/> — always adds to this
-    /// group's own <see cref="MenuCategory.Categories"/>/<see cref="MenuCategory.Items"/>,
-    /// never to the top-level configuration, so a moved subfolder stays a subfolder.</summary>
-    private void AcceptMovedEntry(object entry, System.Windows.Point canvasPoint)
+    /// <summary>
+    /// Recebe múltiplos itens movidos de outro grupo, inserindo-os na posição solta e
+    /// forçando a reorganização dos elementos na grade do grupo alvo.
+    /// </summary>
+    private void AcceptMovedEntries(IReadOnlyList<object> entries, System.Windows.Point canvasPoint)
     {
-        var x = Math.Max(PaddingX, canvasPoint.X);
-        var y = Math.Max(PaddingY, canvasPoint.Y);
-
-        switch (entry)
+        if (entries.Count == 0)
         {
-            case LaunchItem item:
-                item.DesktopIconX = x;
-                item.DesktopIconY = y;
-                _category.Items.Add(item);
-                break;
-            case MenuCategory folder:
-                folder.IconX = x;
-                folder.IconY = y;
-                _category.Categories.Add(folder);
-                break;
-            default:
-                return;
+            return;
+        }
+
+        var usableWidth = ActualWidth > 0 ? ActualWidth - (PaddingX * 2) : _category.DesktopWidth - (PaddingX * 2);
+        var scale = _category.DesktopIconScale > 0 ? _category.DesktopIconScale : 1.0;
+        var columns = Math.Max(1, (int)(usableWidth / (TileSize * scale)));
+
+        var dropCol = Math.Max(0, (int)Math.Round((canvasPoint.X - PaddingX) / TileSize));
+        var dropRow = Math.Max(0, (int)Math.Round((canvasPoint.Y - PaddingY) / TileSize));
+        var targetSlotIndex = Math.Max(0, (dropRow * columns) + dropCol);
+
+        var foldersToMove = entries.OfType<MenuCategory>().ToList();
+        var itemsToMove = entries.OfType<LaunchItem>().ToList();
+
+        if (foldersToMove.Count > 0)
+        {
+            var insertIndex = Math.Clamp(targetSlotIndex, 0, _category.Categories.Count);
+            _category.Categories.InsertRange(insertIndex, foldersToMove);
+        }
+
+        if (itemsToMove.Count > 0)
+        {
+            var adjustedSlot = Math.Max(0, targetSlotIndex - _category.Categories.Count);
+            var insertIndex = Math.Clamp(adjustedSlot, 0, _category.Items.Count);
+            _category.Items.InsertRange(insertIndex, itemsToMove);
         }
 
         FinishStructuralChange();
+
+        _selectedEntries.Clear();
+        foreach (var e in entries)
+        {
+            _selectedEntries.Add(e);
+        }
+        RefreshSelectionVisuals();
+
         RestoreIfMinimized();
     }
 
@@ -3118,12 +3207,7 @@ internal sealed class DesktopGroupWindow : Window
     {
         var usableWidth = _category.DesktopWidth - (PaddingX * 2);
         var columns = Math.Max(1, (int)(usableWidth / (TileSize * _category.DesktopIconScale)));
-        var ordered = _category.IconArrangement switch
-        {
-            IconArrangement.ByName => NameOrder(),
-            IconArrangement.ByType => TypeOrder(),
-            _ => GridOrder()
-        };
+        var ordered = NameOrder();
 
         var index = 0;
         foreach (var entry in ordered)
