@@ -1,0 +1,516 @@
+{
+  "label": "master",
+  "exeFileVersion": "1.1.1.0",
+  "fixture": "probe-config.json",
+  "groupWindowCount": 2,
+  "windows": [
+    {
+      "assumedGroup": "Alpha Panel",
+      "class": "HwndWrapper[EasyWinMenu.App;;7cd37613-387d-4b03-849e-2cdeb27d7ff9]",
+      "title": "",
+      "rect": {
+        "left": 150,
+        "top": 150,
+        "width": 930,
+        "height": 570
+      },
+      "exStyle": {
+        "toolWindow": false,
+        "appWindow": false,
+        "layered": true,
+        "transparent": false
+      },
+      "screenshotSha256": "F1EAFDC44051441564E1C4E6648AE3B7AD079F89B8FD6F2A945963AE800A645D"
+    },
+    {
+      "assumedGroup": "Beta Folder",
+      "class": "HwndWrapper[EasyWinMenu.App;;42c83a7b-7a41-4100-8f7c-c596bdd8f1ad]",
+      "title": "",
+      "rect": {
+        "left": 150,
+        "top": 1050,
+        "width": 450,
+        "height": 390
+      },
+      "exStyle": {
+        "toolWindow": false,
+        "appWindow": false,
+        "layered": true,
+        "transparent": false
+      },
+      "screenshotSha256": "B279470E6FC0FA042B81A39679B491DAC059145E11710AC5E82CDEDC0A808207"
+    }
+  ],
+  "groupMenus": [
+    {
+      "group": "Alpha Panel",
+      "popupFound": true,
+      "items": [
+        {
+          "depth": 0,
+          "name": "Collapse",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Rename...",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "New shortcut...",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Paste\tCtrl\u002BV",
+          "enabled": false
+        },
+        {
+          "depth": 0,
+          "name": "Arrange icons automatically",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Icon size",
+          "enabled": true,
+          "children": [
+            {
+              "depth": 1,
+              "name": "Small",
+              "enabled": true
+            },
+            {
+              "depth": 1,
+              "name": "Medium",
+              "enabled": true
+            },
+            {
+              "depth": 1,
+              "name": "Large",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "depth": 0,
+          "name": "Desktop window order",
+          "enabled": true,
+          "children": [
+            {
+              "depth": 1,
+              "name": "Bring all groups to front",
+              "enabled": true
+            },
+            {
+              "depth": 1,
+              "name": "Send other groups to back",
+              "enabled": true
+            },
+            {
+              "depth": 1,
+              "name": "Send all groups to back",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "depth": 0,
+          "name": "Style: app folder",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Count badge",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Background color...",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Background image...",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Remove background image",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Opacity",
+          "enabled": true,
+          "children": [
+            {
+              "depth": 1,
+              "name": "",
+              "enabled": true
+            },
+            {
+              "depth": 1,
+              "name": "",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "depth": 0,
+          "name": "Duplicate group",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Create taskbar shortcut",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Use desktop wallpaper as background",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Appearance",
+          "enabled": true,
+          "children": [
+            {
+              "depth": 1,
+              "name": "Apply this look to all groups",
+              "enabled": true
+            },
+            {
+              "depth": 1,
+              "name": "Use this look as the default",
+              "enabled": true
+            },
+            {
+              "depth": 1,
+              "name": "Use wallpaper on all groups",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "depth": 0,
+          "name": "Settings...",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Close group",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Remove group",
+          "enabled": false
+        }
+      ]
+    },
+    {
+      "group": "Beta Folder",
+      "popupFound": true,
+      "items": [
+        {
+          "depth": 0,
+          "name": "Collapse",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Rename...",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "New shortcut...",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Paste\tCtrl\u002BV",
+          "enabled": false
+        },
+        {
+          "depth": 0,
+          "name": "Arrange icons automatically",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Icon size",
+          "enabled": true,
+          "children": [
+            {
+              "depth": 1,
+              "name": "Small",
+              "enabled": true
+            },
+            {
+              "depth": 1,
+              "name": "Medium",
+              "enabled": true
+            },
+            {
+              "depth": 1,
+              "name": "Large",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "depth": 0,
+          "name": "Desktop window order",
+          "enabled": true,
+          "children": [
+            {
+              "depth": 1,
+              "name": "Bring all groups to front",
+              "enabled": true
+            },
+            {
+              "depth": 1,
+              "name": "Send other groups to back",
+              "enabled": true
+            },
+            {
+              "depth": 1,
+              "name": "Send all groups to back",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "depth": 0,
+          "name": "Style: app folder",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Count badge",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Background color...",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Background image...",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Remove background image",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Opacity",
+          "enabled": true,
+          "children": [
+            {
+              "depth": 1,
+              "name": "",
+              "enabled": true
+            },
+            {
+              "depth": 1,
+              "name": "",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "depth": 0,
+          "name": "Duplicate group",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Create taskbar shortcut",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Use desktop wallpaper as background",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Appearance",
+          "enabled": true,
+          "children": [
+            {
+              "depth": 1,
+              "name": "Apply this look to all groups",
+              "enabled": true
+            },
+            {
+              "depth": 1,
+              "name": "Use this look as the default",
+              "enabled": true
+            },
+            {
+              "depth": 1,
+              "name": "Use wallpaper on all groups",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "depth": 0,
+          "name": "Settings...",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Close group",
+          "enabled": true
+        },
+        {
+          "depth": 0,
+          "name": "Remove group",
+          "enabled": false
+        }
+      ]
+    }
+  ],
+  "configAfterRun": {
+    "Categories": [
+      {
+        "Name": "Alpha Panel",
+        "Id": "\u003Cid-0\u003E",
+        "Categories": [],
+        "Items": [
+          {
+            "Name": "Zulu Notepad",
+            "Type": "Application",
+            "Target": "C:\\Windows\\System32\\notepad.exe",
+            "ExecutionMode": "Normal",
+            "IsDesktopPinned": true,
+            "DesktopIconX": 300,
+            "DesktopIconY": 220
+          },
+          {
+            "Name": "Alpha Calculator",
+            "Type": "Application",
+            "Target": "C:\\Windows\\System32\\calc.exe",
+            "ExecutionMode": "Normal",
+            "IsDesktopPinned": true,
+            "DesktopIconX": 20,
+            "DesktopIconY": 220
+          },
+          {
+            "Name": "Mike Paint",
+            "Type": "Application",
+            "Target": "C:\\Windows\\System32\\mspaint.exe",
+            "ExecutionMode": "Normal",
+            "IsDesktopPinned": true,
+            "DesktopIconX": 180,
+            "DesktopIconY": 20
+          },
+          {
+            "Name": "Bravo Charmap",
+            "Type": "Application",
+            "Target": "C:\\Windows\\System32\\charmap.exe",
+            "ExecutionMode": "Normal",
+            "IsDesktopPinned": true,
+            "DesktopIconX": 60,
+            "DesktopIconY": 20
+          }
+        ],
+        "IsDesktopGroup": true,
+        "DesktopX": 100,
+        "DesktopY": 100,
+        "DesktopWidth": 620,
+        "DesktopHeight": 380,
+        "DesktopIconScale": 1,
+        "IsCollapsed": false,
+        "IsClosed": false,
+        "AreaOpacity": 1,
+        "TitleOpacity": 1,
+        "DisplayMode": "Panel",
+        "ShowBadge": true,
+        "IconArrangement": "ByName"
+      },
+      {
+        "Name": "Beta Folder",
+        "Id": "\u003Cid-1\u003E",
+        "Categories": [],
+        "Items": [
+          {
+            "Name": "Sierra Regedit",
+            "Type": "Application",
+            "Target": "C:\\Windows\\regedit.exe",
+            "ExecutionMode": "Normal",
+            "IsDesktopPinned": true,
+            "DesktopIconX": 20,
+            "DesktopIconY": 20
+          },
+          {
+            "Name": "Tango Explorer",
+            "Type": "Application",
+            "Target": "C:\\Windows\\explorer.exe",
+            "ExecutionMode": "Normal",
+            "IsDesktopPinned": true,
+            "DesktopIconX": 100,
+            "DesktopIconY": 20
+          }
+        ],
+        "IsDesktopGroup": true,
+        "DesktopX": 100,
+        "DesktopY": 700,
+        "DesktopWidth": 300,
+        "DesktopHeight": 260,
+        "DesktopIconScale": 1,
+        "IsCollapsed": false,
+        "IsClosed": false,
+        "AreaOpacity": 1,
+        "TitleOpacity": 1,
+        "DisplayMode": "Panel",
+        "ShowBadge": true,
+        "IconArrangement": "None"
+      }
+    ],
+    "Items": [],
+    "Theme": {
+      "BackgroundColor": "#1E1E1E",
+      "Opacity": 0.97,
+      "BorderColor": "#3C3C3C",
+      "CornerRadius": 6,
+      "ShowShadow": true,
+      "ShadowBlurRadius": 12,
+      "ShadowDepth": 2,
+      "ShadowDirection": 315,
+      "ShadowOpacity": 0.35,
+      "ItemSpacing": 2,
+      "ItemPadding": 8,
+      "IconSize": 18,
+      "TextColor": "#FFFFFF",
+      "HighlightColor": "#3D7EB8FF",
+      "TitleFontFamily": "Segoe UI",
+      "TitleFontSize": 13,
+      "TitleBold": true,
+      "ItemFontFamily": "Segoe UI",
+      "ItemFontSize": 13,
+      "AnimationDurationMs": 120
+    },
+    "Behavior": {
+      "ClickMode": "SingleClick",
+      "GlobalHotkeyEnabled": false,
+      "GlobalHotkeyModifiers": "Control, Shift",
+      "GlobalHotkeyKey": "Space",
+      "RestoreGroupsHotkeyEnabled": false,
+      "RestoreGroupsHotkeyModifiers": "Alt, Control, Windows",
+      "RestoreGroupsHotkeyKey": "D",
+      "AppTheme": "Dark",
+      "Language": "en"
+    }
+  }
+}

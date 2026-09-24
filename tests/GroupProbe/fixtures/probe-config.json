@@ -1,0 +1,130 @@
+{
+  "Categories": [
+    {
+      "Name": "Alpha Panel",
+      "Categories": [],
+      "Items": [
+        {
+          "Name": "Zulu Notepad",
+          "Type": "Application",
+          "Target": "C:\\Windows\\System32\\notepad.exe",
+          "ExecutionMode": "Normal",
+          "IsDesktopPinned": true,
+          "DesktopIconX": 300.0,
+          "DesktopIconY": 220.0
+        },
+        {
+          "Name": "Alpha Calculator",
+          "Type": "Application",
+          "Target": "C:\\Windows\\System32\\calc.exe",
+          "ExecutionMode": "Normal",
+          "IsDesktopPinned": true,
+          "DesktopIconX": 20.0,
+          "DesktopIconY": 220.0
+        },
+        {
+          "Name": "Mike Paint",
+          "Type": "Application",
+          "Target": "C:\\Windows\\System32\\mspaint.exe",
+          "ExecutionMode": "Normal",
+          "IsDesktopPinned": true,
+          "DesktopIconX": 180.0,
+          "DesktopIconY": 20.0
+        },
+        {
+          "Name": "Bravo Charmap",
+          "Type": "Application",
+          "Target": "C:\\Windows\\System32\\charmap.exe",
+          "ExecutionMode": "Normal",
+          "IsDesktopPinned": true,
+          "DesktopIconX": 60.0,
+          "DesktopIconY": 20.0
+        }
+      ],
+      "IsDesktopGroup": true,
+      "DesktopX": 100.0,
+      "DesktopY": 100.0,
+      "DesktopWidth": 620.0,
+      "DesktopHeight": 380.0,
+      "DesktopIconScale": 1.0,
+      "IsCollapsed": false,
+      "IsClosed": false,
+      "AreaOpacity": 1.0,
+      "TitleOpacity": 1.0,
+      "DisplayMode": "Panel",
+      "ShowBadge": true,
+      "IconArrangement": "ByName"
+    },
+    {
+      "Name": "Beta Folder",
+      "Categories": [],
+      "Items": [
+        {
+          "Name": "Sierra Regedit",
+          "Type": "Application",
+          "Target": "C:\\Windows\\regedit.exe",
+          "ExecutionMode": "Normal",
+          "IsDesktopPinned": true,
+          "DesktopIconX": 20.0,
+          "DesktopIconY": 20.0
+        },
+        {
+          "Name": "Tango Explorer",
+          "Type": "Application",
+          "Target": "C:\\Windows\\explorer.exe",
+          "ExecutionMode": "Normal",
+          "IsDesktopPinned": true,
+          "DesktopIconX": 100.0,
+          "DesktopIconY": 20.0
+        }
+      ],
+      "IsDesktopGroup": true,
+      "DesktopX": 100.0,
+      "DesktopY": 700.0,
+      "DesktopWidth": 300.0,
+      "DesktopHeight": 260.0,
+      "DesktopIconScale": 1.0,
+      "IsCollapsed": false,
+      "IsClosed": false,
+      "AreaOpacity": 1.0,
+      "TitleOpacity": 1.0,
+      "DisplayMode": "Panel",
+      "ShowBadge": true,
+      "IconArrangement": "None"
+    }
+  ],
+  "Items": [],
+  "Theme": {
+    "BackgroundColor": "#1E1E1E",
+    "Opacity": 0.97,
+    "BorderColor": "#3C3C3C",
+    "CornerRadius": 6.0,
+    "ShowShadow": true,
+    "ShadowBlurRadius": 12.0,
+    "ShadowDepth": 2.0,
+    "ShadowDirection": 315.0,
+    "ShadowOpacity": 0.35,
+    "ItemSpacing": 2.0,
+    "ItemPadding": 8.0,
+    "IconSize": 18.0,
+    "TextColor": "#FFFFFF",
+    "HighlightColor": "#3D7EB8FF",
+    "TitleFontFamily": "Segoe UI",
+    "TitleFontSize": 13.0,
+    "TitleBold": true,
+    "ItemFontFamily": "Segoe UI",
+    "ItemFontSize": 13.0,
+    "AnimationDurationMs": 120
+  },
+  "Behavior": {
+    "ClickMode": "SingleClick",
+    "GlobalHotkeyEnabled": false,
+    "GlobalHotkeyModifiers": "Control, Shift",
+    "GlobalHotkeyKey": "Space",
+    "RestoreGroupsHotkeyEnabled": false,
+    "RestoreGroupsHotkeyModifiers": "Alt, Control, Windows",
+    "RestoreGroupsHotkeyKey": "D",
+    "AppTheme": "Dark",
+    "Language": "en"
+  }
+}
