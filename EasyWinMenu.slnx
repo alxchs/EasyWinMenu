@@ -6,7 +6,7 @@
     <Project Path="quickstacks/src/QuickStacks.Infrastructure/QuickStacks.Infrastructure.csproj" />
     <Project Path="quickstacks/src/QuickStacks.Localization/QuickStacks.Localization.csproj" />
     <Project Path="quickstacks/src/QuickStacks.UI/QuickStacks.UI.csproj">
-      <Platform Project="x86" />
+      <Platform Project="x64" />
     </Project>
   </Folder>
   <Folder Name="/src/">

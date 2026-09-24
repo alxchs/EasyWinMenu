@@ -285,6 +285,8 @@ public sealed partial class EditorWindow : Window
         if (!e.DataView.Contains(DraggedItemFormat))
         {
             return;
+        }
+
         var def = e.GetDeferral();
         try
         {
