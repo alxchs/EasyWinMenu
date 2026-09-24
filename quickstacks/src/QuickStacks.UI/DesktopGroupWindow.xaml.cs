@@ -31,6 +31,7 @@ public sealed partial class DesktopGroupWindow : Window
     private const string DraggedItemFormat = "QuickStacksItemId";
     private const string SourceGroupFormat = "QuickStacksSourceGroupId";
 
+    private const int AppFolderMosaicCapacity = 9;
     private const double AppFolderTileWidth = 110;
     private const double AppFolderTileHeight = 140;
     private static readonly List<DesktopGroupWindow> _openGroups = new();
