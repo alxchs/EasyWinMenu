@@ -1,16 +1,10 @@
 <Solution>
-  <Folder Name="/quickstacks/" />
-  <Folder Name="/quickstacks/src/">
-    <Project Path="quickstacks/src/QuickStacks.Application/QuickStacks.Application.csproj" />
-    <Project Path="quickstacks/src/QuickStacks.Domain/QuickStacks.Domain.csproj" />
-    <Project Path="quickstacks/src/QuickStacks.Infrastructure/QuickStacks.Infrastructure.csproj" />
-    <Project Path="quickstacks/src/QuickStacks.Localization/QuickStacks.Localization.csproj" />
-    <Project Path="quickstacks/src/QuickStacks.UI/QuickStacks.UI.csproj">
-      <Platform Project="x64" />
-    </Project>
-  </Folder>
   <Folder Name="/src/">
     <Project Path="src/EasyWinMenu.App/EasyWinMenu.App.csproj" />
     <Project Path="src/EasyWinMenu.Core/EasyWinMenu.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EasyWinMenu.Tests/EasyWinMenu.Tests.csproj" />
+    <Project Path="tests/GroupProbe/GroupProbe.csproj" />
   </Folder>
 </Solution>

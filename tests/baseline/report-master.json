@@ -6,7 +6,7 @@
   "windows": [
     {
       "assumedGroup": "Alpha Panel",
-      "class": "HwndWrapper[EasyWinMenu.App;;7cd37613-387d-4b03-849e-2cdeb27d7ff9]",
+      "class": "HwndWrapper[EasyWinMenu.App;;\u003Cguid\u003E]",
       "title": "",
       "rect": {
         "left": 150,
@@ -24,7 +24,7 @@
     },
     {
       "assumedGroup": "Beta Folder",
-      "class": "HwndWrapper[EasyWinMenu.App;;42c83a7b-7a41-4100-8f7c-c596bdd8f1ad]",
+      "class": "HwndWrapper[EasyWinMenu.App;;\u003Cguid\u003E]",
       "title": "",
       "rect": {
         "left": 150,

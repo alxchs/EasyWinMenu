@@ -202,7 +202,11 @@ internal static class Program
             described.Add(new JsonObject
             {
                 ["assumedGroup"] = name,
-                ["class"] = Win32.ClassOf(handle),
+
+                // WPF names every HwndSource "HwndWrapper[<app>;;<guid>]" with a fresh guid per
+                // process, so the raw class name differs on every run and says nothing about
+                // behaviour. The shape is what matters; the guid is dropped.
+                ["class"] = StripWindowGuid(Win32.ClassOf(handle)),
                 ["title"] = Win32.TitleOf(handle),
                 ["rect"] = new JsonObject
                 {
@@ -315,26 +319,7 @@ internal static class Program
                 entry["toggle"] = ((TogglePattern)togglePattern).Current.ToggleState.ToString();
             }
 
-            var children = new JsonArray();
-            if (element.TryGetCurrentPattern(ExpandCollapsePattern.Pattern, out var expandPattern))
-            {
-                var expand = (ExpandCollapsePattern)expandPattern;
-                if (expand.Current.ExpandCollapseState != ExpandCollapseState.LeafNode)
-                {
-                    try
-                    {
-                        expand.Expand();
-                        Thread.Sleep(320);
-                        ReadMenuItems(element, children, depth + 1);
-                        expand.Collapse();
-                        Thread.Sleep(160);
-                    }
-                    catch (Exception ex)
-                    {
-                        children.Add(new JsonObject { ["error"] = ex.GetType().Name });
-                    }
-                }
-            }
+            var children = ExpandAndRead(element, depth);
 
             if (children.Count > 0)
             {
@@ -387,6 +372,69 @@ internal static class Program
 
                 break;
         }
+    }
+
+    /// <summary>
+    /// Opens a submenu and reads it, waiting for the menu to report itself expanded instead of
+    /// sleeping a guessed amount. A fixed sleep made this flaky: the same build produced a
+    /// 283-field report on one run and 316 on the next, purely because the first group's
+    /// submenus had not finished opening when they were read. A measurement that changes
+    /// between runs cannot tell a refactor from noise, so it retries until the tree is stable.
+    /// </summary>
+    private static JsonArray ExpandAndRead(AutomationElement element, int depth)
+    {
+        var children = new JsonArray();
+
+        if (!element.TryGetCurrentPattern(ExpandCollapsePattern.Pattern, out var pattern))
+        {
+            return children;
+        }
+
+        var expand = (ExpandCollapsePattern)pattern;
+        if (expand.Current.ExpandCollapseState == ExpandCollapseState.LeafNode)
+        {
+            return children;
+        }
+
+        for (var attempt = 0; attempt < 3 && children.Count == 0; attempt++)
+        {
+            try
+            {
+                expand.Expand();
+
+                // Wait for the state the menu reports, not for a duration.
+                var clock = Stopwatch.StartNew();
+                while (clock.Elapsed < TimeSpan.FromSeconds(3)
+                    && expand.Current.ExpandCollapseState != ExpandCollapseState.Expanded)
+                {
+                    Thread.Sleep(80);
+                }
+
+                // The items still materialise a beat after the state flips; poll for them too.
+                var settle = Stopwatch.StartNew();
+                while (settle.Elapsed < TimeSpan.FromSeconds(3) && children.Count == 0)
+                {
+                    Thread.Sleep(120);
+                    children = new JsonArray();
+                    ReadMenuItems(element, children, depth + 1);
+                }
+
+                expand.Collapse();
+                Thread.Sleep(150);
+            }
+            catch (Exception ex)
+            {
+                children = new JsonArray { new JsonObject { ["error"] = ex.GetType().Name } };
+            }
+        }
+
+        return children;
+    }
+
+    private static string StripWindowGuid(string className)
+    {
+        var separator = className.IndexOf(";;", StringComparison.Ordinal);
+        return separator < 0 ? className : $"{className[..separator]};;<guid>]";
     }
 
     private static void StopApp()
