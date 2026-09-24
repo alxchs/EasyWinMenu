@@ -339,7 +339,6 @@ public partial class App : Application, IDesktopGroupCommands
 
         var menu = TrayMenuBuilder.Build(
             _configuration!,
-            _iconCache!,
             StartupRegistration.IsEnabled(),
             _desktopOrganizer!.HasOpenGroups,
             OpenSettingsWindow,

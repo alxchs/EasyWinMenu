@@ -26,7 +26,6 @@ internal static class TrayMenuBuilder
 {
     public static ContextMenu Build(
         LauncherConfiguration configuration,
-        IconCacheService iconCache,
         bool startWithWindowsEnabled,
         bool hasOpenGroups,
         Action openSettings,
@@ -46,13 +45,6 @@ internal static class TrayMenuBuilder
         };
         ApplyPanelAppearance(menu, theme);
         ApplyOpenAnimation(menu, theme);
-
-        AddContainerItems(menu.Items, configuration, theme, iconCache);
-
-        if (configuration.Items.Count > 0 || configuration.Categories.Count > 0)
-        {
-            menu.Items.Add(BuildSeparator(theme));
-        }
 
         var newGroupItem = new MenuItem { Header = LocalizationService.Get("tray.newDesktopGroup") };
         ApplyMenuItemAppearance(newGroupItem, theme, theme, "IconAdd");
@@ -135,30 +127,6 @@ internal static class TrayMenuBuilder
         return menu;
     }
 
-    private static void AddContainerItems(ItemCollection collection, IMenuContainer container, MenuTheme theme, IconCacheService iconCache)
-    {
-        foreach (var item in container.Items)
-        {
-            var menuItem = new MenuItem
-            {
-                Header = item.Name,
-                Icon = BuildIcon(item, theme, iconCache)
-            };
-            ApplyMenuItemAppearance(menuItem, theme, theme);
-            menuItem.Click += (_, _) => LaunchExecutor.Execute(item);
-            collection.Add(menuItem);
-        }
-
-        foreach (var category in container.Categories)
-        {
-            var categoryTheme = category.ThemeOverride ?? theme;
-            var categoryItem = new MenuItem { Header = category.Name };
-            ApplyMenuItemAppearance(categoryItem, theme, categoryTheme);
-            AddContainerItems(categoryItem.Items, category, categoryTheme, iconCache);
-            collection.Add(categoryItem);
-        }
-    }
-
     private static void ApplyOpenAnimation(ContextMenu menu, MenuTheme theme)
     {
         menu.Opacity = 0;
@@ -229,19 +197,4 @@ internal static class TrayMenuBuilder
         };
     }
 
-    private static UIElement BuildIcon(LaunchItem item, MenuTheme theme, IconCacheService iconCache)
-    {
-        var icon = iconCache.GetIcon(item.IconOverridePath ?? item.Target);
-        if (icon is null)
-        {
-            return new Border { Width = theme.IconSize, Height = theme.IconSize };
-        }
-
-        return new Image
-        {
-            Source = Imaging.CreateBitmapSourceFromHIcon(icon.Handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions()),
-            Width = theme.IconSize,
-            Height = theme.IconSize
-        };
-    }
 }

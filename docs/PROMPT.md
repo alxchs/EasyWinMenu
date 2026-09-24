@@ -553,3 +553,29 @@ e simplificou a organização. (A versão do zero, em um passo, está em
   [`VIABILIDADE_ATALHO_TASKBAR_GRUPO.md`](VIABILIDADE_ATALHO_TASKBAR_GRUPO.md).
 - Versão **1.1.1.0**.
 
+## 22. Higienização: o EasyWinMenu passa a ser só os grupos
+
+O repositório carregava três coisas que não são a função de grupos. Separe cada uma **sem
+mudar nada no comportamento dos grupos**, e prove que não mudou.
+
+- **QuickStacks** (app WinUI 3 inteiro, 5 projetos) vira repositório próprio, com o histórico
+  que tocava a pasta preservado por `git subtree split`. Antes de remover daqui, ele tem que
+  compilar sozinho lá.
+- **O menu lançador da bandeja** — a lista hierárquica de categorias e atalhos do usuário —
+  vira um app próprio chamado **QuickMenu**, com `%AppData%\QuickMenu` separado. Aqui fica
+  só o menu como painel de controle dos grupos (novo grupo, abrir/fechar, recolher, reunir,
+  iniciar com Windows, configurações, sair).
+- **Código morto e ferramentas de scratch**: `DesktopContextMenuBuilder`, `DeskProbe`,
+  `DragDropTester`, capturas soltas e seis scripts `.ps1` de auditoria por *grep* de
+  código-fonte — que a sonda nova substitui por medição real.
+
+**A prova exigida, nesta ordem:**
+
+1. Um **arsenal de verificação primeiro**, com a master ainda intacta: 32 asserções xUnit e
+   uma sonda em C# que sobe o app de verdade e grava geometria, captura PNG por grupo e o
+   menu de contexto inteiro lido por UI Automation.
+2. **Validar o oráculo antes de confiar nele**: rodar a sonda duas vezes contra o *mesmo*
+   build e exigir relatórios idênticos. A primeira versão oscilava entre 283 e 316 campos
+   porque esperava os submenus por `sleep` fixo — troque por esperar o estado que o menu
+   reporta. Medição que muda sozinha não distingue refatoração de ruído.
+3. Comparar cada etapa contra a linha de base e **exigir zero divergência** nos 316 campos.

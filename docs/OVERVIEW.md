@@ -30,8 +30,11 @@ src/
   EasyWinMenu.Core/               modelos e persistência, sem UI
   EasyWinMenu.App/                WPF: toda a interface e os serviços do Windows
 tools/
-  IconForge/                      gera o .ico oficial do app (não versionado)
-  DeskProbe/                      *(não commitado — vive fora do repo)*
+  IconForge/                      gera o .ico oficial do app
+tests/
+  EasyWinMenu.Tests/              32 asserções xUnit (geometria de monitor, contrato do config)
+  GroupProbe/                     sonda que sobe o app e caracteriza os grupos
+  baseline/                       referência da master 5bf5ee8, para comparar refatorações
 docs/
   OVERVIEW.md                     este arquivo
   PROMPT.md                       o prompt único equivalente a tudo isto (histórico)
@@ -310,7 +313,7 @@ funciona de fora desta rede, sem custo.
   configuração inteira pode reescrever os outros grupos (ou, no caso das
   Configurações, é quem já guarda a janela). É por aqui que qualquer grupo
   — não só a bandeja — chega até a tela de Configurações.
-- **`DesktopContextMenuBuilder`** — **atualmente sem uso.** Foi escrito para
+- ~~**`DesktopContextMenuBuilder`**~~ — removido em 2026-09-24 (código morto). Foi escrito para
   desenhar um menu de clique direito temático na área de trabalho vazia, mas
   depois que a seção "Grupos não vivem dentro da área de trabalho" (abaixo)
   decidiu não reparentar os grupos no `Progman`/`SHELLDLL_DefView`, o app não
