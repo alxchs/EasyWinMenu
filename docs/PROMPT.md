@@ -541,8 +541,15 @@ e simplificou a organização. (A versão do zero, em um passo, está em
 - **Ordem das janelas** (submenu no grupo): trazer todos para frente, enviar os outros para
   trás, enviar todos para trás — para escolher quem cobre quem na área de trabalho.
 - **Win+Shift+←/→** leva o grupo ao monitor vizinho.
-- Versão **1.1.0.3**.
-
-**Ainda não implementado, só analisado:** atalho de grupo na barra de tarefas — ver
-[`VIABILIDADE_ATALHO_TASKBAR_GRUPO.md`](VIABILIDADE_ATALHO_TASKBAR_GRUPO.md).
+- **Atalho de grupo na barra de tarefas**: item **"Criar atalho na barra de tarefas"** no
+  menu do grupo. Cada grupo ganha um `Id` estável (GUID, gravado na config; duplicar gera outro).
+  O item cria um `.lnk` em `%AppData%\EasyWinMenu\GroupShortcuts` que abre o próprio app com
+  `--desktop-action=focus-group:<id>` e mostra o arquivo no Explorer para o usuário arrastar à
+  barra. Clicar no atalho abre o grupo se estiver fechado, expande se estiver recolhido, traz
+  para frente, ativa e faz um pulso curto de opacidade; com o app fechado, sobe e faz o mesmo;
+  com um id que não existe mais, mostra o balão "Grupo não encontrado". Uma pasta
+  `...\User Pinned\TaskBar` sozinha **não** fixa (o Explorer usa o valor `Favorites` da chave
+  `Taskband`), então o fixar-sozinho ficou para depois — ver
+  [`VIABILIDADE_ATALHO_TASKBAR_GRUPO.md`](VIABILIDADE_ATALHO_TASKBAR_GRUPO.md).
+- Versão **1.1.1.0**.
 

@@ -5,6 +5,13 @@ namespace EasyWinMenu.Core.Models;
 public sealed class MenuCategory : IMenuContainer
 {
     public required string Name { get; set; }
+
+    /// <summary>
+    /// Stable identity, so something outside the config (a taskbar shortcut) can point at this
+    /// group and survive a rename or a duplicate name. Null in configs written before this
+    /// existed; <c>DesktopOrganizerService.EnsureIds</c> fills it in and the config is saved.
+    /// </summary>
+    public string? Id { get; set; }
     public List<MenuCategory> Categories { get; init; } = [];
     public List<LaunchItem> Items { get; init; } = [];
     public MenuTheme? ThemeOverride { get; set; }
@@ -73,6 +80,7 @@ public sealed class MenuCategory : IMenuContainer
         return new MenuCategory
         {
             Name = Name,
+            Id = Id,
             Items = [.. Items.Select(item => item.Clone())],
             Categories = [.. Categories.Select(category => category.Clone())],
             ThemeOverride = ThemeOverride?.Clone(),

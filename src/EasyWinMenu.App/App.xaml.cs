@@ -48,6 +48,11 @@ public partial class App : Application, IDesktopGroupCommands
 
         _configurationStore = new ConfigurationStore(ApplicationPaths.ConfigFilePath);
         _configuration = _configurationStore.Load();
+        if (DesktopOrganizerService.EnsureIds(_configuration))
+        {
+            _configurationStore.Save(_configuration);
+        }
+
         _iconCache = new IconCacheService(ApplicationPaths.IconCacheDirectory);
 
         AppThemeService.Apply(_configuration.Behavior.AppTheme);
@@ -122,6 +127,12 @@ public partial class App : Application, IDesktopGroupCommands
 
     private void HandleDesktopAction(string action)
     {
+        if (action.StartsWith(DesktopContextMenuRegistration.FocusGroupActionPrefix, StringComparison.Ordinal))
+        {
+            FocusGroup(action[DesktopContextMenuRegistration.FocusGroupActionPrefix.Length..]);
+            return;
+        }
+
         switch (action)
         {
             case DesktopContextMenuRegistration.NewGroupAction:
@@ -199,11 +210,43 @@ public partial class App : Application, IDesktopGroupCommands
         _desktopOrganizer!.ReloadVisuals(_configuration!);
     }
 
+    private void FocusGroup(string groupId)
+    {
+        var group = DesktopOrganizerService.FindGroupById(_configuration!, groupId);
+        if (group is null)
+        {
+            _trayIcon?.ShowBalloonTip(3000, LocalizationService.Get("common.appName"), LocalizationService.Get("group.notFound"), ToolTipIcon.Warning);
+            return;
+        }
+
+        if (group.IsClosed)
+        {
+            group.IsClosed = false;
+            SaveAndReloadGroups();
+        }
+
+        _desktopOrganizer!.FocusOpenGroup(group);
+    }
+
+    void IDesktopGroupCommands.CreateTaskbarShortcut(MenuCategory source)
+    {
+        if (DesktopOrganizerService.EnsureIds(_configuration!))
+        {
+            _configurationStore!.Save(_configuration!);
+        }
+
+        var exePath = Environment.ProcessPath ?? throw new InvalidOperationException("Unknown executable path.");
+        var shortcut = TaskbarShortcutService.CreateGroupShortcut(source, exePath);
+        TaskbarShortcutService.RevealInExplorer(shortcut);
+        _trayIcon?.ShowBalloonTip(5000, LocalizationService.Get("common.appName"), LocalizationService.Get("group.taskbarShortcutHint"), ToolTipIcon.Info);
+    }
+
     void IDesktopGroupCommands.Duplicate(MenuCategory source)
     {
         var parent = DesktopOrganizerService.FindParentList(_configuration!, source) ?? _configuration!.Categories;
 
         var copy = source.Clone();
+        copy.Id = Guid.NewGuid().ToString("N");
         copy.Name = LocalizationService.Format("group.copySuffix", source.Name);
 
         // Offset so the copy is visibly a second group rather than hiding the original.

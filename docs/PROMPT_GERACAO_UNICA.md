@@ -1,12 +1,12 @@
 # Prompt de geração em um passo
 
 > Para que serve: entregue este texto inteiro a um agente de código, numa pasta vazia,
-> e o resultado deve ser um aplicativo equivalente ao EasyWinMenu 1.1.0.3.
+> e o resultado deve ser um aplicativo equivalente ao EasyWinMenu 1.1.1.0.
 > É diferente de [`PROMPT.md`](PROMPT.md): aquele é o **histórico** do pedido, em ordem
 > cronológica e com as correções que foram acontecendo. Este é a **especificação do zero**,
 > já com as decisões finais, escrito para ser executado de uma vez.
 >
-> Todo valor numérico e todo nome citado abaixo foi lido do código da versão 1.1.0.3
+> Todo valor numérico e todo nome citado abaixo foi lido do código da versão 1.1.1.0
 > (`MenuTheme`, `MenuCategory`, `LauncherBehavior`, `DesktopGroupWindow`). Se o código
 > mudar, este arquivo muda no mesmo commit (regra de manutenção do projeto).
 
@@ -21,7 +21,7 @@ atalhos**, no espírito das pastas de app do Android: cada grupo é uma janela s
 
 ### 1. Estrutura da solução
 
-- `EasyWinMenu.slnx` na raiz, um arquivo `VERSION` (`a.b.c.d`, começando em `1.1.0.3`) lido
+- `EasyWinMenu.slnx` na raiz, um arquivo `VERSION` (`a.b.c.d`, começando em `1.1.1.0`) lido
   por `src/Directory.Build.props`, que aplica `Version`, `AssemblyVersion` e `FileVersion`.
 - `src/EasyWinMenu.Core` (`net10.0`, **sem** WPF nem Win32): modelos e persistência.
 - `src/EasyWinMenu.App` (`net10.0-windows`, WPF): toda a interface e os serviços do Windows.
@@ -38,7 +38,7 @@ Serialização com `System.Text.Json`; arquivo antigo com campo a menos ou a mai
 - **`LaunchItem`**: `Name`, `Type`, `Target`, `Arguments`, `WorkingDirectory`,
   `ExecutionMode` (Normal, Minimizado ou Administrador; Normal por padrão), `Type` (Aplicativo, Arquivo, Pasta, URL ou Comando), `IconOverridePath`, `IsDesktopPinned`,
   `DesktopIconX`, `DesktopIconY`. Tem `Clone()`.
-- **`MenuCategory`** (grupo): `Name`; `Categories` e `Items` internos; `ThemeOverride` (um
+- **`MenuCategory`** (grupo): `Name`; `Id` (GUID sem hífens, nulo em config antiga, preenchido na carga e gravado; `Clone()` copia, "Duplicar grupo" gera outro); `Categories` e `Items` internos; `ThemeOverride` (um
   `MenuTheme` opcional por grupo); `IsDesktopGroup`; `DesktopX=40`, `DesktopY=40`,
   `DesktopWidth=220`, `DesktopHeight=180`; `DesktopIconScale=1.0`;
   `DesktopBackgroundImagePath`; `IconX`/`IconY` (posição do ladrilho); `IsCollapsed`;
@@ -133,7 +133,7 @@ uma referência (`Target`).
   ícone (submenu), Ordem das janelas na área de trabalho (submenu: trazer todos para frente,
   enviar os outros para trás, enviar todos para trás), Estilo (painel/App Folder), Selo de
   contagem, Cor de fundo…, Imagem de fundo…, Remover imagem, Opacidade (submenu),
-  Duplicar grupo, Usar papel de parede como fundo, Aparência (submenu), Fechar grupo.
+  Duplicar grupo, **Criar atalho na barra de tarefas**, Usar papel de parede como fundo, Aparência (submenu), Fechar grupo.
   É **reconstruído a cada clique direito** para os "vistos" nunca ficarem desatualizados.
   Cada ícone tem seu menu, com os itens do shell do Explorer (`IContextMenu`; Shift mostra
   os verbos estendidos).
@@ -162,6 +162,12 @@ uma referência (`Target`).
   `<prefixo><ação>`; o segundo processo não consegue o mutex, manda a ação pelo **pipe
   nomeado** `EasyWinMenu.DesktopAction` e sai (`SingleInstanceCoordinator`, mutex
   `EasyWinMenu.SingleInstance`). Se o app não estiver rodando, sobe e executa a ação.
+- **Atalho de grupo na barra de tarefas**: o item do menu do grupo grava um `.lnk` em
+  `%AppData%\EasyWinMenu\GroupShortcuts` (via `WScript.Shell`) com destino no próprio
+  executável, argumento `--desktop-action=focus-group:<id>` e o ícone do app, e abre o Explorer
+  com o arquivo selecionado para o usuário arrastar à barra. Ao clicar: pelo mesmo pipe, o
+  grupo abre se estiver fechado, expande se recolhido, vem para frente (`RestoreIfMinimized` +
+  `Activate`) e pulsa a opacidade duas vezes; id desconhecido mostra um balão.
 - **Hotkey global** do menu e **Win+Ctrl+Alt+D** para restaurar os grupos que o Windows
   escondeu (`GlobalHotkeyService`, ids `0xA1F3` e `0xA1F4`).
 - **Iniciar com o Windows** (`StartupRegistration`, `HKCU\...\Run`).

@@ -257,6 +257,39 @@ internal sealed class DesktopOrganizerService(IconCacheService iconCache)
         }
     }
 
+    /// <summary>Gives every desktop group that lacks one a stable <see cref="MenuCategory.Id"/>. True when anything changed.</summary>
+    public static bool EnsureIds(IMenuContainer container)
+    {
+        var changed = false;
+        foreach (var group in AllDesktopGroups(container))
+        {
+            if (string.IsNullOrEmpty(group.Id))
+            {
+                group.Id = Guid.NewGuid().ToString("N");
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    public static MenuCategory? FindGroupById(IMenuContainer container, string id)
+    {
+        return AllDesktopGroups(container).FirstOrDefault(g => string.Equals(g.Id, id, StringComparison.Ordinal));
+    }
+
+    /// <summary>Brings an open group's window to the front with a short pulse. False when it has no window (closed).</summary>
+    public bool FocusOpenGroup(MenuCategory group)
+    {
+        if (!_windows.TryGetValue(group, out var window))
+        {
+            return false;
+        }
+
+        window.BringForwardAndPulse();
+        return true;
+    }
+
     public static bool RemoveCategory(IMenuContainer container, MenuCategory target)
     {
         if (container.Categories.Remove(target))

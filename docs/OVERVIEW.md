@@ -240,6 +240,26 @@ funciona de fora desta rede, sem custo.
     Esc também fecha. Os dois únicos momentos em que o texto buscado é
     lembrado para a próxima vez são exatamente esses — Enter num resultado ou
     Esc — nunca um simples perder o foco.
+- **Atalho de grupo na barra de tarefas** (v1.1.1.0). O item **"Criar atalho na barra de
+  tarefas"** do menu do grupo (`IDesktopGroupCommands.CreateTaskbarShortcut`) grava
+  `%AppData%\EasyWinMenu\GroupShortcuts\<nome> (<6 primeiros do id>).lnk`
+  (`TaskbarShortcutService`, via `WScript.Shell`), com destino no próprio
+  `EasyWinMenu.App.exe`, argumento `--desktop-action=focus-group:<id>` e o ícone do app, e abre o
+  Explorer com o arquivo selecionado para o usuário arrastá-lo à barra. Clicar no atalho reusa
+  o caminho que já existia: o processo novo não obtém o mutex, manda a ação pelo pipe
+  `EasyWinMenu.DesktopAction` e sai; a instância aberta trata em `App.FocusGroup`
+  (fechado → abre e grava; recolhido → expande; depois `DesktopGroupWindow.BringForwardAndPulse`:
+  `RestoreIfMinimized` + `Activate` + pulso de opacidade). Se o app estava fechado, a mesma
+  ação roda como `startupAction`. Id desconhecido mostra um balão "Grupo não encontrado".
+  Isso exigiu uma identidade estável: **`MenuCategory.Id`** (GUID sem hífens, nulo em configs
+  antigas; `DesktopOrganizerService.EnsureIds` preenche na carga e grava; `Clone()` o copia e o
+  "Duplicar grupo" gera um novo). Medido nesta máquina (Windows 11, build 26340), com a
+  aplicação aberta: um grupo enterrado na posição 36 da ordem-z foi para a 3 em ~0,6 s ao
+  abrir o atalho; com todos os grupos fechados, abrir o atalho reabriu **só** o grupo dele.
+  **Fixar sozinho não está implementado**: soltar um `.lnk` na pasta
+  `...\Quick Launch\User Pinned\TaskBar` não fixa nada (nem reiniciando o Explorer), porque os
+  botões vêm do valor binário `Favorites` da chave `Taskband`. Ver
+  [`VIABILIDADE_ATALHO_TASKBAR_GRUPO.md`](VIABILIDADE_ATALHO_TASKBAR_GRUPO.md).
 - **`AppFolderTile`** — o ladrilho fechado: mosaico 3×3 dos primeiros ícones,
   selo de contagem, nome do grupo. Puramente desenho, sem estado. Ao ser
   colocado como o ícone do grupo na área de trabalho (`DesktopGroupWindow`,

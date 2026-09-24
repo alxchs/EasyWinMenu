@@ -4,8 +4,11 @@
 > que crie um atalho na barra de tarefas para **abrir / visualizar / trazer
 > para frente** aquele grupo.
 >
-> Estado: **análise, nada implementado.** Toda afirmação sobre o código abaixo foi
-> lida do código atual (branch `feat/multi-item-drag-reorganize`, versão 1.1.0.3).
+> Estado: **A (atalho `.lnk` com argumento) está implementada na versão 1.1.1.0**;
+> **A+ (fixar sozinho) e B (janela-proxy) continuam só analisadas.** Onde o texto abaixo diz
+> "criar", leia como "foi criado" para o que é de A. Medições reais de A: um grupo na posição 36
+> da ordem-z foi para a 3 em ~0,6 s; com todos os grupos fechados, o atalho reabriu só o dele; um
+> id inexistente não derrubou o app. Toda afirmação sobre o código foi lida do código atual.
 > Os custos são **estimativas**, não medições — ver "Como os custos foram estimados".
 
 ## Veredito

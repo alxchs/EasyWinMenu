@@ -12,4 +12,5 @@ internal static class ApplicationPaths
 
     public static string ConfigFilePath { get; } = Path.Combine(ProductDataFolder, "config.json");
     public static string IconCacheDirectory { get; } = Path.Combine(ProductDataFolder, "IconCache");
+    public static string GroupShortcutsDirectory { get; } = Path.Combine(ProductDataFolder, "GroupShortcuts");
 }

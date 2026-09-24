@@ -261,6 +261,32 @@ internal sealed class DesktopGroupWindow : Window
     }
 
     /// <summary>
+    /// What a taskbar shortcut asks for: make sure the group is visible (expanded, in front of
+    /// the windows above it, focused) and pulse it briefly so the eye finds it.
+    /// </summary>
+    internal void BringForwardAndPulse()
+    {
+        if (_category.IsCollapsed)
+        {
+            SetCollapsedExternally(false);
+        }
+
+        RestoreIfMinimized();
+        Activate();
+
+        if (Content is UIElement root)
+        {
+            var pulse = new System.Windows.Media.Animation.DoubleAnimation(1.0, 0.55, TimeSpan.FromMilliseconds(180))
+            {
+                AutoReverse = true,
+                RepeatBehavior = new System.Windows.Media.Animation.RepeatBehavior(2)
+            };
+            pulse.Completed += (_, _) => root.BeginAnimation(OpacityProperty, null);
+            root.BeginAnimation(OpacityProperty, pulse);
+        }
+    }
+
+    /// <summary>
     /// Where the group lives by choice, at its current size. It can differ from where
     /// the window is: a group rescued off a monitor that went away keeps this as its
     /// home, so it can walk back when the monitor returns.
@@ -1450,6 +1476,7 @@ internal sealed class DesktopGroupWindow : Window
         {
             menu.Items.Add(BuildSeparator());
             AddMenuItem(menu, LocalizationService.Get("group.duplicate"), () => _commands.Duplicate(_category), "IconDuplicate");
+            AddMenuItem(menu, LocalizationService.Get("group.taskbarShortcut"), () => _commands.CreateTaskbarShortcut(_category), "IconStylePanel");
             AddMenuItem(menu, LocalizationService.Get("group.wallpaperAsBackground"), () => _commands.ApplyWallpaper(_category), "IconImage");
 
             var shareMenu = CreateMenuItem(LocalizationService.Get("group.shareVisual"), "IconStylePanel");

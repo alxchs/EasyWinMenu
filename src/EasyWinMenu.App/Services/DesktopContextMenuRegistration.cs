@@ -24,6 +24,12 @@ internal static class DesktopContextMenuRegistration
     public const string AllPanelAction = "all-panel";
     public const string OpenSettingsAction = "open-settings";
 
+    /// <summary>Action prefix of a taskbar shortcut: <c>focus-group:&lt;group id&gt;</c>.</summary>
+    public const string FocusGroupActionPrefix = "focus-group:";
+
+    /// <summary>The command line a taskbar shortcut passes to the app to bring one group forward.</summary>
+    public static string FocusGroupArguments(string groupId) => $"{ArgumentPrefix}{FocusGroupActionPrefix}{groupId}";
+
     /// <summary>
     /// Idempotent — safe to call on every startup. Labels always follow Windows' own
     /// display language, never the app's configured one: this menu is read by Explorer
